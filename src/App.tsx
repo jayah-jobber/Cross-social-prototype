@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   DndContext,
   DragEndEvent,
@@ -6,7 +7,6 @@ import {
   DragOverlay,
   DragStartEvent,
   KeyboardSensor,
-  Modifier,
   PointerSensor,
   closestCenter,
   useDroppable,
@@ -191,27 +191,6 @@ const navGroups = [
 
 const IMAGE_DROP_ZONE_PREFIX = "image-drop-zone-";
 
-const centerDragPreviewOnPointer: Modifier = ({
-  activatorEvent,
-  overlayNodeRect,
-  transform,
-}) => {
-  if (
-    !activatorEvent ||
-    !overlayNodeRect ||
-    !("clientX" in activatorEvent) ||
-    !("clientY" in activatorEvent)
-  ) {
-    return transform;
-  }
-
-  return {
-    ...transform,
-    x: transform.x + Number(activatorEvent.clientX) - overlayNodeRect.left - overlayNodeRect.width / 2,
-    y: transform.y + Number(activatorEvent.clientY) - overlayNodeRect.top - overlayNodeRect.height / 2,
-  };
-};
-
 function ImageDropZone({
   index,
   active,
@@ -293,9 +272,12 @@ function SortableImageCard({
   );
 }
 
-function DragPreview({ image }: { image: GalleryImage }) {
+function DragPreview({ image, scale }: { image: GalleryImage; scale: number }) {
   return (
-    <div className="drag-preview">
+    <div
+      className="drag-preview"
+      style={{ "--drag-preview-scale": scale } as React.CSSProperties}
+    >
       <span className="drag-preview-handle"><GripVertical size={15} /></span>
       <img src={image.src} alt="" />
     </div>
@@ -312,6 +294,7 @@ function InteractiveGallery({
   const [activeId, setActiveId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
   const [suppressHover, setSuppressHover] = useState(false);
+  const [dragPreviewScale, setDragPreviewScale] = useState(1);
   const activeImage = images.find(({ id }) => id === activeId);
   const activeIndex = images.findIndex(({ id }) => id === activeId);
   const overIndex = images.findIndex(({ id }) => id === overId);
@@ -322,6 +305,7 @@ function InteractiveGallery({
 
   const handleDragStart = ({ active }: DragStartEvent) => {
     setSuppressHover(false);
+    setDragPreviewScale((active.rect.current.initial?.width ?? 56) / 56);
     setActiveId(String(active.id));
     setOverId(String(active.id));
   };
@@ -406,12 +390,12 @@ function InteractiveGallery({
           />
         </div>
       </SortableContext>
-      <DragOverlay
-        dropAnimation={{ duration: 220, easing: "ease" }}
-        modifiers={[centerDragPreviewOnPointer]}
-      >
-        {activeImage ? <DragPreview image={activeImage} /> : null}
-      </DragOverlay>
+      {createPortal(
+        <DragOverlay dropAnimation={{ duration: 220, easing: "ease" }}>
+          {activeImage ? <DragPreview image={activeImage} scale={dragPreviewScale} /> : null}
+        </DragOverlay>,
+        document.body,
+      )}
     </DndContext>
   );
 }
