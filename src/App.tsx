@@ -103,6 +103,7 @@ type PrototypeVersion = "v1" | "v2" | "v3";
 type V2Tab = "all" | "google" | "facebook" | "instagram";
 type PreviewChannel = Exclude<V2Tab, "all">;
 type EnabledChannels = Record<PreviewChannel, boolean>;
+const LOCKED_VERSION: PrototypeVersion = "v1";
 
 type ChannelDraft = {
   message: string;
@@ -1733,7 +1734,7 @@ function ReviewScreen({
 export default function App() {
   const [message, setMessage] = useState(INITIAL_V1_MESSAGE);
   const [images, setImages] = useState(INITIAL_IMAGES);
-  const [version, setVersion] = useState<PrototypeVersion>("v1");
+  const [version, setVersion] = useState<PrototypeVersion>(LOCKED_VERSION);
   const [v2Drafts, setV2Drafts] = useState<V2Drafts>(createInitialV2Drafts);
   const [v3Message, setV3Message] = useState(INITIAL_V3_MESSAGE);
   const [v3Images, setV3Images] = useState(INITIAL_IMAGES);
@@ -1767,6 +1768,7 @@ export default function App() {
         instagram: sharedCalendarDraft,
       };
   const switchVersion = (nextVersion: PrototypeVersion) => {
+    if (LOCKED_VERSION) return;
     if (nextVersion === version) return;
 
     setMessage(INITIAL_V1_MESSAGE);
@@ -1815,8 +1817,8 @@ export default function App() {
         style={{ "--prototype-scale": scale, height: totalHeight } as React.CSSProperties}
       >
         <div className="ab-toolbar">
-          <span>A/B test prototype</span>
-          <div className="version-switcher" aria-label="Prototype version">
+          <span>Version 1 prototype</span>
+          {!LOCKED_VERSION && <div className="version-switcher" aria-label="Prototype version">
             <button
               className={version === "v1" ? "selected" : ""}
               type="button"
@@ -1838,7 +1840,7 @@ export default function App() {
             >
               Version 3
             </button>
-          </div>
+          </div>}
         </div>
         <div className="prototype-frame" style={{ height: frameHeight }}>
           {screen === "calendar" ? (
