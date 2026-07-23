@@ -9,5 +9,5 @@ npm install
 npm run dev
 ```
 
-Use the version switcher above the prototype to compare all three flows. Message editing,
+Use the version switcher above the prototype to compare all four flows. Message editing,
 image reordering, channel selection, scheduling, and platform-specific previews are interactive.
