@@ -1747,7 +1747,7 @@ export default function App() {
     v1: false,
     v2: false,
   });
-  const [screen, setScreen] = useState<"calendar" | "review" | "edit">("calendar");
+  const [screen, setScreen] = useState<"calendar" | "review" | "edit">("review");
   const [calendarModalOpen, setCalendarModalOpen] = useState(false);
   const [scheduleToastVisible, setScheduleToastVisible] = useState(false);
   const [scale, setScale] = useState(1);
@@ -1817,7 +1817,7 @@ export default function App() {
         style={{ "--prototype-scale": scale, height: totalHeight } as React.CSSProperties}
       >
         <div className="ab-toolbar">
-          <span>Version 2 · Task 1 prototype</span>
+          <span>Version 2 · Task 2 prototype</span>
           {!LOCKED_VERSION && <div className="version-switcher" aria-label="Prototype version">
             <button
               className={version === "v1" ? "selected" : ""}
