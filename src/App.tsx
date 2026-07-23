@@ -91,6 +91,7 @@ const INITIAL_V2_MESSAGE = `${INITIAL_MESSAGE}
 
 #HamiltonLandscaping #OutdoorLiving #HomeUpgrade`;
 const INITIAL_HASHTAGS = "#HamiltonLandscaping #OutdoorLiving #HomeUpgrade";
+const INITIAL_EXTERNAL_LINK = "http://yourwebsite.com";
 
 const INITIAL_V3_MESSAGE = `Landscaping isn’t just about appearances—it can completely change how you use and enjoy your yard.
 
@@ -112,20 +113,30 @@ type ChannelDraft = {
   message: string;
   images: GalleryImage[];
   hashtags?: string;
+  externalLink?: string;
 };
 
 type V2Drafts = Record<V2Tab, ChannelDraft>;
 
 const createInitialV2Drafts = (): V2Drafts => ({
   all: { message: INITIAL_V2_MESSAGE, images: [...INITIAL_IMAGES] },
-  google: { message: INITIAL_V2_MESSAGE, images: [...INITIAL_IMAGES] },
+  google: {
+    message: INITIAL_V2_MESSAGE,
+    images: [...INITIAL_IMAGES],
+    externalLink: INITIAL_EXTERNAL_LINK,
+  },
   facebook: { message: INITIAL_V2_MESSAGE, images: [...INITIAL_IMAGES] },
   instagram: { message: INITIAL_V2_MESSAGE, images: [...INITIAL_IMAGES] },
 });
 
 const createInitialV4Drafts = (): V2Drafts => ({
   all: { message: INITIAL_MESSAGE, images: [...INITIAL_IMAGES], hashtags: "" },
-  google: { message: INITIAL_MESSAGE, images: [...INITIAL_IMAGES], hashtags: "" },
+  google: {
+    message: INITIAL_MESSAGE,
+    images: [...INITIAL_IMAGES],
+    hashtags: "",
+    externalLink: INITIAL_EXTERNAL_LINK,
+  },
   facebook: {
     message: INITIAL_MESSAGE,
     images: [...INITIAL_IMAGES],
@@ -1204,6 +1215,23 @@ function VersionTwoEditorPanel({
             <button className="select-row joined" type="button">
               <span><small>Link</small>Other | External Link</span>
             </button>
+            <div className="link-input">
+              <Link2 size={19} />
+              <input
+                aria-label="Button URL"
+                type="url"
+                value={activeDraft.externalLink ?? ""}
+                onChange={(event) => {
+                  setDrafts({
+                    ...drafts,
+                    google: { ...drafts.google, externalLink: event.target.value },
+                  });
+                }}
+              />
+            </div>
+            <p className="helper muted">
+              Make sure your link doesn’t lead to illegal, harmful, or otherwise prohibited content.
+            </p>
           </div>
         )}
       </div>
