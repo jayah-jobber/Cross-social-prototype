@@ -1252,35 +1252,39 @@ label {
 
 .drag-preview {
   position: relative;
-  width: 72px;
-  height: 60px;
-  transform: rotate(2deg) scale(1.08);
+  width: calc(66px * var(--drag-preview-scale, 1));
+  height: calc(56px * var(--drag-preview-scale, 1));
   filter: drop-shadow(0 10px 12px rgb(0 0 0 / 24%));
   cursor: grabbing;
 }
 
 .drag-preview img {
   position: absolute;
-  top: 2px;
-  right: 0;
-  width: 56px;
-  height: 56px;
+  top: 0;
+  left: calc(10px * var(--drag-preview-scale, 1));
+  width: calc(56px * var(--drag-preview-scale, 1));
+  height: calc(56px * var(--drag-preview-scale, 1));
   border: 1px solid white;
-  border-radius: 8px;
+  border-radius: calc(8px * var(--drag-preview-scale, 1));
   object-fit: cover;
 }
 
 .drag-preview-handle {
   position: absolute;
   z-index: 1;
-  top: 13px;
+  top: calc(11px * var(--drag-preview-scale, 1));
   left: 0;
   display: grid;
-  width: 17px;
-  height: 34px;
+  width: calc(17px * var(--drag-preview-scale, 1));
+  height: calc(34px * var(--drag-preview-scale, 1));
   place-items: center;
-  border-radius: 4px 0 0 4px;
+  border-radius: calc(4px * var(--drag-preview-scale, 1)) 0 0 calc(4px * var(--drag-preview-scale, 1));
   background: var(--border);
+}
+
+.drag-preview-handle svg {
+  width: calc(15px * var(--drag-preview-scale, 1));
+  height: calc(15px * var(--drag-preview-scale, 1));
 }
 
 .upload-dropzone {
