@@ -1543,6 +1543,11 @@ label {
   margin-bottom: 32px;
 }
 
+.v4-hashtag-field {
+  margin-top: -4px;
+  margin-bottom: 32px;
+}
+
 .v2-image-section {
   margin-bottom: 24px;
 }

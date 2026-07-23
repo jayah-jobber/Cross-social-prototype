@@ -90,6 +90,7 @@ const INITIAL_IMAGES: GalleryImage[] = [
 const INITIAL_V2_MESSAGE = `${INITIAL_MESSAGE}
 
 #HamiltonLandscaping #OutdoorLiving #HomeUpgrade`;
+const INITIAL_HASHTAGS = "#HamiltonLandscaping #OutdoorLiving #HomeUpgrade";
 
 const INITIAL_V3_MESSAGE = `Landscaping isn’t just about appearances—it can completely change how you use and enjoy your yard.
 
@@ -101,7 +102,7 @@ Have ideas for your own yard? Let’s talk!
 
 #HamiltonLandscaping #OutdoorLiving #HomeUpgrade`;
 
-type PrototypeVersion = "v1" | "v2" | "v3";
+type PrototypeVersion = "v1" | "v2" | "v3" | "v4";
 type V2Tab = "all" | "google" | "facebook" | "instagram";
 type PreviewChannel = Exclude<V2Tab, "all">;
 type EnabledChannels = Record<PreviewChannel, boolean>;
@@ -109,6 +110,7 @@ type EnabledChannels = Record<PreviewChannel, boolean>;
 type ChannelDraft = {
   message: string;
   images: GalleryImage[];
+  hashtags?: string;
 };
 
 type V2Drafts = Record<V2Tab, ChannelDraft>;
@@ -118,6 +120,21 @@ const createInitialV2Drafts = (): V2Drafts => ({
   google: { message: INITIAL_V2_MESSAGE, images: [...INITIAL_IMAGES] },
   facebook: { message: INITIAL_V2_MESSAGE, images: [...INITIAL_IMAGES] },
   instagram: { message: INITIAL_V2_MESSAGE, images: [...INITIAL_IMAGES] },
+});
+
+const createInitialV4Drafts = (): V2Drafts => ({
+  all: { message: INITIAL_MESSAGE, images: [...INITIAL_IMAGES], hashtags: "" },
+  google: { message: INITIAL_MESSAGE, images: [...INITIAL_IMAGES], hashtags: "" },
+  facebook: {
+    message: INITIAL_MESSAGE,
+    images: [...INITIAL_IMAGES],
+    hashtags: INITIAL_HASHTAGS,
+  },
+  instagram: {
+    message: INITIAL_MESSAGE,
+    images: [...INITIAL_IMAGES],
+    hashtags: INITIAL_HASHTAGS,
+  },
 });
 
 function splitPostMessage(message: string) {
@@ -920,6 +937,7 @@ function CalendarContextModal({
               <PlatformPreviewCard
                 channel={previewChannel}
                 message={previews[previewChannel].message}
+                hashtags={previews[previewChannel].hashtags}
                 images={previews[previewChannel].images}
               />
             ) : (
@@ -1033,6 +1051,8 @@ function VersionTwoEditorPanel({
   setDrafts,
   enabledChannels,
   onCancel,
+  allTabLabel = "Your post",
+  separateHashtags = false,
 }: {
   activeTab: V2Tab;
   setActiveTab: (tab: V2Tab) => void;
@@ -1040,6 +1060,8 @@ function VersionTwoEditorPanel({
   setDrafts: (drafts: V2Drafts) => void;
   enabledChannels: EnabledChannels;
   onCancel: () => void;
+  allTabLabel?: string;
+  separateHashtags?: boolean;
 }) {
   const activeDraft = drafts[activeTab];
   const visibleImages =
@@ -1095,6 +1117,7 @@ function VersionTwoEditorPanel({
             ["facebook", "Facebook"],
             ["instagram", "Instagram"],
           ] as [V2Tab, string][])
+            .map(([tab, label]) => [tab, tab === "all" ? allTabLabel : label] as [V2Tab, string])
             .filter(([tab]) => tab === "all" || enabledChannels[tab])
             .map(([tab, label]) => (
             <button
@@ -1126,6 +1149,22 @@ function VersionTwoEditorPanel({
           />
           <span className="character-count">{activeDraft.message.length}/1500 characters</span>
         </div>
+
+        {separateHashtags && (activeTab === "facebook" || activeTab === "instagram") && (
+          <div className="field-block v4-hashtag-field">
+            <label htmlFor={`v4-hashtags-${activeTab}`}>Hashtag</label>
+            <input
+              id={`v4-hashtags-${activeTab}`}
+              value={activeDraft.hashtags ?? ""}
+              onChange={(event) => {
+                setDrafts({
+                  ...drafts,
+                  [activeTab]: { ...activeDraft, hashtags: event.target.value },
+                });
+              }}
+            />
+          </div>
+        )}
 
         <div className="image-section v2-image-section">
           <div>
@@ -1402,6 +1441,7 @@ function MultiChannelPreviewCarousel({
               <PlatformPreviewCard
                 channel={channel}
                 message={drafts[channel].message}
+                hashtags={drafts[channel].hashtags}
                 images={drafts[channel].images}
               />
             </div>
@@ -1493,6 +1533,7 @@ function VersionTwoPreview({
           <PlatformPreviewCard
             channel={previewChannel}
             message={draft.message}
+            hashtags={draft.hashtags}
             images={draft.images}
           />
         ) : (
@@ -1512,11 +1553,15 @@ function VersionTwoEditScreen({
   setDrafts,
   enabledChannels,
   onCancel,
+  allTabLabel,
+  separateHashtags,
 }: {
   drafts: V2Drafts;
   setDrafts: (drafts: V2Drafts) => void;
   enabledChannels: EnabledChannels;
   onCancel: () => void;
+  allTabLabel?: string;
+  separateHashtags?: boolean;
 }) {
   const [activeTab, setActiveTab] = useState<V2Tab>("all");
 
@@ -1537,6 +1582,8 @@ function VersionTwoEditScreen({
         setDrafts={setDrafts}
         enabledChannels={enabledChannels}
         onCancel={onCancel}
+        allTabLabel={allTabLabel}
+        separateHashtags={separateHashtags}
       />
       <VersionTwoPreview
         drafts={drafts}
@@ -1812,6 +1859,7 @@ export default function App() {
   const [images, setImages] = useState(INITIAL_IMAGES);
   const [version, setVersion] = useState<PrototypeVersion>("v1");
   const [v2Drafts, setV2Drafts] = useState<V2Drafts>(createInitialV2Drafts);
+  const [v4Drafts, setV4Drafts] = useState<V2Drafts>(createInitialV4Drafts);
   const [v3Message, setV3Message] = useState(INITIAL_V3_MESSAGE);
   const [v3Images, setV3Images] = useState(INITIAL_IMAGES);
   const [enabledChannels, setEnabledChannels] = useState<EnabledChannels>({
@@ -1819,9 +1867,10 @@ export default function App() {
     facebook: true,
     instagram: true,
   });
-  const [publishedVersions, setPublishedVersions] = useState<Record<"v1" | "v2", boolean>>({
+  const [publishedVersions, setPublishedVersions] = useState<Record<"v1" | "v2" | "v4", boolean>>({
     v1: false,
     v2: false,
+    v4: false,
   });
   const [screen, setScreen] = useState<"calendar" | "review" | "edit">("calendar");
   const [calendarModalOpen, setCalendarModalOpen] = useState(false);
@@ -1832,11 +1881,12 @@ export default function App() {
   const sharedCalendarDraft = version === "v1"
     ? { message, images }
     : { message: v3Message, images: v3Images };
-  const calendarPreviews: Record<PreviewChannel, ChannelDraft> = version === "v2"
+  const calendarPreviews: Record<PreviewChannel, ChannelDraft> =
+    version === "v2" || version === "v4"
     ? {
-        google: v2Drafts.google,
-        facebook: v2Drafts.facebook,
-        instagram: v2Drafts.instagram,
+        google: (version === "v4" ? v4Drafts : v2Drafts).google,
+        facebook: (version === "v4" ? v4Drafts : v2Drafts).facebook,
+        instagram: (version === "v4" ? v4Drafts : v2Drafts).instagram,
       }
     : {
         google: sharedCalendarDraft,
@@ -1849,6 +1899,7 @@ export default function App() {
     setMessage(INITIAL_V1_MESSAGE);
     setImages([...INITIAL_IMAGES]);
     setV2Drafts(createInitialV2Drafts());
+    setV4Drafts(createInitialV4Drafts());
     setV3Message(INITIAL_V3_MESSAGE);
     setV3Images([...INITIAL_IMAGES]);
     setEnabledChannels({
@@ -1856,7 +1907,7 @@ export default function App() {
       facebook: true,
       instagram: true,
     });
-    setPublishedVersions({ v1: false, v2: false });
+    setPublishedVersions({ v1: false, v2: false, v4: false });
     setVersion(nextVersion);
     setScreen("calendar");
     setCalendarModalOpen(false);
@@ -1915,6 +1966,13 @@ export default function App() {
             >
               Version 3
             </button>
+            <button
+              className={version === "v4" ? "selected" : ""}
+              type="button"
+              onClick={() => switchVersion("v4")}
+            >
+              Version 4
+            </button>
           </div>
         </div>
         <div className="prototype-frame" style={{ height: frameHeight }}>
@@ -1953,15 +2011,25 @@ export default function App() {
                 />
               ) : screen === "review" ? (
                 <ReviewScreen
-                  message={version === "v1" ? message : v2Drafts.google.message}
-                  images={version === "v1" ? images : v2Drafts.google.images}
+                  message={
+                    version === "v1"
+                      ? message
+                      : (version === "v4" ? v4Drafts : v2Drafts).google.message
+                  }
+                  images={
+                    version === "v1"
+                      ? images
+                      : (version === "v4" ? v4Drafts : v2Drafts).google.images
+                  }
                   enabledChannels={enabledChannels}
-                  carouselDrafts={version === "v2" ? v2Drafts : undefined}
+                  carouselDrafts={
+                    version === "v2" ? v2Drafts : version === "v4" ? v4Drafts : undefined
+                  }
                   onToggleChannel={toggleChannel}
                   onEdit={() => setScreen("edit")}
                   onBack={() => setScreen("calendar")}
                   onSchedule={() => {
-                    if (version === "v1" || version === "v2") {
+                    if (version === "v1" || version === "v2" || version === "v4") {
                       setPublishedVersions((current) => ({ ...current, [version]: true }));
                     }
                     setScreen("calendar");
@@ -1976,12 +2044,14 @@ export default function App() {
                   setImages={setV3Images}
                   onCancel={() => setScreen("review")}
                 />
-              ) : version === "v2" ? (
+              ) : version === "v2" || version === "v4" ? (
                 <VersionTwoEditScreen
-                  drafts={v2Drafts}
-                  setDrafts={setV2Drafts}
+                  drafts={version === "v4" ? v4Drafts : v2Drafts}
+                  setDrafts={version === "v4" ? setV4Drafts : setV2Drafts}
                   enabledChannels={enabledChannels}
                   onCancel={() => setScreen("review")}
+                  allTabLabel={version === "v4" ? "Your posts" : undefined}
+                  separateHashtags={version === "v4"}
                 />
               ) : (
                 <main className="app-content">
