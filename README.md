@@ -1,6 +1,6 @@
 # Cross Social Prototype
 
-Interactive React prototype for comparing social-post creation workflows.
+Interactive React prototype for the Version 2 Task 1 social-post creation workflow.
 
 ## Run locally
 
@@ -9,5 +9,5 @@ npm install
 npm run dev
 ```
 
-Use the version switcher above the prototype to compare all three flows. Message editing,
-image reordering, channel selection, scheduling, and platform-specific previews are interactive.
+The prototype is locked to Version 2 and starts from the marketing calendar. Message editing,
+image reordering, channel-specific customization, scheduling, and platform previews are interactive.
