@@ -6,8 +6,10 @@ import {
   DragOverlay,
   DragStartEvent,
   KeyboardSensor,
+  Modifier,
   PointerSensor,
   closestCenter,
+  useDroppable,
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
@@ -188,6 +190,52 @@ const navGroups = [
   ],
 ];
 
+const IMAGE_DROP_ZONE_PREFIX = "image-drop-zone-";
+
+const centerDragPreviewOnPointer: Modifier = ({
+  activatorEvent,
+  overlayNodeRect,
+  transform,
+}) => {
+  if (
+    !activatorEvent ||
+    !overlayNodeRect ||
+    !("clientX" in activatorEvent) ||
+    !("clientY" in activatorEvent)
+  ) {
+    return transform;
+  }
+
+  return {
+    ...transform,
+    x: transform.x + Number(activatorEvent.clientX) - overlayNodeRect.left - overlayNodeRect.width / 2,
+    y: transform.y + Number(activatorEvent.clientY) - overlayNodeRect.top - overlayNodeRect.height / 2,
+  };
+};
+
+function ImageDropZone({
+  index,
+  active,
+  disabled,
+}: {
+  index: number;
+  active: boolean;
+  disabled: boolean;
+}) {
+  const { setNodeRef } = useDroppable({
+    id: `${IMAGE_DROP_ZONE_PREFIX}${index}`,
+    disabled,
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={`gallery-drop-zone ${active ? "active" : ""}`}
+      aria-hidden="true"
+    />
+  );
+}
+
 function SortableImageCard({
   image,
   index,
@@ -264,12 +312,17 @@ function InteractiveGallery({
 }) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
+  const [suppressHover, setSuppressHover] = useState(false);
+  const activeImage = images.find(({ id }) => id === activeId);
+  const activeIndex = images.findIndex(({ id }) => id === activeId);
+  const overIndex = images.findIndex(({ id }) => id === overId);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
   const handleDragStart = ({ active }: DragStartEvent) => {
+    setSuppressHover(false);
     setActiveId(String(active.id));
     setOverId(String(active.id));
   };
@@ -279,14 +332,24 @@ function InteractiveGallery({
   const handleDragEnd = ({ active, over }: DragEndEvent) => {
     setActiveId(null);
     setOverId(null);
+    setSuppressHover(true);
+    requestAnimationFrame(() => {
+      if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    });
     if (!over || active.id === over.id) return;
     const oldIndex = images.findIndex(({ id }) => id === active.id);
-    const newIndex = images.findIndex(({ id }) => id === over.id);
+    const overValue = String(over.id);
+    const dropZoneIndex = overValue.startsWith(IMAGE_DROP_ZONE_PREFIX)
+      ? Number(overValue.slice(IMAGE_DROP_ZONE_PREFIX.length))
+      : null;
+    const newIndex = dropZoneIndex === null
+      ? images.findIndex(({ id }) => id === over.id)
+      : dropZoneIndex > oldIndex
+        ? dropZoneIndex - 1
+        : dropZoneIndex;
+    if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return;
     setImages(arrayMove(images, oldIndex, newIndex));
   };
-  const activeImage = images.find(({ id }) => id === activeId);
-  const activeIndex = images.findIndex(({ id }) => id === activeId);
-  const overIndex = images.findIndex(({ id }) => id === overId);
   const indicatorSide =
     activeIndex === -1 || overIndex === -1 || activeIndex === overIndex
       ? undefined
@@ -303,6 +366,7 @@ function InteractiveGallery({
       onDragCancel={() => {
         setActiveId(null);
         setOverId(null);
+        setSuppressHover(true);
       }}
       onDragEnd={handleDragEnd}
     >
@@ -310,19 +374,43 @@ function InteractiveGallery({
         items={images.map(({ id }) => id)}
         strategy={horizontalListSortingStrategy}
       >
-        <div className="gallery-list">
-          {images.map((image, index) => (
+        <div
+          className={[
+            "gallery-list",
+            activeId ? "is-reordering" : "",
+            suppressHover ? "suppress-hover" : "",
+          ].filter(Boolean).join(" ")}
+          onPointerLeave={() => setSuppressHover(false)}
+          onPointerMove={() => {
+            if (suppressHover && !activeId) setSuppressHover(false);
+          }}
+        >
+          {images.flatMap((image, index) => [
+            <ImageDropZone
+              key={`${IMAGE_DROP_ZONE_PREFIX}${index}`}
+              index={index}
+              active={overId === `${IMAGE_DROP_ZONE_PREFIX}${index}`}
+              disabled={activeIndex === -1 || index === activeIndex || index === activeIndex + 1}
+            />,
             <SortableImageCard
               key={image.id}
               image={image}
               index={index}
               onRemove={(id) => setImages(images.filter((item) => item.id !== id))}
               dropIndicator={image.id === overId ? indicatorSide : undefined}
-            />
-          ))}
+            />,
+          ])}
+          <ImageDropZone
+            index={images.length}
+            active={overId === `${IMAGE_DROP_ZONE_PREFIX}${images.length}`}
+            disabled={activeIndex === -1 || images.length === activeIndex + 1}
+          />
         </div>
       </SortableContext>
-      <DragOverlay dropAnimation={{ duration: 220, easing: "ease" }}>
+      <DragOverlay
+        dropAnimation={{ duration: 220, easing: "ease" }}
+        modifiers={[centerDragPreviewOnPointer]}
+      >
         {activeImage ? <DragPreview image={activeImage} /> : null}
       </DragOverlay>
     </DndContext>
@@ -805,13 +893,14 @@ function CalendarContextModal({
                     {channel[0].toUpperCase() + channel.slice(1)}
                   </span>
                   <button
-                    className={`toggle ${enabledChannels[channel] ? "on" : ""}`}
+                    className={`channel-visibility-toggle ${enabledChannels[channel] ? "on" : "off"}`}
                     type="button"
                     role="switch"
                     aria-checked={enabledChannels[channel]}
                     aria-label={`${enabledChannels[channel] ? "Disable" : "Enable"} ${channel}`}
                     onClick={() => onToggleChannel(channel)}
                   >
+                    {enabledChannels[channel] ? <Check size={14} /> : <X size={14} />}
                     <span />
                   </button>
                 </div>
@@ -935,7 +1024,11 @@ function EditorPanel({
           </button>
           <div className="link-input">
             <Link2 size={19} />
-            <input aria-label="Button URL" placeholder="Http://" />
+            <input
+              aria-label="Button URL"
+              defaultValue="http://yourwebsite.com"
+              type="url"
+            />
           </div>
           <p className="helper muted">
             Make sure your link doesn’t lead to illegal, harmful, or otherwise prohibited content.
@@ -1666,10 +1759,10 @@ function ReviewScreen({
                   type="button"
                   role="switch"
                   aria-checked={enabledChannels.google}
-                  aria-label="Post to Google"
+                  aria-label={`${enabledChannels.google ? "Disable" : "Enable"} Google`}
                   onClick={() => onToggleChannel("google")}
                 >
-                  {enabledChannels.google && <Check size={14} />}<i />
+                  {enabledChannels.google ? <Check size={14} /> : <X size={14} />}<i />
                 </button>
               </div>
               <div className="social-connection">
@@ -1679,10 +1772,10 @@ function ReviewScreen({
                   type="button"
                   role="switch"
                   aria-checked={enabledChannels.facebook}
-                  aria-label="Post to Facebook"
+                  aria-label={`${enabledChannels.facebook ? "Disable" : "Enable"} Facebook`}
                   onClick={() => onToggleChannel("facebook")}
                 >
-                  {enabledChannels.facebook && <Check size={14} />}<i />
+                  {enabledChannels.facebook ? <Check size={14} /> : <X size={14} />}<i />
                 </button>
               </div>
               <div className="social-connection">
@@ -1692,10 +1785,10 @@ function ReviewScreen({
                   type="button"
                   role="switch"
                   aria-checked={enabledChannels.instagram}
-                  aria-label="Post to Instagram"
+                  aria-label={`${enabledChannels.instagram ? "Disable" : "Enable"} Instagram`}
                   onClick={() => onToggleChannel("instagram")}
                 >
-                  {enabledChannels.instagram && <Check size={14} />}<i />
+                  {enabledChannels.instagram ? <Check size={14} /> : <X size={14} />}<i />
                 </button>
               </div>
             </section>

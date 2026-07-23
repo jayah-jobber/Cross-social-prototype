@@ -470,7 +470,7 @@ button {
   font-size: 20px;
 }
 
-.calendar-channel-row .toggle {
+.calendar-channel-row .channel-visibility-toggle {
   flex: 0 0 auto;
 }
 
@@ -1024,11 +1024,34 @@ label {
 }
 
 .gallery-list {
+  position: relative;
   display: flex;
   min-height: 58px;
   align-items: center;
-  gap: 4px;
+  gap: 0;
   overflow: visible;
+}
+
+.gallery-drop-zone {
+  position: relative;
+  width: 14px;
+  height: 56px;
+  flex: 0 0 14px;
+  pointer-events: none;
+}
+
+.gallery-drop-zone:first-child {
+  position: absolute;
+  z-index: 10;
+  top: 1px;
+  left: 0;
+  width: 28px;
+  height: 56px;
+}
+
+.gallery-drop-zone:last-child {
+  width: 20px;
+  flex-basis: 20px;
 }
 
 .image-card-shell {
@@ -1046,7 +1069,8 @@ label {
 }
 
 .image-card-shell.drop-before::after,
-.image-card-shell.drop-after::after {
+.image-card-shell.drop-after::after,
+.gallery-drop-zone.active::after {
   position: absolute;
   z-index: 12;
   top: -5px;
@@ -1070,6 +1094,10 @@ label {
   right: -4px;
 }
 
+.gallery-drop-zone.active::after {
+  left: calc(50% - 1.5px);
+}
+
 @keyframes drop-indicator-in {
   from {
     opacity: 0;
@@ -1091,7 +1119,11 @@ label {
 
 .image-card-shell:is(:hover, :focus-within) .image-card-layout,
 .image-card-shell:is(:hover, :focus-within) ~ .image-card-shell .image-card-layout {
-  transform: translateX(16px);
+  transform: translateX(10px);
+}
+
+.gallery-list.is-reordering .image-card-shell .image-card-layout {
+  transform: none;
 }
 
 .image-card {
@@ -1198,6 +1230,20 @@ label {
 .image-card-shell:hover .image-order,
 .image-card-shell:focus-within .image-order {
   opacity: 0;
+}
+
+.gallery-list.suppress-hover .image-card-shell .image-card-layout {
+  transform: none;
+}
+
+.gallery-list.suppress-hover .image-card-shell .drag-handle,
+.gallery-list.suppress-hover .image-card-shell .delete-image,
+.gallery-list.suppress-hover .image-card-shell .image-hover-overlay {
+  opacity: 0;
+}
+
+.gallery-list.suppress-hover .image-card-shell .image-order {
+  opacity: 1;
 }
 
 .delete-image:hover {
@@ -1866,37 +1912,66 @@ label {
   font-size: 12px;
 }
 
+.channel-visibility-toggle,
 .connection-toggle {
   position: relative;
   display: flex;
   width: 47px;
   height: 24px;
   align-items: center;
-  padding-left: 7px;
-  border-radius: 13px;
-  border: 0;
+  box-sizing: border-box;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 12px;
   color: white;
   cursor: pointer;
   background: var(--green);
 }
 
+.channel-visibility-toggle.off,
 .connection-toggle.off {
-  background: #9eacb1;
+  border-color: #e1e7e8;
+  color: var(--ink);
+  background: #f5f8f8;
 }
 
+.channel-visibility-toggle svg,
+.connection-toggle svg {
+  position: absolute;
+  z-index: 1;
+  left: 5px;
+  pointer-events: none;
+  stroke-width: 3;
+}
+
+.channel-visibility-toggle.off svg,
+.connection-toggle.off svg {
+  right: 5px;
+  left: auto;
+}
+
+.channel-visibility-toggle span,
 .connection-toggle i {
   position: absolute;
-  top: 4px;
-  right: 4px;
+  top: 2px;
+  right: 2px;
   width: 16px;
   height: 16px;
   border-radius: 50%;
   background: white;
 }
 
+.channel-visibility-toggle.off span,
 .connection-toggle.off i {
   right: auto;
-  left: 4px;
+  left: 2px;
+  background: var(--ink);
+}
+
+.channel-visibility-toggle:focus-visible,
+.connection-toggle:focus-visible {
+  outline: 2px solid #0077c8;
+  outline-offset: 2px;
 }
 
 .connect-label {
