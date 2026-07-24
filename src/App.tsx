@@ -107,6 +107,7 @@ type V2Tab = "all" | "google" | "facebook" | "instagram";
 type PreviewChannel = Exclude<V2Tab, "all">;
 type EnabledChannels = Record<PreviewChannel, boolean>;
 const LOCKED_VERSION: PrototypeVersion = "v2";
+type SchedulableVersion = Exclude<PrototypeVersion, "v3">;
 
 type ChannelDraft = {
   message: string;
@@ -507,6 +508,12 @@ type CalendarGroup = {
   items: CalendarItem[];
 };
 
+const CALENDAR_CHANNEL_BY_PREVIEW: Record<PreviewChannel, CalendarChannel> = {
+  google: "Google post",
+  facebook: "Facebook post",
+  instagram: "Instagram post",
+};
+
 const CALENDAR_COLUMNS: { day: string; groups: CalendarGroup[] }[] = [
   { day: "Sunday, Nov 1", groups: [] },
   {
@@ -695,14 +702,18 @@ function MarketingCalendarCard({
   onOpen,
   updated = false,
   targetPublished = false,
+  targetChannels,
 }: {
   item: CalendarItem;
   onOpen: () => void;
   updated?: boolean;
   targetPublished?: boolean;
+  targetChannels?: CalendarChannel[];
 }) {
-  const channels = item.channels ?? (item.channel ? [item.channel] : []);
-  const status = item.target && targetPublished ? "Published" : item.status;
+  const channels = item.target && targetPublished && targetChannels
+    ? targetChannels
+    : item.channels ?? (item.channel ? [item.channel] : []);
+  const status = item.target && targetPublished ? "Sent" : item.status;
   const content = (
     <>
       <span className="calendar-card-title">{item.title}</span>
@@ -746,10 +757,12 @@ function CalendarScreen({
   onOpenPost,
   updated = false,
   targetPublished = false,
+  targetChannels,
 }: {
   onOpenPost: () => void;
   updated?: boolean;
   targetPublished?: boolean;
+  targetChannels?: CalendarChannel[];
 }) {
   const columns = updated ? UPDATED_CALENDAR_COLUMNS : CALENDAR_COLUMNS;
 
@@ -803,6 +816,7 @@ function CalendarScreen({
                       onOpen={onOpenPost}
                       updated={updated}
                       targetPublished={targetPublished}
+                      targetChannels={targetChannels}
                     />
                   ))}
                 </div>
@@ -1843,9 +1857,9 @@ export default function App() {
     facebook: true,
     instagram: true,
   });
-  const [publishedVersions, setPublishedVersions] = useState<Record<"v1" | "v2", boolean>>({
-    v1: false,
-    v2: false,
+  const [scheduledChannels, setScheduledChannels] = useState<Record<SchedulableVersion, EnabledChannels | null>>({
+    v1: null,
+    v2: null,
   });
   const [screen, setScreen] = useState<"calendar" | "review" | "edit">("review");
   const [calendarModalOpen, setCalendarModalOpen] = useState(false);
@@ -1881,7 +1895,7 @@ export default function App() {
       facebook: true,
       instagram: true,
     });
-    setPublishedVersions({ v1: false, v2: false });
+    setScheduledChannels({ v1: null, v2: null });
     setVersion(nextVersion);
     setScreen("calendar");
     setCalendarModalOpen(false);
@@ -1949,7 +1963,12 @@ export default function App() {
               <TopBar compact staticControls marketingEssentials={version !== "v3"} />
               <CalendarScreen
                 updated={version !== "v3"}
-                targetPublished={version !== "v3" && publishedVersions[version]}
+                targetPublished={version !== "v3" && scheduledChannels[version] !== null}
+                targetChannels={version !== "v3"
+                  ? PREVIEW_CHANNEL_ORDER
+                    .filter((channel) => scheduledChannels[version]?.[channel])
+                    .map((channel) => CALENDAR_CHANNEL_BY_PREVIEW[channel])
+                  : undefined}
                 onOpenPost={() => setCalendarModalOpen(true)}
               />
               {calendarModalOpen && (
@@ -1987,7 +2006,10 @@ export default function App() {
                   onBack={() => setScreen("calendar")}
                   onSchedule={() => {
                     if (version === "v1" || version === "v2") {
-                      setPublishedVersions((current) => ({ ...current, [version]: true }));
+                      setScheduledChannels((current) => ({
+                        ...current,
+                        [version]: { ...enabledChannels },
+                      }));
                     }
                     setScreen("calendar");
                     setScheduleToastVisible(true);
