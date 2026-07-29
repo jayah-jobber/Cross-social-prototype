@@ -1158,14 +1158,24 @@ function VersionFourContextModal({
   const [activeIndex, setActiveIndex] = useState(initialIndex);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteFeedback, setDeleteFeedback] = useState("");
+  const [splitMenuOpen, setSplitMenuOpen] = useState(false);
+  const splitMenuRef = useRef<HTMLDivElement>(null);
+  const splitToggleRef = useRef<HTMLButtonElement>(null);
+  const splitOptionRef = useRef<HTMLButtonElement>(null);
   const channels = googleAvailable
     ? CONTEXTUAL_CHANNELS
     : CONTEXTUAL_CHANNELS.filter(({ id }) => id !== "google");
   const active = channels[Math.min(activeIndex, channels.length - 1)];
   const atStart = activeIndex === 0;
   const atEnd = activeIndex === channels.length - 1;
-  const goPrevious = () => setActiveIndex((current) => Math.max(0, current - 1));
-  const goNext = () => setActiveIndex((current) => Math.min(channels.length - 1, current + 1));
+  const goPrevious = () => {
+    setSplitMenuOpen(false);
+    setActiveIndex((current) => Math.max(0, current - 1));
+  };
+  const goNext = () => {
+    setSplitMenuOpen(false);
+    setActiveIndex((current) => Math.min(channels.length - 1, current + 1));
+  };
   const safeVisualAction = (event: React.MouseEvent<HTMLButtonElement>) => event.preventDefault();
   const closeDeleteDialog = () => {
     setDeleteDialogOpen(false);
@@ -1179,6 +1189,12 @@ function VersionFourContextModal({
         closeDeleteDialog();
         return;
       }
+      if (event.key === "Escape" && splitMenuOpen) {
+        event.stopImmediatePropagation();
+        setSplitMenuOpen(false);
+        splitToggleRef.current?.focus();
+        return;
+      }
       if (event.key === "Escape") onClose();
       if (deleteDialogOpen) return;
       if (event.key === "ArrowLeft") goPrevious();
@@ -1186,7 +1202,17 @@ function VersionFourContextModal({
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [deleteDialogOpen, onClose]);
+  }, [deleteDialogOpen, onClose, splitMenuOpen]);
+
+  useEffect(() => {
+    if (!splitMenuOpen) return;
+    splitOptionRef.current?.focus();
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      if (!splitMenuRef.current?.contains(event.target as Node)) setSplitMenuOpen(false);
+    };
+    document.addEventListener("mousedown", closeOnOutsideClick);
+    return () => document.removeEventListener("mousedown", closeOnOutsideClick);
+  }, [splitMenuOpen]);
 
   return (
     <div className="calendar-modal-overlay v4-context-overlay" role="presentation">
@@ -1239,6 +1265,66 @@ function VersionFourContextModal({
                 <div><dt>{active.destinationLabel}</dt><dd>{active.destination}</dd></div>
               </dl>
             </div>
+            <footer className="v4-context-footer" inert={deleteDialogOpen ? true : undefined}>
+              <button
+                type="button"
+                className="delete-post"
+                aria-disabled={active.id === "google" ? undefined : "true"}
+                onClick={active.id === "google"
+                  ? () => {
+                      setSplitMenuOpen(false);
+                      setDeleteDialogOpen(true);
+                    }
+                  : safeVisualAction}
+              >
+                Delete
+              </button>
+              <div>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  aria-disabled={active.id === "facebook" || active.id === "instagram" ? undefined : "true"}
+                  onClick={active.id === "facebook" || active.id === "instagram"
+                    ? () => {
+                        setSplitMenuOpen(false);
+                        if (active.id === "facebook" || active.id === "instagram") onSocialEdit(active.id);
+                      }
+                    : safeVisualAction}
+                >
+                  Edit
+                </button>
+                <div className="v4-split-action" ref={splitMenuRef}>
+                  {splitMenuOpen && (
+                    <div className="v4-split-menu" role="menu" aria-label="Publishing options">
+                      <button
+                        ref={splitOptionRef}
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          setSplitMenuOpen(false);
+                          splitToggleRef.current?.focus();
+                        }}
+                      >
+                        Post now and next
+                      </button>
+                    </div>
+                  )}
+                  <span className="v4-split-button">
+                    <button type="button" onClick={safeVisualAction}>Schedule and next</button>
+                    <button
+                      ref={splitToggleRef}
+                      type="button"
+                      aria-label="Show publishing options"
+                      aria-haspopup="menu"
+                      aria-expanded={splitMenuOpen}
+                      onClick={() => setSplitMenuOpen((open) => !open)}
+                    >
+                      <ChevronDown size={20} />
+                    </button>
+                  </span>
+                </div>
+              </div>
+            </footer>
           </section>
 
           <section className="v4-context-preview" aria-label={`${active.label} content preview`}>
@@ -1260,36 +1346,6 @@ function VersionFourContextModal({
           </section>
         </div>
 
-        <footer className="v4-context-footer" inert={deleteDialogOpen ? true : undefined}>
-          <button
-            type="button"
-            className="delete-post"
-            aria-disabled={active.id === "google" ? undefined : "true"}
-            onClick={active.id === "google" ? () => setDeleteDialogOpen(true) : safeVisualAction}
-          >
-            Delete
-          </button>
-          <div>
-            <button
-              type="button"
-              className="secondary-button"
-              aria-disabled={active.id === "facebook" || active.id === "instagram" ? undefined : "true"}
-              onClick={active.id === "facebook" || active.id === "instagram"
-                ? () => {
-                    if (active.id === "facebook" || active.id === "instagram") onSocialEdit(active.id);
-                  }
-                : safeVisualAction}
-            >
-              Edit
-            </button>
-            <button type="button" className="secondary-button" aria-disabled="true" onClick={safeVisualAction}>
-              Schedule and next
-            </button>
-            <button type="button" className="primary-button" aria-disabled="true" onClick={safeVisualAction}>
-              Publish page
-            </button>
-          </div>
-        </footer>
         {deleteDialogOpen && (
           <div className="google-delete-overlay" role="presentation">
             <section
