@@ -72,6 +72,8 @@ The result was a cleaner, more orderly outdoor space, with garden beds refreshed
 If you’re planning a clean up and mulching project in Hamilton, feel free to reach out to discuss your property and timing.`;
 const INITIAL_EMAIL_MESSAGE = INITIAL_MESSAGE;
 const INITIAL_WEBSITE_MESSAGE = INITIAL_MESSAGE;
+const INITIAL_EMAIL_SUBJECT = "A seasonal refresh for your Hamilton property";
+const INITIAL_WEBSITE_TITLE = "Seasonal property clean up in Hamilton";
 
 const INITIAL_V1_MESSAGE = `${INITIAL_MESSAGE}
 
@@ -103,6 +105,11 @@ type EnabledChannels = Record<PreviewChannel, boolean>;
 type SchedulableVersion = PrototypeVersion;
 type ContextualAction = "schedule" | "post";
 type ContextualToast = { message: string; id: number };
+type SuggestedTextDraft = { title: string; message: string };
+type SuggestedCompletion = {
+  card: CalendarItem;
+  destinations: Record<ContextualChannel, { label: string; value: string }>;
+};
 
 type ChannelDraft = {
   message: string;
@@ -157,6 +164,22 @@ function splitPostMessage(message: string) {
     body: bodyLines.join("\n").trim(),
     hashtags: hashtagLines.join(" "),
   };
+}
+
+function cloneDrafts(drafts: V2Drafts): V2Drafts {
+  return Object.fromEntries(
+    Object.entries(drafts).map(([channel, draft]) => [
+      channel,
+      { ...draft, images: [...draft.images] },
+    ]),
+  ) as V2Drafts;
+}
+
+function suggestionCardTitle(prompt: string) {
+  const normalized = prompt.trim().replace(/\s+/g, " ").replace(/[.!?]+$/, "");
+  if (!normalized) return "Generated marketing content";
+  const title = normalized[0].toUpperCase() + normalized.slice(1);
+  return title.length > 88 ? `${title.slice(0, 85).trimEnd()}...` : title;
 }
 
 function AutoSizeTextarea({
@@ -517,6 +540,7 @@ type CalendarItem = {
   automated?: boolean;
   target?: boolean;
   combinedTarget?: boolean;
+  generatedSuggestion?: boolean;
   showDate?: boolean;
 };
 
@@ -805,7 +829,12 @@ function MarketingCalendarCard({
       {content}
     </button>
   ) : (
-    <div className={`marketing-calendar-card ${item.tone ?? ""} ${updated ? "updated-card" : ""}`}>
+    <div className={[
+      "marketing-calendar-card",
+      item.tone ?? "",
+      updated ? "updated-card" : "",
+      item.generatedSuggestion ? "generated-suggestion-card" : "",
+    ].filter(Boolean).join(" ")}>
       {content}
     </div>
   );
@@ -824,6 +853,7 @@ function CalendarScreen({
   combinedPublished = false,
   targetChannels,
   combinedChannels,
+  generatedSuggestionCard,
 }: {
   onOpenPost: () => void;
   onOpenCombinedPost: () => void;
@@ -837,8 +867,22 @@ function CalendarScreen({
   combinedPublished?: boolean;
   targetChannels?: CalendarChannel[];
   combinedChannels?: CalendarChannel[];
+  generatedSuggestionCard?: CalendarItem;
 }) {
-  const columns = updated ? UPDATED_CALENDAR_COLUMNS : CALENDAR_COLUMNS;
+  const baseColumns = updated ? UPDATED_CALENDAR_COLUMNS : CALENDAR_COLUMNS;
+  const columns = generatedSuggestionCard
+    ? baseColumns.map((column) => (
+        column.day === "Friday, Nov 6"
+          ? {
+              ...column,
+              groups: [
+                { label: "Sent (1)", items: [generatedSuggestionCard] },
+                ...column.groups,
+              ],
+            }
+          : column
+      ))
+    : baseColumns;
 
   return (
     <main className={`calendar-page ${updated ? "updated-calendar-page" : ""}`}>
@@ -913,7 +957,12 @@ function CalendarScreen({
         </header>
         <div className="calendar-grid">
           {columns.map((column) => (
-            <section className="calendar-day" key={column.day}>
+            <section
+              className={`calendar-day${generatedSuggestionCard && column.day === "Friday, Nov 6"
+                ? " with-generated-suggestion"
+                : ""}`}
+              key={column.day}
+            >
               <h2 className={column.day.startsWith("Friday") ? "today" : ""}>{column.day}</h2>
               {column.groups.map((group) => (
                 <div className="calendar-group" key={group.label}>
@@ -1055,6 +1104,7 @@ function CalendarContextModal({
                 message={previews[previewChannel].message}
                 hashtags={previews[previewChannel].hashtags}
                 images={previews[previewChannel].images}
+                externalLink={previews[previewChannel].externalLink}
               />
             ) : (
               <div className="no-channel-preview">No channels selected for this post.</div>
@@ -1112,6 +1162,17 @@ const CONTEXTUAL_CHANNELS: Array<{
   },
 ];
 
+const SUGGESTED_DESTINATIONS: Record<ContextualChannel, { label: string; value: string }> = {
+  google: { label: "Post to:", value: "Google profile: Beegreen Landscaping" },
+  facebook: { label: "Post to:", value: "Facebook page: Beegreen Landscaping / Profile 1" },
+  instagram: { label: "Post to:", value: "Instagram profile: @beegreenlandscaping" },
+  email: {
+    label: "Recipients:",
+    value: "This email will send to the All clients segment, with 394 of 400 subscribed to email marketing.",
+  },
+  website: { label: "Publish to:", value: INITIAL_EXTERNAL_LINK },
+};
+
 function contextualSuccessMessage(
   channel: "social" | ContextualChannel,
   action: ContextualAction,
@@ -1139,11 +1200,19 @@ function ContextualChannelIcon({ channel }: { channel: ContextualChannel }) {
   return <Globe2 size={18} />;
 }
 
-function EmailCampaignPreview({ images, message }: { images: GalleryImage[]; message: string }) {
+function EmailCampaignPreview({
+  images,
+  message,
+  subject = INITIAL_EMAIL_SUBJECT,
+}: {
+  images: GalleryImage[];
+  message: string;
+  subject?: string;
+}) {
   return (
     <article className="context-email-preview">
       <header className="email-envelope">
-        <p><strong>Subject:</strong> A seasonal refresh for this Hamilton property</p>
+        <p><strong>Subject:</strong> {subject}</p>
         <p><strong>From:</strong> Beegreen Landscaping &lt;hello@beegreenlandscaping.ca&gt;</p>
       </header>
       <div className="email-brand">
@@ -1165,7 +1234,15 @@ function EmailCampaignPreview({ images, message }: { images: GalleryImage[]; mes
   );
 }
 
-function WebsitePagePreview({ images, message }: { images: GalleryImage[]; message: string }) {
+function WebsitePagePreview({
+  images,
+  message,
+  title = INITIAL_WEBSITE_TITLE,
+}: {
+  images: GalleryImage[];
+  message: string;
+  title?: string;
+}) {
   return (
     <article className="context-website-preview">
       <header className="website-nav">
@@ -1176,7 +1253,7 @@ function WebsitePagePreview({ images, message }: { images: GalleryImage[]; messa
         {images[0] && <img src={images[0].src} alt={images[0].alt} />}
         <div>
           <p>HAMILTON PROJECT SHOWCASE</p>
-          <h2>Seasonal property clean up in Hamilton</h2>
+          <h2>{title}</h2>
         </div>
       </section>
       <section className="website-copy">
@@ -1203,22 +1280,28 @@ function SuggestedMarketingContentDialog({
   prompt,
   drafts,
   emailMessage,
+  emailSubject,
   websiteMessage,
+  websiteTitle,
   activeIndex,
   onPromptChange,
   onActiveIndexChange,
   onClose,
-  onFacebookEdit,
+  onEdit,
+  onSchedule,
 }: {
   prompt: string;
   drafts: V2Drafts;
   emailMessage: string;
+  emailSubject: string;
   websiteMessage: string;
+  websiteTitle: string;
   activeIndex: number;
   onPromptChange: (value: string) => void;
   onActiveIndexChange: (index: number) => void;
   onClose: () => void;
-  onFacebookEdit: () => void;
+  onEdit: (channel: ContextualChannel) => void;
+  onSchedule: (channel: ContextualChannel, final: boolean) => void;
 }) {
   const active = CONTEXTUAL_CHANNELS[activeIndex];
   const atStart = activeIndex === 0;
@@ -1228,18 +1311,7 @@ function SuggestedMarketingContentDialog({
     : active.id === "website"
       ? "Website page"
       : `${active.label} post`;
-  const destinationDetails = active.id === "google"
-    ? { label: "Post to:", value: "Google profile: Beegreen Landscaping" }
-    : active.id === "facebook"
-      ? { label: "Post to:", value: "Facebook page: Beegreen Landscaping / Profile 1" }
-      : active.id === "instagram"
-        ? { label: "Post to:", value: "Instagram profile: @beegreenlandscaping" }
-        : active.id === "email"
-          ? {
-              label: "Recipients:",
-              value: "This email will send to the All clients segment, with 394 of 400 subscribed to email marketing.",
-            }
-          : { label: "Publish to:", value: INITIAL_EXTERNAL_LINK };
+  const destinationDetails = SUGGESTED_DESTINATIONS[active.id];
   const visualOnlyAction = (event: React.MouseEvent<HTMLButtonElement>) => event.preventDefault();
   const goPrevious = () => onActiveIndexChange(Math.max(0, activeIndex - 1));
   const goNext = () => onActiveIndexChange(Math.min(CONTEXTUAL_CHANNELS.length - 1, activeIndex + 1));
@@ -1332,15 +1404,24 @@ function SuggestedMarketingContentDialog({
           <hr className="suggested-preview-divider" />
           <div className="suggested-preview-scroll">
             {active.id === "email" ? (
-              <EmailCampaignPreview images={drafts.all.images} message={emailMessage} />
+              <EmailCampaignPreview
+                images={drafts.all.images}
+                message={emailMessage}
+                subject={emailSubject}
+              />
             ) : active.id === "website" ? (
-              <WebsitePagePreview images={drafts.all.images} message={websiteMessage} />
+              <WebsitePagePreview
+                images={drafts.all.images}
+                message={websiteMessage}
+                title={websiteTitle}
+              />
             ) : (
               <PlatformPreviewCard
                 channel={active.id}
                 message={drafts[active.id].message}
                 hashtags={drafts[active.id].hashtags}
                 images={drafts[active.id].images}
+                externalLink={drafts[active.id].externalLink}
               />
             )}
           </div>
@@ -1354,13 +1435,16 @@ function SuggestedMarketingContentDialog({
             <button
               type="button"
               className="secondary-button"
-              aria-disabled={active.id === "facebook" ? undefined : "true"}
-              onClick={active.id === "facebook" ? onFacebookEdit : visualOnlyAction}
+              onClick={() => onEdit(active.id)}
             >
               Edit
             </button>
-            <button type="button" className="primary-button" aria-disabled="true" onClick={visualOnlyAction}>
-              Schedule Nov 6
+            <button
+              type="button"
+              className="primary-button"
+              onClick={() => onSchedule(active.id, atEnd)}
+            >
+              Schedule and next
             </button>
           </div>
         </footer>
@@ -1636,6 +1720,7 @@ function VersionThreeCombinedContextModal({
                     message={drafts[previewChannel].message}
                     hashtags={drafts[previewChannel].hashtags}
                     images={drafts[previewChannel].images}
+                    externalLink={drafts[previewChannel].externalLink}
                   />
                 ) : (
                   <div className="no-channel-preview">No channels selected for this post.</div>
@@ -1656,7 +1741,9 @@ function VersionThreeCombinedContextModal({
 function VersionFourContextModal({
   drafts,
   emailMessage,
+  emailSubject,
   websiteMessage,
+  websiteTitle,
   initialIndex = 0,
   googleAvailable,
   onClose,
@@ -1666,7 +1753,9 @@ function VersionFourContextModal({
 }: {
   drafts: V2Drafts;
   emailMessage: string;
+  emailSubject: string;
   websiteMessage: string;
+  websiteTitle: string;
   initialIndex?: number;
   googleAvailable: boolean;
   onClose: () => void;
@@ -1849,15 +1938,24 @@ function VersionFourContextModal({
             <header><Sparkles size={20} /><strong>{active.label} preview</strong></header>
             <div className="v4-context-preview-scroll">
               {active.id === "email" ? (
-                <EmailCampaignPreview images={drafts.all.images} message={emailMessage} />
+                <EmailCampaignPreview
+                  images={drafts.all.images}
+                  message={emailMessage}
+                  subject={emailSubject}
+                />
               ) : active.id === "website" ? (
-                <WebsitePagePreview images={drafts.all.images} message={websiteMessage} />
+                <WebsitePagePreview
+                  images={drafts.all.images}
+                  message={websiteMessage}
+                  title={websiteTitle}
+                />
               ) : (
                 <PlatformPreviewCard
                   channel={active.id}
                   message={drafts[active.id].message}
                   hashtags={drafts[active.id].hashtags}
                   images={drafts[active.id].images}
+                  externalLink={drafts[active.id].externalLink}
                 />
               )}
             </div>
@@ -1992,6 +2090,7 @@ function SocialDraftPreview({ channel, draft }: { channel: PreviewChannel; draft
           message={draft.message}
           hashtags={draft.hashtags}
           images={draft.images}
+          externalLink={draft.externalLink}
         />
         <p className="preview-disclaimer">
           Social networks regularly make updates to formatting so your post may appear slightly
@@ -2248,8 +2347,10 @@ function VersionTwoEditorPanel({
   setDrafts,
   enabledChannels,
   onCancel,
+  onSave,
   allTabLabel = "Your post",
   separateHashtags = false,
+  focusedChannel,
 }: {
   activeTab: V2Tab;
   setActiveTab: (tab: V2Tab) => void;
@@ -2257,8 +2358,10 @@ function VersionTwoEditorPanel({
   setDrafts: (drafts: V2Drafts) => void;
   enabledChannels: EnabledChannels;
   onCancel: () => void;
+  onSave?: () => void;
   allTabLabel?: string;
   separateHashtags?: boolean;
+  focusedChannel?: PreviewChannel;
 }) {
   const activeDraft = drafts[activeTab];
   const visibleImages =
@@ -2306,8 +2409,8 @@ function VersionTwoEditorPanel({
   return (
     <section className="editor-panel version-two-editor">
       <div className="editor-scroll">
-        <h1>Edit Social Post</h1>
-        <div className="channel-editor-tabs" role="tablist" aria-label="Post channel">
+        <h1>{focusedChannel ? `Edit ${focusedChannel[0].toUpperCase() + focusedChannel.slice(1)} Post` : "Edit Social Post"}</h1>
+        {!focusedChannel && <div className="channel-editor-tabs" role="tablist" aria-label="Post channel">
           {([
             ["all", "Your post"],
             ["google", "Google"],
@@ -2328,7 +2431,7 @@ function VersionTwoEditorPanel({
               {label}
             </button>
           ))}
-        </div>
+        </div>}
 
         {activeTab === "all" && (
           <p className="channel-customize-note">
@@ -2422,7 +2525,7 @@ function VersionTwoEditorPanel({
       </div>
       <footer className="editor-footer">
         <button className="secondary-button" type="button" onClick={onCancel}>Cancel</button>
-        <button className="primary-button" type="button" onClick={onCancel}>Save Edit</button>
+        <button className="primary-button" type="button" onClick={onSave ?? onCancel}>Save Edit</button>
       </footer>
     </section>
   );
@@ -2471,11 +2574,13 @@ function PlatformPreviewCard({
   message,
   hashtags: explicitHashtags = "",
   images,
+  externalLink,
 }: {
   channel: PreviewChannel;
   message: string;
   hashtags?: string;
   images: GalleryImage[];
+  externalLink?: string;
 }) {
   const [instagramImage, setInstagramImage] = useState(0);
   const parsed = splitPostMessage(message);
@@ -2503,7 +2608,10 @@ function PlatformPreviewCard({
         )}
         <div className="post-copy">
           <p>{body}{hashtags ? `\n\n${hashtags}` : ""}</p>
-          <button type="button">Learn more</button>
+          <div className="google-post-link">
+            <button type="button">Learn more</button>
+            {externalLink && <span>{externalLink}</span>}
+          </div>
         </div>
       </article>
     );
@@ -2657,6 +2765,7 @@ function MultiChannelPreviewCarousel({
                 message={drafts[channel].message}
                 hashtags={drafts[channel].hashtags}
                 images={drafts[channel].images}
+                externalLink={drafts[channel].externalLink}
               />
             </div>
           ))}
@@ -2749,6 +2858,7 @@ function VersionTwoPreview({
             message={draft.message}
             hashtags={draft.hashtags}
             images={draft.images}
+            externalLink={draft.externalLink}
           />
         ) : (
           <div className="no-channel-preview">No channels selected for this post.</div>
@@ -2930,6 +3040,123 @@ function ReviewScreen({
   );
 }
 
+function SuggestedGoogleEditor({
+  drafts,
+  setDrafts,
+  onCancel,
+  onSave,
+}: {
+  drafts: V2Drafts;
+  setDrafts: (drafts: V2Drafts) => void;
+  onCancel: () => void;
+  onSave: () => void;
+}) {
+  const allChannelsEnabled: EnabledChannels = {
+    google: true,
+    facebook: true,
+    instagram: true,
+  };
+
+  return (
+    <main className="app-content suggested-google-editor">
+      <VersionTwoEditorPanel
+        activeTab="google"
+        setActiveTab={() => undefined}
+        drafts={drafts}
+        setDrafts={setDrafts}
+        enabledChannels={allChannelsEnabled}
+        onCancel={onCancel}
+        onSave={onSave}
+        focusedChannel="google"
+        separateHashtags
+      />
+      <VersionTwoPreview
+        drafts={drafts}
+        enabledChannels={allChannelsEnabled}
+        activeTab="google"
+      />
+    </main>
+  );
+}
+
+function SuggestedTextEditor({
+  channel,
+  draft,
+  images,
+  setDraft,
+  onCancel,
+  onSave,
+}: {
+  channel: "email" | "website";
+  draft: SuggestedTextDraft;
+  images: GalleryImage[];
+  setDraft: (draft: SuggestedTextDraft) => void;
+  onCancel: () => void;
+  onSave: () => void;
+}) {
+  const isEmail = channel === "email";
+  const channelLabel = isEmail ? "Email Campaign" : "Website Page";
+
+  return (
+    <main className="app-content suggested-text-editor">
+      <section className="editor-panel">
+        <div className="editor-scroll">
+          <h1>Edit {channelLabel}</h1>
+          <div className="about-content-row">
+            {isEmail ? <Mail size={21} /> : <Globe2 size={21} />}
+            <strong>{isEmail ? "Email campaign details" : "Website page details"}</strong>
+          </div>
+          <div className="suggested-editor-context">
+            {isEmail ? (
+              <>
+                <p><strong>From:</strong> Beegreen Landscaping &lt;hello@beegreenlandscaping.ca&gt;</p>
+                <p><strong>Recipients:</strong> All clients · 394 subscribed</p>
+              </>
+            ) : (
+              <p><strong>Publish to:</strong> {INITIAL_EXTERNAL_LINK}</p>
+            )}
+          </div>
+          <div className="field-block">
+            <label htmlFor={`suggested-${channel}-title`}>
+              {isEmail ? "Email subject" : "Page title"}
+            </label>
+            <input
+              id={`suggested-${channel}-title`}
+              value={draft.title}
+              onChange={(event) => setDraft({ ...draft, title: event.target.value })}
+            />
+          </div>
+          <div className="field-block">
+            <label htmlFor={`suggested-${channel}-body`}>
+              {isEmail ? "Message body" : "Project summary"}
+            </label>
+            <AutoSizeTextarea
+              id={`suggested-${channel}-body`}
+              maxLength={1500}
+              value={draft.message}
+              onChange={(message) => setDraft({ ...draft, message })}
+            />
+            <span className="character-count">{draft.message.length}/1500 characters</span>
+          </div>
+        </div>
+        <footer className="editor-footer">
+          <button className="secondary-button" type="button" onClick={onCancel}>Cancel</button>
+          <button className="primary-button" type="button" onClick={onSave}>Save Edit</button>
+        </footer>
+      </section>
+      <section className="preview-panel suggested-text-preview">
+        <div className="preview-content">
+          {isEmail ? (
+            <EmailCampaignPreview images={images} message={draft.message} subject={draft.title} />
+          ) : (
+            <WebsitePagePreview images={images} message={draft.message} title={draft.title} />
+          )}
+        </div>
+      </section>
+    </main>
+  );
+}
+
 export default function App() {
   const [message, setMessage] = useState(INITIAL_V1_MESSAGE);
   const [images, setImages] = useState(INITIAL_IMAGES);
@@ -2955,18 +3182,24 @@ export default function App() {
   const [v3ReviewOrigin, setV3ReviewOrigin] = useState<"friday" | "saturday" | null>(null);
   const [combinedWorkflow, setCombinedWorkflow] = useState<"modal" | "review" | "edit" | null>(null);
   const [combinedModalStartIndex, setCombinedModalStartIndex] = useState(0);
-  const [v4ReviewOrigin, setV4ReviewOrigin] = useState<"saturday" | "suggested" | null>(null);
+  const [v4ReviewOrigin, setV4ReviewOrigin] = useState<"saturday" | "suggested-content" | null>(null);
   const [calendarPrompt, setCalendarPrompt] = useState("");
   const [suggestedPrompt, setSuggestedPrompt] = useState("");
   const [suggestedDialogOpen, setSuggestedDialogOpen] = useState(false);
   const [suggestedPreviewIndex, setSuggestedPreviewIndex] = useState(0);
   const [v4Generating, setV4Generating] = useState(false);
   const suggestionTimerRef = useRef<number | null>(null);
+  const [suggestedEditor, setSuggestedEditor] = useState<"google" | "email" | "website" | null>(null);
+  const [suggestedGoogleDrafts, setSuggestedGoogleDrafts] = useState<V2Drafts | null>(null);
+  const [suggestedTextDraft, setSuggestedTextDraft] = useState<SuggestedTextDraft | null>(null);
+  const [suggestedCompletion, setSuggestedCompletion] = useState<SuggestedCompletion | null>(null);
   const [socialWorkflowChannel, setSocialWorkflowChannel] = useState<PreviewChannel>("facebook");
   const [socialEditDraft, setSocialEditDraft] = useState<ChannelDraft | null>(null);
   const [applyChanges, setApplyChanges] = useState<{ source: PreviewChannel; message: string } | null>(null);
   const [v4EmailMessage, setV4EmailMessage] = useState(INITIAL_EMAIL_MESSAGE);
+  const [v4EmailSubject, setV4EmailSubject] = useState(INITIAL_EMAIL_SUBJECT);
   const [v4WebsiteMessage, setV4WebsiteMessage] = useState(INITIAL_WEBSITE_MESSAGE);
+  const [v4WebsiteTitle, setV4WebsiteTitle] = useState(INITIAL_WEBSITE_TITLE);
   const [v4GoogleDeleted, setV4GoogleDeleted] = useState(false);
   const [deleteToastVisible, setDeleteToastVisible] = useState(false);
   const [scheduleToastVisible, setScheduleToastVisible] = useState(false);
@@ -2978,6 +3211,8 @@ export default function App() {
   const frameHeight = 1024;
   const totalHeight = frameHeight + 60;
   const v4SidebarFree = version === "v4" && (
+    suggestedEditor !== null
+    ||
     combinedWorkflow === "review"
     || combinedWorkflow === "edit"
     || (combinedWorkflow === null && screen !== "calendar")
@@ -3042,11 +3277,17 @@ export default function App() {
     setSuggestedDialogOpen(false);
     setSuggestedPreviewIndex(0);
     setV4Generating(false);
+    setSuggestedEditor(null);
+    setSuggestedGoogleDrafts(null);
+    setSuggestedTextDraft(null);
+    setSuggestedCompletion(null);
     setSocialWorkflowChannel("facebook");
     setSocialEditDraft(null);
     setApplyChanges(null);
     setV4EmailMessage(INITIAL_EMAIL_MESSAGE);
+    setV4EmailSubject(INITIAL_EMAIL_SUBJECT);
     setV4WebsiteMessage(INITIAL_WEBSITE_MESSAGE);
+    setV4WebsiteTitle(INITIAL_WEBSITE_TITLE);
     setV4GoogleDeleted(false);
     setDeleteToastVisible(false);
     setScheduleToastVisible(false);
@@ -3055,6 +3296,12 @@ export default function App() {
   };
   const toggleChannel = (channel: PreviewChannel) => {
     setEnabledChannels((current) => ({ ...current, [channel]: !current[channel] }));
+  };
+  const returnToSuggestedDialog = () => {
+    setSuggestedEditor(null);
+    setSuggestedGoogleDrafts(null);
+    setSuggestedTextDraft(null);
+    setSuggestedDialogOpen(true);
   };
 
   useEffect(() => {
@@ -3143,7 +3390,35 @@ export default function App() {
           className={`prototype-frame${v4SidebarFree ? " sidebar-free" : ""}`}
           style={{ height: frameHeight }}
         >
-          {combinedWorkflow === "review" ? (
+          {suggestedEditor === "google" && suggestedGoogleDrafts ? (
+            <SuggestedGoogleEditor
+              drafts={suggestedGoogleDrafts}
+              setDrafts={setSuggestedGoogleDrafts}
+              onCancel={returnToSuggestedDialog}
+              onSave={() => {
+                setV4Drafts(cloneDrafts(suggestedGoogleDrafts));
+                returnToSuggestedDialog();
+              }}
+            />
+          ) : (suggestedEditor === "email" || suggestedEditor === "website") && suggestedTextDraft ? (
+            <SuggestedTextEditor
+              channel={suggestedEditor}
+              draft={suggestedTextDraft}
+              images={v4Drafts.all.images}
+              setDraft={setSuggestedTextDraft}
+              onCancel={returnToSuggestedDialog}
+              onSave={() => {
+                if (suggestedEditor === "email") {
+                  setV4EmailSubject(suggestedTextDraft.title);
+                  setV4EmailMessage(suggestedTextDraft.message);
+                } else {
+                  setV4WebsiteTitle(suggestedTextDraft.title);
+                  setV4WebsiteMessage(suggestedTextDraft.message);
+                }
+                returnToSuggestedDialog();
+              }}
+            />
+          ) : combinedWorkflow === "review" ? (
             <>
               <VersionFourSocialReview
                 channel={socialWorkflowChannel}
@@ -3151,8 +3426,8 @@ export default function App() {
                 inactive={applyChanges !== null}
                 onBack={() => {
                   setApplyChanges(null);
-                  if (v4ReviewOrigin === "suggested") {
-                    setSuggestedPreviewIndex(1);
+                  if (v4ReviewOrigin === "suggested-content") {
+                    setSuggestedPreviewIndex(socialWorkflowChannel === "facebook" ? 1 : 2);
                     setSuggestedDialogOpen(true);
                     setCombinedWorkflow(null);
                     return;
@@ -3275,13 +3550,16 @@ export default function App() {
                   ?? (version === "v4" && v4GoogleDeleted
                     ? ["Facebook post", "Instagram post", "Email", "Website"]
                     : undefined)}
+                generatedSuggestionCard={version === "v4" ? suggestedCompletion?.card : undefined}
               />
               {suggestedDialogOpen && version === "v4" && (
                 <SuggestedMarketingContentDialog
                   prompt={suggestedPrompt}
                   drafts={v4Drafts}
                   emailMessage={v4EmailMessage}
+                  emailSubject={v4EmailSubject}
                   websiteMessage={v4WebsiteMessage}
+                  websiteTitle={v4WebsiteTitle}
                   activeIndex={suggestedPreviewIndex}
                   onPromptChange={setSuggestedPrompt}
                   onActiveIndexChange={setSuggestedPreviewIndex}
@@ -3290,12 +3568,46 @@ export default function App() {
                     setSuggestedPreviewIndex(0);
                     setV4ReviewOrigin(null);
                   }}
-                  onFacebookEdit={() => {
-                    setSocialWorkflowChannel("facebook");
-                    setApplyChanges(null);
-                    setV4ReviewOrigin("suggested");
+                  onEdit={(channel) => {
                     setSuggestedDialogOpen(false);
-                    setCombinedWorkflow("review");
+                    if (channel === "facebook" || channel === "instagram") {
+                      setSocialWorkflowChannel(channel);
+                      setApplyChanges(null);
+                      setV4ReviewOrigin("suggested-content");
+                      setCombinedWorkflow("review");
+                      return;
+                    }
+                    if (channel === "google") {
+                      setSuggestedGoogleDrafts(cloneDrafts(v4Drafts));
+                      setSuggestedEditor("google");
+                      return;
+                    }
+                    setSuggestedTextDraft({
+                      title: channel === "email" ? v4EmailSubject : v4WebsiteTitle,
+                      message: channel === "email" ? v4EmailMessage : v4WebsiteMessage,
+                    });
+                    setSuggestedEditor(channel);
+                  }}
+                  onSchedule={(channel, final) => {
+                    showContextualToast(contextualSuccessMessage(channel, "schedule"));
+                    if (!final) {
+                      setSuggestedPreviewIndex((current) => Math.min(4, current + 1));
+                      return;
+                    }
+                    setSuggestedCompletion({
+                      card: {
+                        title: suggestionCardTitle(suggestedPrompt),
+                        channels: ["Google post", "Facebook post", "Instagram post", "Email", "Website"],
+                        status: "Sent",
+                        generatedSuggestion: true,
+                        showDate: false,
+                      },
+                      destinations: { ...SUGGESTED_DESTINATIONS },
+                    });
+                    setSuggestedDialogOpen(false);
+                    setSuggestedPreviewIndex(0);
+                    setSuggestedPrompt("");
+                    setV4ReviewOrigin(null);
                   }}
                 />
               )}
@@ -3349,7 +3661,9 @@ export default function App() {
                 <VersionFourContextModal
                   drafts={v4Drafts}
                   emailMessage={v4EmailMessage}
+                  emailSubject={v4EmailSubject}
                   websiteMessage={v4WebsiteMessage}
+                  websiteTitle={v4WebsiteTitle}
                   initialIndex={combinedModalStartIndex}
                   googleAvailable={!v4GoogleDeleted}
                   onClose={() => {
