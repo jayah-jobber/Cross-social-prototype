@@ -300,6 +300,11 @@ button {
   left: 56px;
 }
 
+.prototype-frame.sidebar-free .top-bar,
+.prototype-frame.sidebar-free .app-content {
+  left: 0;
+}
+
 .top-actions button:disabled {
   cursor: default;
 }

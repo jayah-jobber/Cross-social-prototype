@@ -2579,6 +2579,11 @@ export default function App() {
   const [scale, setScale] = useState(1);
   const frameHeight = 1024;
   const totalHeight = frameHeight + 60;
+  const v4SidebarFree = version === "v4" && (
+    combinedWorkflow === "review"
+    || combinedWorkflow === "edit"
+    || (combinedWorkflow === null && screen !== "calendar")
+  );
   const sharedCalendarDraft = version === "v1"
     ? { message, images }
     : { message: v3Message, images: v3Images };
@@ -2691,10 +2696,12 @@ export default function App() {
             </button>
           </div>
         </div>
-        <div className="prototype-frame" style={{ height: frameHeight }}>
+        <div
+          className={`prototype-frame${v4SidebarFree ? " sidebar-free" : ""}`}
+          style={{ height: frameHeight }}
+        >
           {combinedWorkflow === "review" ? (
             <>
-              <SideNavigation />
               <TopBar />
               <VersionFourSocialReview
                 channel={socialWorkflowChannel}
@@ -2745,7 +2752,6 @@ export default function App() {
             </>
           ) : combinedWorkflow === "edit" && socialEditDraft ? (
             <>
-              <SideNavigation />
               <TopBar />
               <VersionFourSocialEditor
                 channel={socialWorkflowChannel}
@@ -2834,7 +2840,7 @@ export default function App() {
             </>
           ) : (
             <>
-              <SideNavigation />
+              {version !== "v4" && <SideNavigation />}
               <TopBar />
               {screen === "review" && version === "v3" ? (
                 <VersionThreeReviewScreen
