@@ -1158,20 +1158,24 @@ function WebsitePagePreview({ images, message }: { images: GalleryImage[]; messa
 function VersionThreeCombinedContextModal({
   drafts,
   enabledChannels,
+  initialPreviewChannel,
   onToggleChannel,
+  onPreviewChannelChange,
   onClose,
   onEdit,
   onAction,
 }: {
   drafts: V2Drafts;
   enabledChannels: EnabledChannels;
+  initialPreviewChannel: PreviewChannel;
   onToggleChannel: (channel: PreviewChannel) => void;
+  onPreviewChannelChange: (channel: PreviewChannel) => void;
   onClose: () => void;
-  onEdit: () => void;
+  onEdit: (channel: PreviewChannel) => void;
   onAction: (page: "social" | "email" | "website", action: ContextualAction, final: boolean) => void;
 }) {
   const [activePage, setActivePage] = useState(0);
-  const [previewChannel, setPreviewChannel] = useState<PreviewChannel>("google");
+  const [previewChannel, setPreviewChannel] = useState<PreviewChannel>(initialPreviewChannel);
   const [splitMenuOpen, setSplitMenuOpen] = useState(false);
   const splitMenuRef = useRef<HTMLDivElement>(null);
   const splitToggleRef = useRef<HTMLButtonElement>(null);
@@ -1201,6 +1205,22 @@ function VersionThreeCombinedContextModal({
     .filter((channel) => enabledChannels[channel]);
   const sharedBody = splitPostMessage(drafts.all.message).body;
   const safeVisualAction = (event: React.MouseEvent<HTMLButtonElement>) => event.preventDefault();
+  const selectPreviewChannel = (channel: PreviewChannel) => {
+    setPreviewChannel(channel);
+    onPreviewChannelChange(channel);
+  };
+  const handlePreviewTabKeyDown = (
+    event: React.KeyboardEvent<HTMLButtonElement>,
+    channel: PreviewChannel,
+  ) => {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    event.preventDefault();
+    event.stopPropagation();
+    const currentIndex = socialChannels.indexOf(channel);
+    const direction = event.key === "ArrowRight" ? 1 : -1;
+    const nextIndex = (currentIndex + direction + socialChannels.length) % socialChannels.length;
+    selectPreviewChannel(socialChannels[nextIndex]);
+  };
   const performAction = (action: ContextualAction) => {
     setSplitMenuOpen(false);
     const page = activePage === 0 ? "social" : activePage === 1 ? "email" : "website";
@@ -1213,7 +1233,7 @@ function VersionThreeCombinedContextModal({
     if (!enabledChannels[previewChannel]) {
       const nextChannel = (["google", "facebook", "instagram"] as PreviewChannel[])
         .find((channel) => enabledChannels[channel]);
-      if (nextChannel) setPreviewChannel(nextChannel);
+      if (nextChannel) selectPreviewChannel(nextChannel);
     }
   }, [enabledChannels, previewChannel]);
 
@@ -1338,7 +1358,7 @@ function VersionThreeCombinedContextModal({
                   type="button"
                   className="secondary-button"
                   aria-disabled={activePage === 0 ? undefined : "true"}
-                  onClick={activePage === 0 ? onEdit : safeVisualAction}
+                  onClick={activePage === 0 ? () => onEdit(previewChannel) : safeVisualAction}
                 >
                   Edit
                 </button>
@@ -1381,8 +1401,10 @@ function VersionThreeCombinedContextModal({
                     type="button"
                     role="tab"
                     aria-selected={previewChannel === channel}
+                    tabIndex={previewChannel === channel ? 0 : -1}
                     className={previewChannel === channel ? "active" : ""}
-                    onClick={() => setPreviewChannel(channel)}
+                    onClick={() => selectPreviewChannel(channel)}
+                    onKeyDown={(event) => handlePreviewTabKeyDown(event, channel)}
                     key={channel}
                   >
                     {channel[0].toUpperCase() + channel.slice(1)}
@@ -2715,6 +2737,8 @@ export default function App() {
   const [screen, setScreen] = useState<"calendar" | "review" | "edit">("calendar");
   const [calendarModalOpen, setCalendarModalOpen] = useState(false);
   const [v3CombinedModalOpen, setV3CombinedModalOpen] = useState(false);
+  const [v3ContextPreviewChannel, setV3ContextPreviewChannel] = useState<PreviewChannel>("google");
+  const [v3ReviewOrigin, setV3ReviewOrigin] = useState<"friday" | "saturday" | null>(null);
   const [combinedWorkflow, setCombinedWorkflow] = useState<"modal" | "review" | "edit" | null>(null);
   const [combinedModalStartIndex, setCombinedModalStartIndex] = useState(0);
   const [socialWorkflowChannel, setSocialWorkflowChannel] = useState<PreviewChannel>("facebook");
@@ -2779,6 +2803,8 @@ export default function App() {
     setScreen("calendar");
     setCalendarModalOpen(false);
     setV3CombinedModalOpen(false);
+    setV3ContextPreviewChannel("google");
+    setV3ReviewOrigin(null);
     setCombinedWorkflow(null);
     setCombinedModalStartIndex(0);
     setSocialWorkflowChannel("facebook");
@@ -2959,9 +2985,14 @@ export default function App() {
                 targetChannels={PREVIEW_CHANNEL_ORDER
                   .filter((channel) => scheduledChannels[version]?.[channel])
                   .map((channel) => CALENDAR_CHANNEL_BY_PREVIEW[channel])}
-                onOpenPost={() => setCalendarModalOpen(true)}
+                onOpenPost={() => {
+                  setV3ReviewOrigin(null);
+                  setCalendarModalOpen(true);
+                }}
                 onOpenCombinedPost={() => {
                   if (version === "v3") {
+                    setV3ContextPreviewChannel("google");
+                    setV3ReviewOrigin(null);
                     setV3CombinedModalOpen(true);
                   } else if (version === "v4") {
                     setCombinedModalStartIndex(0);
@@ -2982,6 +3013,7 @@ export default function App() {
                   onClose={() => setCalendarModalOpen(false)}
                   onEdit={() => {
                     setCalendarModalOpen(false);
+                    if (version === "v3") setV3ReviewOrigin("friday");
                     setScreen("review");
                   }}
                 />
@@ -2990,9 +3022,16 @@ export default function App() {
                 <VersionThreeCombinedContextModal
                   drafts={v3Drafts}
                   enabledChannels={enabledChannels}
+                  initialPreviewChannel={v3ContextPreviewChannel}
                   onToggleChannel={toggleChannel}
-                  onClose={() => setV3CombinedModalOpen(false)}
-                  onEdit={() => {
+                  onPreviewChannelChange={setV3ContextPreviewChannel}
+                  onClose={() => {
+                    setV3ContextPreviewChannel("google");
+                    setV3CombinedModalOpen(false);
+                  }}
+                  onEdit={(channel) => {
+                    setV3ContextPreviewChannel(channel);
+                    setV3ReviewOrigin("saturday");
                     setV3CombinedModalOpen(false);
                     setScreen("review");
                   }}
@@ -3006,6 +3045,8 @@ export default function App() {
                       ...current,
                       v3: [...completedChannels, "Email", "Website"],
                     }));
+                    setV3ContextPreviewChannel("google");
+                    setV3ReviewOrigin(null);
                     setV3CombinedModalOpen(false);
                   }}
                 />
@@ -3077,12 +3118,19 @@ export default function App() {
                   carouselDrafts={version === "v1" ? undefined : multiChannelDrafts}
                   onToggleChannel={toggleChannel}
                   onEdit={() => setScreen("edit")}
-                  onBack={() => setScreen("calendar")}
+                  onBack={() => {
+                    setScreen("calendar");
+                    if (version === "v3" && v3ReviewOrigin === "saturday") {
+                      setV3CombinedModalOpen(true);
+                    }
+                    setV3ReviewOrigin(null);
+                  }}
                   onSchedule={() => {
                     setScheduledChannels((current) => ({
                       ...current,
                       [version]: { ...enabledChannels },
                     }));
+                    setV3ReviewOrigin(null);
                     setScreen("calendar");
                     setContextualToast(null);
                     setScheduleToastVisible(true);
