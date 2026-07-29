@@ -2860,7 +2860,13 @@ export default function App() {
         style={{ "--prototype-scale": scale, height: totalHeight } as React.CSSProperties}
       >
         <div className="ab-toolbar">
-          <span>A/B test prototype</span>
+          <span>
+            {version === "v3"
+              ? "Daisy chain social, email and website"
+              : version === "v4"
+                ? "Daisy chain all 5 channels"
+                : "A/B test prototype"}
+          </span>
           <div className="version-switcher" aria-label="Prototype version">
             <button
               className={version === "v1" ? "selected" : ""}
