@@ -1667,8 +1667,53 @@ button {
   border-style: solid;
 }
 
+.marketing-calendar-card.generated-suggestion-card {
+  gap: 3px;
+  padding: 8px;
+  border-color: #bdd8b6;
+  background: #fbfef9;
+}
+
+.generated-suggestion-card .calendar-card-title {
+  margin-bottom: 2px;
+  font-size: 11px;
+  line-height: 1.15;
+}
+
+.generated-suggestion-card .calendar-card-meta,
+.generated-suggestion-card .calendar-card-details {
+  font-size: 10px;
+  line-height: 1.1;
+}
+
+.with-generated-suggestion .marketing-calendar-card.updated-card {
+  min-height: 0;
+  gap: 2px;
+  padding: 6px;
+  font-size: 10px;
+}
+
+.with-generated-suggestion .calendar-group {
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.with-generated-suggestion .calendar-card-title {
+  margin-bottom: 0;
+  line-height: 1.1;
+}
+
+.with-generated-suggestion .calendar-card-meta,
+.with-generated-suggestion .calendar-card-details {
+  line-height: 1.05;
+}
+
 .marketing-calendar-card.updated-card.target-card {
   min-height: 154px;
+}
+
+.with-generated-suggestion .marketing-calendar-card.updated-card.target-card {
+  min-height: 0;
 }
 
 .updated-card .calendar-card-title {
@@ -3178,6 +3223,22 @@ label {
   text-decoration: underline;
 }
 
+.google-post-link {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.google-post-link span {
+  min-width: 0;
+  overflow: hidden;
+  color: #60777f;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .preview-disclaimer {
   margin: 0;
   color: #415a64;
@@ -3447,6 +3508,40 @@ label {
 .suggested-content-footer [aria-disabled="true"] {
   cursor: default;
   opacity: 0.62;
+}
+
+.suggested-google-editor .version-two-editor h1,
+.suggested-text-editor .editor-scroll h1 {
+  margin-bottom: 30px;
+}
+
+.suggested-editor-context {
+  display: grid;
+  gap: 8px;
+  margin: -8px 0 28px;
+  padding: 16px;
+  border: 1px solid #e0e4e5;
+  border-radius: 8px;
+  background: #f8f8f5;
+  font-size: 13px;
+}
+
+.suggested-editor-context p {
+  margin: 0;
+}
+
+.suggested-text-editor .field-block {
+  margin-bottom: 28px;
+}
+
+.suggested-text-preview .preview-content {
+  width: 540px;
+  margin-top: 28px;
+}
+
+.suggested-text-preview .context-email-preview,
+.suggested-text-preview .context-website-preview {
+  width: 100%;
 }
 
 @media (max-height: 940px) {
