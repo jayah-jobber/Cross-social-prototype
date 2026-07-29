@@ -111,6 +111,8 @@ type PreviewChannel = Exclude<V2Tab, "all">;
 type EnabledChannels = Record<PreviewChannel, boolean>;
 const LOCKED_VERSION: PrototypeVersion = "v4";
 type SchedulableVersion = Exclude<PrototypeVersion, "v3">;
+type ContextualAction = "schedule" | "post";
+type ContextualToast = { message: string; id: number };
 
 type ChannelDraft = {
   message: string;
@@ -754,6 +756,7 @@ function MarketingCalendarCard({
   combinedInteractive = false,
   updated = false,
   targetPublished = false,
+  combinedPublished = false,
   targetChannels,
   combinedChannels,
 }: {
@@ -762,6 +765,7 @@ function MarketingCalendarCard({
   combinedInteractive?: boolean;
   updated?: boolean;
   targetPublished?: boolean;
+  combinedPublished?: boolean;
   targetChannels?: CalendarChannel[];
   combinedChannels?: CalendarChannel[];
 }) {
@@ -770,7 +774,10 @@ function MarketingCalendarCard({
     : item.target && targetPublished && targetChannels
       ? targetChannels
       : item.channels ?? (item.channel ? [item.channel] : []);
-  const status = item.target && targetPublished ? "Sent" : item.status;
+  const status = (item.target && targetPublished) || (item.combinedTarget && combinedPublished)
+    ? "Sent"
+    : item.status;
+  const isPublished = (item.target && targetPublished) || (item.combinedTarget && combinedPublished);
   const content = (
     <>
       <span className="calendar-card-title">{item.title}</span>
@@ -796,10 +803,11 @@ function MarketingCalendarCard({
   return isInteractive ? (
     <button
       className={[
-        "marketing-calendar-card target-card review",
+        "marketing-calendar-card target-card",
+        isPublished ? "" : "review",
         item.combinedTarget ? "combined-target-card" : "",
         updated ? "updated-card" : "",
-        targetPublished ? "published-card" : "",
+        isPublished ? "published-card" : "",
       ].filter(Boolean).join(" ")}
       type="button"
       onClick={onOpen}
@@ -819,6 +827,7 @@ function CalendarScreen({
   combinedInteractive = false,
   updated = false,
   targetPublished = false,
+  combinedPublished = false,
   targetChannels,
   combinedChannels,
 }: {
@@ -827,6 +836,7 @@ function CalendarScreen({
   combinedInteractive?: boolean;
   updated?: boolean;
   targetPublished?: boolean;
+  combinedPublished?: boolean;
   targetChannels?: CalendarChannel[];
   combinedChannels?: CalendarChannel[];
 }) {
@@ -883,6 +893,7 @@ function CalendarScreen({
                       combinedInteractive={combinedInteractive}
                       updated={updated}
                       targetPublished={targetPublished}
+                      combinedPublished={combinedPublished}
                       targetChannels={targetChannels}
                       combinedChannels={combinedChannels}
                     />
@@ -1068,6 +1079,20 @@ const CONTEXTUAL_CHANNELS: Array<{
   },
 ];
 
+function contextualSuccessMessage(channel: ContextualChannel, action: ContextualAction) {
+  if (action === "schedule") {
+    if (channel === "email") return "Your email campaign has been successfully scheduled.";
+    if (channel === "website") return "Your website page has been successfully scheduled.";
+    const label = channel[0].toUpperCase() + channel.slice(1);
+    return `Your ${label} post has been successfully scheduled.`;
+  }
+
+  if (channel === "email") return "Your email campaign has been successfully sent.";
+  if (channel === "website") return "Your website page has been successfully published.";
+  const label = channel[0].toUpperCase() + channel.slice(1);
+  return `Your ${label} post has been successfully posted.`;
+}
+
 function ContextualChannelIcon({ channel }: { channel: ContextualChannel }) {
   if (channel === "google") return <strong className="google-g">G</strong>;
   if (channel === "facebook") return <strong className="brand-facebook">f</strong>;
@@ -1145,6 +1170,7 @@ function VersionFourContextModal({
   onClose,
   onSocialEdit,
   onDeleteGoogle,
+  onAction,
 }: {
   drafts: V2Drafts;
   emailMessage: string;
@@ -1154,6 +1180,7 @@ function VersionFourContextModal({
   onClose: () => void;
   onSocialEdit: (channel: PreviewChannel) => void;
   onDeleteGoogle: () => void;
+  onAction: (channel: ContextualChannel, action: ContextualAction, final: boolean) => void;
 }) {
   const [activeIndex, setActiveIndex] = useState(initialIndex);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -1175,6 +1202,11 @@ function VersionFourContextModal({
   const goNext = () => {
     setSplitMenuOpen(false);
     setActiveIndex((current) => Math.min(channels.length - 1, current + 1));
+  };
+  const performAction = (action: ContextualAction) => {
+    setSplitMenuOpen(false);
+    onAction(active.id, action, atEnd);
+    if (!atEnd) setActiveIndex((current) => current + 1);
   };
   const safeVisualAction = (event: React.MouseEvent<HTMLButtonElement>) => event.preventDefault();
   const closeDeleteDialog = () => {
@@ -1297,17 +1329,14 @@ function VersionFourContextModal({
                         ref={splitOptionRef}
                         type="button"
                         role="menuitem"
-                        onClick={() => {
-                          setSplitMenuOpen(false);
-                          splitToggleRef.current?.focus();
-                        }}
+                        onClick={() => performAction("post")}
                       >
                         Post now and next
                       </button>
                     </div>
                   )}
                   <span className="v4-split-button">
-                    <button type="button" onClick={safeVisualAction}>Schedule and next</button>
+                    <button type="button" onClick={() => performAction("schedule")}>Schedule and next</button>
                     <button
                       ref={splitToggleRef}
                       type="button"
@@ -2577,6 +2606,8 @@ export default function App() {
   const [v4GoogleDeleted, setV4GoogleDeleted] = useState(false);
   const [deleteToastVisible, setDeleteToastVisible] = useState(false);
   const [scheduleToastVisible, setScheduleToastVisible] = useState(false);
+  const [contextualToast, setContextualToast] = useState<ContextualToast | null>(null);
+  const [saturdayCompletion, setSaturdayCompletion] = useState<CalendarChannel[] | null>(null);
   const [scale, setScale] = useState(1);
   const frameHeight = 1024;
   const totalHeight = frameHeight + 60;
@@ -2600,6 +2631,11 @@ export default function App() {
         facebook: sharedCalendarDraft,
         instagram: sharedCalendarDraft,
       };
+  const showContextualToast = (message: string) => {
+    setDeleteToastVisible(false);
+    setScheduleToastVisible(false);
+    setContextualToast((current) => ({ message, id: (current?.id ?? 0) + 1 }));
+  };
   const switchVersion = (nextVersion: PrototypeVersion) => {
     if (LOCKED_VERSION) return;
     if (nextVersion === version) return;
@@ -2629,6 +2665,8 @@ export default function App() {
     setV4GoogleDeleted(false);
     setDeleteToastVisible(false);
     setScheduleToastVisible(false);
+    setContextualToast(null);
+    setSaturdayCompletion(null);
   };
   const toggleChannel = (channel: PreviewChannel) => {
     setEnabledChannels((current) => ({ ...current, [channel]: !current[channel] }));
@@ -2646,6 +2684,12 @@ export default function App() {
     const timeout = window.setTimeout(() => setDeleteToastVisible(false), 4000);
     return () => window.clearTimeout(timeout);
   }, [deleteToastVisible]);
+
+  useEffect(() => {
+    if (!contextualToast) return;
+    const timeout = window.setTimeout(() => setContextualToast(null), 4000);
+    return () => window.clearTimeout(timeout);
+  }, [contextualToast]);
 
   useEffect(() => {
     const fitPrototypeToViewport = () => {
@@ -2787,6 +2831,7 @@ export default function App() {
               <CalendarScreen
                 updated={version !== "v3"}
                 targetPublished={version !== "v3" && scheduledChannels[version] !== null}
+                combinedPublished={saturdayCompletion !== null}
                 targetChannels={version !== "v3"
                   ? PREVIEW_CHANNEL_ORDER
                     .filter((channel) => scheduledChannels[version]?.[channel])
@@ -2800,9 +2845,10 @@ export default function App() {
                   }
                 }}
                 combinedInteractive={version === "v4"}
-                combinedChannels={version === "v4" && v4GoogleDeleted
-                  ? ["Facebook post", "Instagram post", "Email", "Website"]
-                  : undefined}
+                combinedChannels={saturdayCompletion
+                  ?? (version === "v4" && v4GoogleDeleted
+                    ? ["Facebook post", "Instagram post", "Email", "Website"]
+                    : undefined)}
               />
               {calendarModalOpen && (
                 <CalendarContextModal
@@ -2835,7 +2881,27 @@ export default function App() {
                   onDeleteGoogle={() => {
                     setV4GoogleDeleted(true);
                     setCombinedModalStartIndex(0);
+                    setContextualToast(null);
                     setDeleteToastVisible(true);
+                  }}
+                  onAction={(channel, action, final) => {
+                    showContextualToast(contextualSuccessMessage(channel, action));
+                    if (!final) return;
+                    setSaturdayCompletion(CONTEXTUAL_CHANNELS
+                      .filter(({ id }) => id !== "google" || !v4GoogleDeleted)
+                      .map(({ id }) => (
+                        id === "google"
+                          ? "Google post"
+                          : id === "facebook"
+                            ? "Facebook post"
+                            : id === "instagram"
+                              ? "Instagram post"
+                              : id === "email"
+                                ? "Email"
+                                : "Website"
+                      )));
+                    setCombinedModalStartIndex(0);
+                    setCombinedWorkflow(null);
                   }}
                 />
               )}
@@ -2878,6 +2944,7 @@ export default function App() {
                       }));
                     }
                     setScreen("calendar");
+                    setContextualToast(null);
                     setScheduleToastVisible(true);
                   }}
                 />
@@ -2924,6 +2991,19 @@ export default function App() {
                 type="button"
                 aria-label="Dismiss notification"
                 onClick={() => setScheduleToastVisible(false)}
+              >
+                <X size={18} />
+              </button>
+            </div>
+          )}
+          {contextualToast && (
+            <div className="schedule-success-toast" role="status" aria-live="polite" key={contextualToast.id}>
+              <CheckCircle2 size={22} />
+              <span>{contextualToast.message}</span>
+              <button
+                type="button"
+                aria-label="Dismiss notification"
+                onClick={() => setContextualToast(null)}
               >
                 <X size={18} />
               </button>
