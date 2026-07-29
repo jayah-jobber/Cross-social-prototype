@@ -814,6 +814,7 @@ function CalendarScreen({
   onOpenPost,
   onOpenCombinedPost,
   v4Prompt,
+  v4Generating = false,
   onV4PromptChange,
   onV4PromptSubmit,
   combinedInteractive = false,
@@ -826,6 +827,7 @@ function CalendarScreen({
   onOpenPost: () => void;
   onOpenCombinedPost: () => void;
   v4Prompt?: string;
+  v4Generating?: boolean;
   onV4PromptChange?: (value: string) => void;
   onV4PromptSubmit?: () => void;
   combinedInteractive?: boolean;
@@ -867,9 +869,11 @@ function CalendarScreen({
             <span>2026</span>
             {v4Prompt !== undefined && onV4PromptChange && onV4PromptSubmit && (
               <form
-                className="v4-calendar-prompt"
+                className={`v4-calendar-prompt${v4Generating ? " generating" : ""}`}
+                aria-busy={v4Generating}
                 onSubmit={(event) => {
                   event.preventDefault();
+                  if (v4Generating) return;
                   onV4PromptSubmit();
                 }}
               >
@@ -877,17 +881,25 @@ function CalendarScreen({
                 <input
                   type="text"
                   value={v4Prompt}
+                  disabled={v4Generating}
                   aria-label="Add to your marketing calendar"
                   placeholder="Add to your marketing calendar ..."
                   onChange={(event) => onV4PromptChange(event.target.value)}
                 />
-                <button
-                  type="submit"
-                  aria-label="Generate suggested marketing content"
-                  disabled={!v4Prompt.trim()}
-                >
-                  <Send size={20} aria-hidden="true" />
-                </button>
+                {v4Generating ? (
+                  <span className="v4-calendar-generating" role="status" aria-live="polite">
+                    <i aria-hidden="true" />
+                    Generating suggestions…
+                  </span>
+                ) : (
+                  <button
+                    type="submit"
+                    aria-label="Generate suggested marketing content"
+                    disabled={!v4Prompt.trim()}
+                  >
+                    <Send size={20} aria-hidden="true" />
+                  </button>
+                )}
               </form>
             )}
             <small><CalendarDays size={14} /> Today</small>
@@ -1215,6 +1227,18 @@ function SuggestedMarketingContentDialog({
     : active.id === "website"
       ? "Website page"
       : `${active.label} post`;
+  const destinationDetails = active.id === "google"
+    ? { label: "Post to:", value: "Google profile: Beegreen Landscaping" }
+    : active.id === "facebook"
+      ? { label: "Post to:", value: "Facebook page: Beegreen Landscaping / Profile 1" }
+      : active.id === "instagram"
+        ? { label: "Post to:", value: "Instagram profile: @beegreenlandscaping" }
+        : active.id === "email"
+          ? {
+              label: "Recipients:",
+              value: "This email will send to the All clients segment, with 394 of 400 subscribed to email marketing.",
+            }
+          : { label: "Publish to:", value: INITIAL_EXTERNAL_LINK };
   const visualOnlyAction = (event: React.MouseEvent<HTMLButtonElement>) => event.preventDefault();
   const goPrevious = () => onActiveIndexChange(Math.max(0, activeIndex - 1));
   const goNext = () => onActiveIndexChange(Math.min(CONTEXTUAL_CHANNELS.length - 1, activeIndex + 1));
@@ -1300,6 +1324,11 @@ function SuggestedMarketingContentDialog({
               </button>
             </nav>
           </header>
+          <div className="suggested-preview-facts">
+            <p><strong>Schedule date:</strong> Jan 7th, 2026 9:00am</p>
+            <p><strong>{destinationDetails.label}</strong> {destinationDetails.value}</p>
+          </div>
+          <hr className="suggested-preview-divider" />
           <div className="suggested-preview-scroll">
             {active.id === "email" ? (
               <EmailCampaignPreview images={drafts.all.images} message={emailMessage} />
@@ -2930,6 +2959,8 @@ export default function App() {
   const [suggestedPrompt, setSuggestedPrompt] = useState("");
   const [suggestedDialogOpen, setSuggestedDialogOpen] = useState(false);
   const [suggestedPreviewIndex, setSuggestedPreviewIndex] = useState(0);
+  const [v4Generating, setV4Generating] = useState(false);
+  const suggestionTimerRef = useRef<number | null>(null);
   const [socialWorkflowChannel, setSocialWorkflowChannel] = useState<PreviewChannel>("facebook");
   const [socialEditDraft, setSocialEditDraft] = useState<ChannelDraft | null>(null);
   const [applyChanges, setApplyChanges] = useState<{ source: PreviewChannel; message: string } | null>(null);
@@ -2974,9 +3005,17 @@ export default function App() {
     setScheduleToastVisible(false);
     setContextualToast((current) => ({ message, id: (current?.id ?? 0) + 1 }));
   };
+  const cancelSuggestionGeneration = () => {
+    if (suggestionTimerRef.current !== null) {
+      window.clearTimeout(suggestionTimerRef.current);
+      suggestionTimerRef.current = null;
+    }
+    setV4Generating(false);
+  };
   const switchVersion = (nextVersion: PrototypeVersion) => {
     if (nextVersion === version) return;
 
+    cancelSuggestionGeneration();
     setMessage(INITIAL_V1_MESSAGE);
     setImages([...INITIAL_IMAGES]);
     setV2Drafts(createInitialV2Drafts());
@@ -3001,6 +3040,7 @@ export default function App() {
     setSuggestedPrompt("");
     setSuggestedDialogOpen(false);
     setSuggestedPreviewIndex(0);
+    setV4Generating(false);
     setSocialWorkflowChannel("facebook");
     setSocialEditDraft(null);
     setApplyChanges(null);
@@ -3015,6 +3055,12 @@ export default function App() {
   const toggleChannel = (channel: PreviewChannel) => {
     setEnabledChannels((current) => ({ ...current, [channel]: !current[channel] }));
   };
+
+  useEffect(() => {
+    return () => {
+      if (suggestionTimerRef.current !== null) window.clearTimeout(suggestionTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     if (!scheduleToastVisible) return;
@@ -3190,16 +3236,22 @@ export default function App() {
                   .filter((channel) => scheduledChannels[version]?.[channel])
                   .map((channel) => CALENDAR_CHANNEL_BY_PREVIEW[channel])}
                 v4Prompt={version === "v4" ? calendarPrompt : undefined}
+                v4Generating={version === "v4" && v4Generating}
                 onV4PromptChange={version === "v4" ? setCalendarPrompt : undefined}
                 onV4PromptSubmit={version === "v4"
                   ? () => {
                       const prompt = calendarPrompt.trim();
-                      if (!prompt) return;
+                      if (!prompt || v4Generating || suggestionTimerRef.current !== null) return;
                       setSuggestedPrompt(prompt);
-                      setCalendarPrompt("");
-                      setSuggestedPreviewIndex(0);
-                      setV4ReviewOrigin(null);
-                      setSuggestedDialogOpen(true);
+                      setV4Generating(true);
+                      suggestionTimerRef.current = window.setTimeout(() => {
+                        suggestionTimerRef.current = null;
+                        setV4Generating(false);
+                        setCalendarPrompt("");
+                        setSuggestedPreviewIndex(0);
+                        setV4ReviewOrigin(null);
+                        setSuggestedDialogOpen(true);
+                      }, 1200);
                     }
                   : undefined}
                 onOpenPost={() => {
