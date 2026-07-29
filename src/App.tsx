@@ -99,6 +99,7 @@ type PrototypeVersion = "v1" | "v2" | "v3" | "v4";
 type V2Tab = "all" | "google" | "facebook" | "instagram";
 type PreviewChannel = Exclude<V2Tab, "all">;
 type EnabledChannels = Record<PreviewChannel, boolean>;
+const LOCKED_VERSION: PrototypeVersion = "v3";
 type SchedulableVersion = PrototypeVersion;
 type ContextualAction = "schedule" | "post";
 type ContextualToast = { message: string; id: number };
@@ -2719,7 +2720,7 @@ function ReviewScreen({
 export default function App() {
   const [message, setMessage] = useState(INITIAL_V1_MESSAGE);
   const [images, setImages] = useState(INITIAL_IMAGES);
-  const [version, setVersion] = useState<PrototypeVersion>("v1");
+  const [version, setVersion] = useState<PrototypeVersion>(LOCKED_VERSION);
   const [v2Drafts, setV2Drafts] = useState<V2Drafts>(createInitialV2Drafts);
   const [v3Drafts, setV3Drafts] = useState<V2Drafts>(createInitialV2Drafts);
   const [v4Drafts, setV4Drafts] = useState<V2Drafts>(createInitialV4Drafts);
@@ -2786,6 +2787,7 @@ export default function App() {
     setContextualToast((current) => ({ message, id: (current?.id ?? 0) + 1 }));
   };
   const switchVersion = (nextVersion: PrototypeVersion) => {
+    if (LOCKED_VERSION) return;
     if (nextVersion === version) return;
 
     setMessage(INITIAL_V1_MESSAGE);
@@ -2867,7 +2869,7 @@ export default function App() {
                 ? "Daisy chain all 5 channels"
                 : "A/B test prototype"}
           </span>
-          <div className="version-switcher" aria-label="Prototype version">
+          {!LOCKED_VERSION && <div className="version-switcher" aria-label="Prototype version">
             <button
               className={version === "v1" ? "selected" : ""}
               type="button"
@@ -2896,7 +2898,7 @@ export default function App() {
             >
               Version 4
             </button>
-          </div>
+          </div>}
         </div>
         <div
           className={`prototype-frame${v4SidebarFree ? " sidebar-free" : ""}`}

@@ -1,6 +1,6 @@
 # Cross Social Prototype
 
-Interactive React prototype for comparing social-post creation workflows.
+Interactive React prototype for the locked Version 3 daisy-chain workflow.
 
 ## Run locally
 
@@ -9,5 +9,7 @@ npm install
 npm run dev
 ```
 
-Use the version switcher above the prototype to compare all four flows. Message editing,
-image reordering, channel selection, scheduling, and platform-specific previews are interactive.
+The prototype starts on the marketing calendar and is locked to Version 3. Its Saturday
+contextual modal moves through three pages—Social, Email, and Website—with interactive
+social preview tabs, shared V2-style editing, Schedule/Post-now advancement, success
+notifications, and a completed `Sent` calendar state.
