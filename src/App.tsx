@@ -1247,9 +1247,6 @@ function VersionFourContextModal({
         <div className="v4-context-body" inert={deleteDialogOpen ? true : undefined}>
           <section className="v4-context-details">
             <div>
-              <p className="v4-channel-label">
-                <ContextualChannelIcon channel={active.id} /> {active.label}
-              </p>
               <h1 id="v4-context-title">Seasonal property clean up in Hamilton</h1>
               <section className="v4-about-copy">
                 <h2>{active.about}</h2>
