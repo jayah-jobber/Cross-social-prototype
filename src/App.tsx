@@ -95,22 +95,11 @@ const INITIAL_V2_MESSAGE = `${INITIAL_MESSAGE}
 const INITIAL_HASHTAGS = "#HamiltonLandscaping #OutdoorLiving #HomeUpgrade";
 const INITIAL_EXTERNAL_LINK = "http://yourwebsite.com";
 
-const INITIAL_V3_MESSAGE = `Landscaping isn’t just about appearances—it can completely change how you use and enjoy your yard.
-
-We worked with a homeowner in Hamilton who wanted better use of their outdoor space. Our team reshaped the layout, added fresh features, and improved the overall flow of the yard. Now, the space not only looks inviting but also makes life outdoors easier and more enjoyable.
-
-Have ideas for your own yard? Let’s talk!
-
-📞 416-624-3188
-
-#HamiltonLandscaping #OutdoorLiving #HomeUpgrade`;
-
 type PrototypeVersion = "v1" | "v2" | "v3" | "v4";
 type V2Tab = "all" | "google" | "facebook" | "instagram";
 type PreviewChannel = Exclude<V2Tab, "all">;
 type EnabledChannels = Record<PreviewChannel, boolean>;
-const LOCKED_VERSION: PrototypeVersion = "v4";
-type SchedulableVersion = Exclude<PrototypeVersion, "v3">;
+type SchedulableVersion = PrototypeVersion;
 type ContextualAction = "schedule" | "post";
 type ContextualToast = { message: string; id: number };
 
@@ -824,6 +813,9 @@ function MarketingCalendarCard({
 function CalendarScreen({
   onOpenPost,
   onOpenCombinedPost,
+  v4Prompt,
+  onV4PromptChange,
+  onV4PromptSubmit,
   combinedInteractive = false,
   updated = false,
   targetPublished = false,
@@ -833,6 +825,9 @@ function CalendarScreen({
 }: {
   onOpenPost: () => void;
   onOpenCombinedPost: () => void;
+  v4Prompt?: string;
+  onV4PromptChange?: (value: string) => void;
+  onV4PromptSubmit?: () => void;
   combinedInteractive?: boolean;
   updated?: boolean;
   targetPublished?: boolean;
@@ -868,8 +863,33 @@ function CalendarScreen({
           <div className="calendar-month">
             <ChevronLeft size={24} />
             <ChevronRight size={24} />
-            <strong>November</strong>
+            <strong>{v4Prompt === undefined ? "November" : "Nov"}</strong>
             <span>2026</span>
+            {v4Prompt !== undefined && onV4PromptChange && onV4PromptSubmit && (
+              <form
+                className="v4-calendar-prompt"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  onV4PromptSubmit();
+                }}
+              >
+                <Sparkles size={21} aria-hidden="true" />
+                <input
+                  type="text"
+                  value={v4Prompt}
+                  aria-label="Add to your marketing calendar"
+                  placeholder="Add to your marketing calendar ..."
+                  onChange={(event) => onV4PromptChange(event.target.value)}
+                />
+                <button
+                  type="submit"
+                  aria-label="Generate suggested marketing content"
+                  disabled={!v4Prompt.trim()}
+                >
+                  <Send size={20} aria-hidden="true" />
+                </button>
+              </form>
+            )}
             <small><CalendarDays size={14} /> Today</small>
           </div>
           <div className="calendar-view-control">
@@ -1079,14 +1099,19 @@ const CONTEXTUAL_CHANNELS: Array<{
   },
 ];
 
-function contextualSuccessMessage(channel: ContextualChannel, action: ContextualAction) {
+function contextualSuccessMessage(
+  channel: "social" | ContextualChannel,
+  action: ContextualAction,
+) {
   if (action === "schedule") {
+    if (channel === "social") return "Your social posts have been successfully scheduled.";
     if (channel === "email") return "Your email campaign has been successfully scheduled.";
     if (channel === "website") return "Your website page has been successfully scheduled.";
     const label = channel[0].toUpperCase() + channel.slice(1);
     return `Your ${label} post has been successfully scheduled.`;
   }
 
+  if (channel === "social") return "Your social posts have been successfully posted.";
   if (channel === "email") return "Your email campaign has been successfully sent.";
   if (channel === "website") return "Your website page has been successfully published.";
   const label = channel[0].toUpperCase() + channel.slice(1);
@@ -1158,6 +1183,443 @@ function WebsitePagePreview({ images, message }: { images: GalleryImage[]; messa
         <span className="fake-cta">Request a quote</span>
       </section>
     </article>
+  );
+}
+
+function SuggestedMarketingContentDialog({
+  prompt,
+  drafts,
+  emailMessage,
+  websiteMessage,
+  activeIndex,
+  onPromptChange,
+  onActiveIndexChange,
+  onClose,
+  onFacebookEdit,
+}: {
+  prompt: string;
+  drafts: V2Drafts;
+  emailMessage: string;
+  websiteMessage: string;
+  activeIndex: number;
+  onPromptChange: (value: string) => void;
+  onActiveIndexChange: (index: number) => void;
+  onClose: () => void;
+  onFacebookEdit: () => void;
+}) {
+  const active = CONTEXTUAL_CHANNELS[activeIndex];
+  const atStart = activeIndex === 0;
+  const atEnd = activeIndex === CONTEXTUAL_CHANNELS.length - 1;
+  const channelLabel = active.id === "email"
+    ? "Email campaign"
+    : active.id === "website"
+      ? "Website page"
+      : `${active.label} post`;
+  const visualOnlyAction = (event: React.MouseEvent<HTMLButtonElement>) => event.preventDefault();
+  const goPrevious = () => onActiveIndexChange(Math.max(0, activeIndex - 1));
+  const goNext = () => onActiveIndexChange(Math.min(CONTEXTUAL_CHANNELS.length - 1, activeIndex + 1));
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.stopImmediatePropagation();
+        onClose();
+        return;
+      }
+      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
+      if (event.key === "ArrowLeft") goPrevious();
+      if (event.key === "ArrowRight") goNext();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [activeIndex, onClose]);
+
+  return (
+    <div
+      className="calendar-modal-overlay suggested-content-overlay"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <section
+        className="suggested-content-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="suggested-content-title"
+      >
+        <header className="suggested-content-header">
+          <h1 id="suggested-content-title">Suggested Marketing Content</h1>
+          <button type="button" aria-label="Close suggested marketing content" onClick={onClose}>
+            <X size={26} aria-hidden="true" />
+          </button>
+        </header>
+
+        <form
+          className="suggested-prompt-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const nextPrompt = prompt.trim();
+            if (nextPrompt) onPromptChange(nextPrompt);
+          }}
+        >
+          <input
+            value={prompt}
+            aria-label="Edit marketing content prompt"
+            onChange={(event) => onPromptChange(event.target.value)}
+            autoFocus
+          />
+          <button
+            type="submit"
+            aria-label="Regenerate suggestions"
+            disabled={!prompt.trim()}
+          >
+            <Send size={18} aria-hidden="true" />
+          </button>
+        </form>
+        <p className="suggested-prompt-helper">
+          Edit your prompt and regenerate to get a fresh set of suggestions.
+        </p>
+
+        <section className="suggested-preview-section" aria-label={`${channelLabel} preview`}>
+          <header className="suggested-preview-toolbar">
+            <div>
+              <span className="suggested-preview-eyebrow">PREVIEW</span>
+              <span className="suggested-channel-badge">
+                <ContextualChannelIcon channel={active.id} />
+                {channelLabel}
+              </span>
+            </div>
+            <nav aria-label="Suggested content channels">
+              <span aria-live="polite">{activeIndex + 1} of {CONTEXTUAL_CHANNELS.length}</span>
+              <button type="button" onClick={goPrevious} disabled={atStart} aria-label="Previous channel">
+                <ChevronLeft size={20} aria-hidden="true" />
+              </button>
+              <button type="button" onClick={goNext} disabled={atEnd} aria-label="Next channel">
+                <ChevronRight size={20} aria-hidden="true" />
+              </button>
+            </nav>
+          </header>
+          <div className="suggested-preview-scroll">
+            {active.id === "email" ? (
+              <EmailCampaignPreview images={drafts.all.images} message={emailMessage} />
+            ) : active.id === "website" ? (
+              <WebsitePagePreview images={drafts.all.images} message={websiteMessage} />
+            ) : (
+              <PlatformPreviewCard
+                channel={active.id}
+                message={drafts[active.id].message}
+                hashtags={drafts[active.id].hashtags}
+                images={drafts[active.id].images}
+              />
+            )}
+          </div>
+        </section>
+
+        <footer className="suggested-content-footer">
+          <button type="button" className="delete-post" aria-disabled="true" onClick={visualOnlyAction}>
+            Delete
+          </button>
+          <div>
+            <button
+              type="button"
+              className="secondary-button"
+              aria-disabled={active.id === "facebook" ? undefined : "true"}
+              onClick={active.id === "facebook" ? onFacebookEdit : visualOnlyAction}
+            >
+              Edit
+            </button>
+            <button type="button" className="primary-button" aria-disabled="true" onClick={visualOnlyAction}>
+              Schedule Nov 6
+            </button>
+          </div>
+        </footer>
+      </section>
+    </div>
+  );
+}
+
+function VersionThreeCombinedContextModal({
+  drafts,
+  enabledChannels,
+  initialPreviewChannel,
+  onToggleChannel,
+  onPreviewChannelChange,
+  onClose,
+  onEdit,
+  onAction,
+}: {
+  drafts: V2Drafts;
+  enabledChannels: EnabledChannels;
+  initialPreviewChannel: PreviewChannel;
+  onToggleChannel: (channel: PreviewChannel) => void;
+  onPreviewChannelChange: (channel: PreviewChannel) => void;
+  onClose: () => void;
+  onEdit: (channel: PreviewChannel) => void;
+  onAction: (page: "social" | "email" | "website", action: ContextualAction, final: boolean) => void;
+}) {
+  const [activePage, setActivePage] = useState(0);
+  const [previewChannel, setPreviewChannel] = useState<PreviewChannel>(initialPreviewChannel);
+  const [splitMenuOpen, setSplitMenuOpen] = useState(false);
+  const splitMenuRef = useRef<HTMLDivElement>(null);
+  const splitToggleRef = useRef<HTMLButtonElement>(null);
+  const splitOptionRef = useRef<HTMLButtonElement>(null);
+  const pages = [
+    {
+      label: "Social",
+      about: "About these social media posts",
+      destinationLabel: "Post to",
+      destination: "Select the channels that you want to post it to",
+    },
+    {
+      label: "Email",
+      about: "About this email campaign",
+      destinationLabel: "Recipients",
+      destination: "Customers and leads in Hamilton",
+    },
+    {
+      label: "Website",
+      about: "About this website page",
+      destinationLabel: "Publish to",
+      destination: "Beegreen Landscaping website",
+    },
+  ] as const;
+  const active = pages[activePage];
+  const socialChannels = (["google", "facebook", "instagram"] as PreviewChannel[])
+    .filter((channel) => enabledChannels[channel]);
+  const sharedBody = splitPostMessage(drafts.all.message).body;
+  const safeVisualAction = (event: React.MouseEvent<HTMLButtonElement>) => event.preventDefault();
+  const selectPreviewChannel = (channel: PreviewChannel) => {
+    setPreviewChannel(channel);
+    onPreviewChannelChange(channel);
+  };
+  const handlePreviewTabKeyDown = (
+    event: React.KeyboardEvent<HTMLButtonElement>,
+    channel: PreviewChannel,
+  ) => {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    event.preventDefault();
+    event.stopPropagation();
+    const currentIndex = socialChannels.indexOf(channel);
+    const direction = event.key === "ArrowRight" ? 1 : -1;
+    const nextIndex = (currentIndex + direction + socialChannels.length) % socialChannels.length;
+    selectPreviewChannel(socialChannels[nextIndex]);
+  };
+  const performAction = (action: ContextualAction) => {
+    setSplitMenuOpen(false);
+    const page = activePage === 0 ? "social" : activePage === 1 ? "email" : "website";
+    const final = activePage === pages.length - 1;
+    onAction(page, action, final);
+    if (!final) setActivePage((current) => current + 1);
+  };
+
+  useEffect(() => {
+    if (!enabledChannels[previewChannel]) {
+      const nextChannel = (["google", "facebook", "instagram"] as PreviewChannel[])
+        .find((channel) => enabledChannels[channel]);
+      if (nextChannel) selectPreviewChannel(nextChannel);
+    }
+  }, [enabledChannels, previewChannel]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && splitMenuOpen) {
+        event.stopImmediatePropagation();
+        setSplitMenuOpen(false);
+        splitToggleRef.current?.focus();
+        return;
+      }
+      if (event.key === "Escape") onClose();
+      if (event.key === "ArrowLeft") {
+        setSplitMenuOpen(false);
+        setActivePage((current) => Math.max(0, current - 1));
+      }
+      if (event.key === "ArrowRight") {
+        setSplitMenuOpen(false);
+        setActivePage((current) => Math.min(2, current + 1));
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose, splitMenuOpen]);
+
+  useEffect(() => {
+    if (!splitMenuOpen) return;
+    splitOptionRef.current?.focus();
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      if (!splitMenuRef.current?.contains(event.target as Node)) setSplitMenuOpen(false);
+    };
+    document.addEventListener("mousedown", closeOnOutsideClick);
+    return () => document.removeEventListener("mousedown", closeOnOutsideClick);
+  }, [splitMenuOpen]);
+
+  return (
+    <div className="calendar-modal-overlay v4-context-overlay" role="presentation">
+      <section
+        className="v4-context-modal v3-combined-context-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="v3-combined-context-title"
+      >
+        <nav className="v4-context-navigation" aria-label="Combined content preview">
+          <button
+            type="button"
+            onClick={() => {
+              setSplitMenuOpen(false);
+              setActivePage((current) => Math.max(0, current - 1));
+            }}
+            disabled={activePage === 0}
+            aria-label="Previous page"
+          >
+            <ChevronLeft size={22} />
+          </button>
+          <span aria-live="polite">{activePage + 1} of 3</span>
+          <button
+            type="button"
+            onClick={() => {
+              setSplitMenuOpen(false);
+              setActivePage((current) => Math.min(2, current + 1));
+            }}
+            disabled={activePage === 2}
+            aria-label="Next page"
+          >
+            <ChevronRight size={22} />
+          </button>
+        </nav>
+        <button className="calendar-modal-close" type="button" aria-label="Close" onClick={onClose}>
+          <X size={28} />
+        </button>
+
+        <div className="v4-context-body">
+          <section className="v4-context-details">
+            <div>
+              <h1 id="v3-combined-context-title">Seasonal property clean up in Hamilton</h1>
+              <section className="v4-about-copy">
+                <h2>{active.about}</h2>
+                <p>
+                  Showcase this Hamilton property’s seasonal clean up and fresh mulch to highlight
+                  the work completed, demonstrate the visible results, and help local homeowners
+                  understand when to book a similar landscaping service.
+                </p>
+              </section>
+              {activePage === 0 ? (
+                <div className="v3-combined-social-facts">
+                  <p><strong>Schedule date:</strong> Nov 7, 2026 · 9:00 AM</p>
+                  <p><strong>{active.destinationLabel}:</strong><br />{active.destination}</p>
+                  {(["google", "facebook", "instagram"] as PreviewChannel[]).map((channel) => (
+                    <div className="calendar-channel-row" key={channel}>
+                      <span>
+                        <ContextualChannelIcon channel={channel} />
+                        {channel[0].toUpperCase() + channel.slice(1)}
+                      </span>
+                      <button
+                        className={`channel-visibility-toggle ${enabledChannels[channel] ? "on" : "off"}`}
+                        type="button"
+                        role="switch"
+                        aria-checked={enabledChannels[channel]}
+                        aria-label={`${enabledChannels[channel] ? "Disable" : "Enable"} ${channel}`}
+                        onClick={() => onToggleChannel(channel)}
+                      >
+                        {enabledChannels[channel] ? <Check size={14} /> : <X size={14} />}
+                        <span />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <dl className="v4-context-facts">
+                  <div><dt>Scheduled for</dt><dd>Nov 7, 2026 · 9:00 AM</dd></div>
+                  <div><dt>{active.destinationLabel}</dt><dd>{active.destination}</dd></div>
+                </dl>
+              )}
+            </div>
+            <footer className="v4-context-footer">
+              <button type="button" className="delete-post" aria-disabled="true" onClick={safeVisualAction}>
+                Delete
+              </button>
+              <div>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  aria-disabled={activePage === 0 ? undefined : "true"}
+                  onClick={activePage === 0 ? () => onEdit(previewChannel) : safeVisualAction}
+                >
+                  Edit
+                </button>
+                <div className="v4-split-action" ref={splitMenuRef}>
+                  {splitMenuOpen && (
+                    <div className="v4-split-menu" role="menu" aria-label="Publishing options">
+                      <button
+                        ref={splitOptionRef}
+                        type="button"
+                        role="menuitem"
+                        onClick={() => performAction("post")}
+                      >
+                        Post now and next
+                      </button>
+                    </div>
+                  )}
+                  <span className="v4-split-button">
+                    <button type="button" onClick={() => performAction("schedule")}>Schedule and next</button>
+                    <button
+                      ref={splitToggleRef}
+                      type="button"
+                      aria-label="Show publishing options"
+                      aria-haspopup="menu"
+                      aria-expanded={splitMenuOpen}
+                      onClick={() => setSplitMenuOpen((open) => !open)}
+                    >
+                      <ChevronDown size={20} />
+                    </button>
+                  </span>
+                </div>
+              </div>
+            </footer>
+          </section>
+
+          <section className="v4-context-preview v3-context-preview" aria-label={`${active.label} content preview`}>
+            {activePage === 0 ? (
+              <header className="v3-social-preview-tabs" role="tablist" aria-label="Social preview channel">
+                {socialChannels.map((channel) => (
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={previewChannel === channel}
+                    tabIndex={previewChannel === channel ? 0 : -1}
+                    className={previewChannel === channel ? "active" : ""}
+                    onClick={() => selectPreviewChannel(channel)}
+                    onKeyDown={(event) => handlePreviewTabKeyDown(event, channel)}
+                    key={channel}
+                  >
+                    {channel[0].toUpperCase() + channel.slice(1)}
+                  </button>
+                ))}
+              </header>
+            ) : (
+              <header><Sparkles size={20} /><strong>{active.label} preview</strong></header>
+            )}
+            <div className="v4-context-preview-scroll">
+              {activePage === 0 ? (
+                enabledChannels[previewChannel] ? (
+                  <PlatformPreviewCard
+                    channel={previewChannel}
+                    message={drafts[previewChannel].message}
+                    hashtags={drafts[previewChannel].hashtags}
+                    images={drafts[previewChannel].images}
+                  />
+                ) : (
+                  <div className="no-channel-preview">No channels selected for this post.</div>
+                )
+              ) : activePage === 1 ? (
+                <EmailCampaignPreview images={drafts.all.images} message={sharedBody} />
+              ) : (
+                <WebsitePagePreview images={drafts.all.images} message={sharedBody} />
+              )}
+            </div>
+          </section>
+        </div>
+      </section>
+    </div>
   );
 }
 
@@ -1493,7 +1955,7 @@ function VersionFourSocialReview({
 
 function SocialDraftPreview({ channel, draft }: { channel: PreviewChannel; draft: ChannelDraft }) {
   return (
-    <section className="preview-panel facebook-only-preview v4-facebook-preview">
+    <section className="preview-panel social-only-preview v4-facebook-preview">
       <div className="preview-content">
         <PlatformPreviewCard
           channel={channel}
@@ -1532,7 +1994,7 @@ function VersionFourSocialEditor({
 
   return (
     <main className="app-content v4-facebook-workflow" aria-labelledby="v4-social-editor-title">
-      <section className="editor-panel version-three-editor">
+      <section className="editor-panel v4-social-editor">
         <div className="editor-scroll">
           <h1 id="v4-social-editor-title">Edit {channelLabel} Post</h1>
           <div className="about-content-row">
@@ -1540,7 +2002,7 @@ function VersionFourSocialEditor({
             <strong>About this {channelLabel} post</strong>
             <ChevronDown size={19} />
           </div>
-          <div className="field-block version-three-message">
+          <div className="field-block v4-social-message">
             <label htmlFor="v4-social-message">Message body</label>
             <AutoSizeTextarea
               id="v4-social-message"
@@ -1550,7 +2012,7 @@ function VersionFourSocialEditor({
             />
             <span className="character-count">{combinedMessage.length}/1500 characters</span>
           </div>
-          <div className="image-section version-three-images">
+          <div className="image-section v4-social-images">
             <div>
               <label>Image <span className="optional">(optional)</span></label>
               <p className="helper image-helper">
@@ -1562,7 +2024,7 @@ function VersionFourSocialEditor({
               images={draft.images}
               setImages={(images) => setDraft({ ...draft, images })}
             />
-            <div className="version-three-dropzone">
+            <div className="v4-social-dropzone">
               <button type="button" aria-disabled="true">Choose image</button>
               <span>Select or drag files here to upload</span>
               <small>Maximum size 5MB per file</small>
@@ -2316,144 +2778,6 @@ function VersionTwoEditScreen({
   );
 }
 
-function FacebookOnlyPreview({
-  message,
-  images,
-}: {
-  message: string;
-  images: GalleryImage[];
-}) {
-  return (
-    <section className="preview-panel facebook-only-preview">
-      <div className="preview-content">
-        <PlatformPreviewCard channel="facebook" message={message} images={images} />
-        <p className="preview-disclaimer">
-          Social networks regularly make updates to formatting so your post may appear slightly
-          different when published
-        </p>
-      </div>
-    </section>
-  );
-}
-
-function VersionThreeReviewScreen({
-  message,
-  images,
-  onEdit,
-  onBack,
-}: {
-  message: string;
-  images: GalleryImage[];
-  onEdit: () => void;
-  onBack: () => void;
-}) {
-  return (
-    <main className="app-content">
-      <section className="review-panel version-three-review">
-        <div className="review-scroll">
-          <h1>Review Facebook Post</h1>
-          <div className="about-content-row">
-            <Sparkles size={21} />
-            <strong>About this {"{content type}"}</strong>
-            <ChevronDown size={19} />
-          </div>
-          <div className="review-fields">
-            <section className="review-field">
-              <header><h2>Content</h2><button type="button" onClick={onEdit}>Edit</button></header>
-              <p className="review-summary">{message.replace(/\n+/g, " ")}</p>
-              <small>AI-generated content may contain errors. Please verify important information.</small>
-            </section>
-            <section className="review-field">
-              <header><h2>Schedule Post</h2><button type="button">Edit</button></header>
-              <p>Jan 01, 2026 9:00AM</p>
-            </section>
-            <section className="review-field version-three-post-to">
-              <header>
-                <span className="not-connected-title">
-                  <h2>Post to</h2><small>Not Connected</small>
-                </span>
-                <button type="button">Connect</button>
-              </header>
-              <p>
-                We’ll help you connect or create a Facebook Business Page in the next step.
-                You’ll need full admin permissions for the business profile to connect.
-              </p>
-            </section>
-          </div>
-        </div>
-        <footer className="review-footer">
-          <div>
-            <button className="secondary-button" type="button" onClick={onBack}>Back</button>
-            <button className="delete-post" type="button">Delete Post</button>
-          </div>
-          <div className="schedule-split">
-            <span>Schedule {"{date}"}</span><ChevronDown size={20} />
-          </div>
-        </footer>
-      </section>
-      <FacebookOnlyPreview message={message} images={images} />
-    </main>
-  );
-}
-
-function VersionThreeEditScreen({
-  message,
-  setMessage,
-  images,
-  setImages,
-  onCancel,
-}: {
-  message: string;
-  setMessage: (message: string) => void;
-  images: GalleryImage[];
-  setImages: (images: GalleryImage[]) => void;
-  onCancel: () => void;
-}) {
-  return (
-    <main className="app-content">
-      <section className="editor-panel version-three-editor">
-        <div className="editor-scroll">
-          <h1>Edit Facebook Post</h1>
-          <div className="about-content-row">
-            <Sparkles size={21} />
-            <strong>About this {"{content type}"}</strong>
-            <ChevronDown size={19} />
-          </div>
-          <div className="field-block version-three-message">
-            <label htmlFor="v3-message">Message body</label>
-            <AutoSizeTextarea
-              id="v3-message"
-              maxLength={1500}
-              value={message}
-              onChange={setMessage}
-            />
-          </div>
-          <div className="image-section version-three-images">
-            <div>
-              <label>Image <span className="optional">(optional)</span></label>
-              <p className="helper image-helper">
-                Max 10 images. Landscape image works best.<br />
-                To show before-and-after work, you can combine two images into one with the <u>collage tool</u>.
-              </p>
-            </div>
-            <InteractiveGallery images={images} setImages={setImages} />
-            <div className="version-three-dropzone">
-              <button type="button">Choose image</button>
-              <span>Select or drag files here to upload</span>
-              <small>Maximum size 5MB per file</small>
-            </div>
-          </div>
-        </div>
-        <footer className="editor-footer">
-          <button className="secondary-button" type="button" onClick={onCancel}>Cancel</button>
-          <button className="primary-button" type="button" onClick={onCancel}>Save Edit</button>
-        </footer>
-      </section>
-      <FacebookOnlyPreview message={message} images={images} />
-    </main>
-  );
-}
-
 function ReviewScreen({
   message,
   images,
@@ -2579,11 +2903,10 @@ function ReviewScreen({
 export default function App() {
   const [message, setMessage] = useState(INITIAL_V1_MESSAGE);
   const [images, setImages] = useState(INITIAL_IMAGES);
-  const [version, setVersion] = useState<PrototypeVersion>(LOCKED_VERSION);
+  const [version, setVersion] = useState<PrototypeVersion>("v1");
   const [v2Drafts, setV2Drafts] = useState<V2Drafts>(createInitialV2Drafts);
+  const [v3Drafts, setV3Drafts] = useState<V2Drafts>(createInitialV2Drafts);
   const [v4Drafts, setV4Drafts] = useState<V2Drafts>(createInitialV4Drafts);
-  const [v3Message, setV3Message] = useState(INITIAL_V3_MESSAGE);
-  const [v3Images, setV3Images] = useState(INITIAL_IMAGES);
   const [enabledChannels, setEnabledChannels] = useState<EnabledChannels>({
     google: true,
     facebook: true,
@@ -2592,12 +2915,21 @@ export default function App() {
   const [scheduledChannels, setScheduledChannels] = useState<Record<SchedulableVersion, EnabledChannels | null>>({
     v1: null,
     v2: null,
+    v3: null,
     v4: null,
   });
   const [screen, setScreen] = useState<"calendar" | "review" | "edit">("calendar");
   const [calendarModalOpen, setCalendarModalOpen] = useState(false);
+  const [v3CombinedModalOpen, setV3CombinedModalOpen] = useState(false);
+  const [v3ContextPreviewChannel, setV3ContextPreviewChannel] = useState<PreviewChannel>("google");
+  const [v3ReviewOrigin, setV3ReviewOrigin] = useState<"friday" | "saturday" | null>(null);
   const [combinedWorkflow, setCombinedWorkflow] = useState<"modal" | "review" | "edit" | null>(null);
   const [combinedModalStartIndex, setCombinedModalStartIndex] = useState(0);
+  const [v4ReviewOrigin, setV4ReviewOrigin] = useState<"saturday" | "suggested" | null>(null);
+  const [calendarPrompt, setCalendarPrompt] = useState("");
+  const [suggestedPrompt, setSuggestedPrompt] = useState("");
+  const [suggestedDialogOpen, setSuggestedDialogOpen] = useState(false);
+  const [suggestedPreviewIndex, setSuggestedPreviewIndex] = useState(0);
   const [socialWorkflowChannel, setSocialWorkflowChannel] = useState<PreviewChannel>("facebook");
   const [socialEditDraft, setSocialEditDraft] = useState<ChannelDraft | null>(null);
   const [applyChanges, setApplyChanges] = useState<{ source: PreviewChannel; message: string } | null>(null);
@@ -2607,7 +2939,9 @@ export default function App() {
   const [deleteToastVisible, setDeleteToastVisible] = useState(false);
   const [scheduleToastVisible, setScheduleToastVisible] = useState(false);
   const [contextualToast, setContextualToast] = useState<ContextualToast | null>(null);
-  const [saturdayCompletion, setSaturdayCompletion] = useState<CalendarChannel[] | null>(null);
+  const [saturdayCompletion, setSaturdayCompletion] = useState<
+    Record<"v3" | "v4", CalendarChannel[] | null>
+  >({ v3: null, v4: null });
   const [scale, setScale] = useState(1);
   const frameHeight = 1024;
   const totalHeight = frameHeight + 60;
@@ -2616,47 +2950,57 @@ export default function App() {
     || combinedWorkflow === "edit"
     || (combinedWorkflow === null && screen !== "calendar")
   );
-  const sharedCalendarDraft = version === "v1"
-    ? { message, images }
-    : { message: v3Message, images: v3Images };
-  const calendarPreviews: Record<PreviewChannel, ChannelDraft> =
-    version === "v2" || version === "v4"
+  const multiChannelDrafts = version === "v2"
+    ? v2Drafts
+    : version === "v3"
+      ? v3Drafts
+      : v4Drafts;
+  const calendarPreviews: Record<PreviewChannel, ChannelDraft> = version === "v1"
     ? {
-        google: (version === "v4" ? v4Drafts : v2Drafts).google,
-        facebook: (version === "v4" ? v4Drafts : v2Drafts).facebook,
-        instagram: (version === "v4" ? v4Drafts : v2Drafts).instagram,
+        google: { message, images },
+        facebook: { message, images },
+        instagram: { message, images },
       }
     : {
-        google: sharedCalendarDraft,
-        facebook: sharedCalendarDraft,
-        instagram: sharedCalendarDraft,
+        google: multiChannelDrafts.google,
+        facebook: multiChannelDrafts.facebook,
+        instagram: multiChannelDrafts.instagram,
       };
+  const currentSaturdayCompletion = version === "v3" || version === "v4"
+    ? saturdayCompletion[version]
+    : null;
   const showContextualToast = (message: string) => {
     setDeleteToastVisible(false);
     setScheduleToastVisible(false);
     setContextualToast((current) => ({ message, id: (current?.id ?? 0) + 1 }));
   };
   const switchVersion = (nextVersion: PrototypeVersion) => {
-    if (LOCKED_VERSION) return;
     if (nextVersion === version) return;
 
     setMessage(INITIAL_V1_MESSAGE);
     setImages([...INITIAL_IMAGES]);
     setV2Drafts(createInitialV2Drafts());
+    setV3Drafts(createInitialV2Drafts());
     setV4Drafts(createInitialV4Drafts());
-    setV3Message(INITIAL_V3_MESSAGE);
-    setV3Images([...INITIAL_IMAGES]);
     setEnabledChannels({
       google: true,
       facebook: true,
       instagram: true,
     });
-    setScheduledChannels({ v1: null, v2: null, v4: null });
+    setScheduledChannels({ v1: null, v2: null, v3: null, v4: null });
     setVersion(nextVersion);
     setScreen("calendar");
     setCalendarModalOpen(false);
+    setV3CombinedModalOpen(false);
+    setV3ContextPreviewChannel("google");
+    setV3ReviewOrigin(null);
     setCombinedWorkflow(null);
     setCombinedModalStartIndex(0);
+    setV4ReviewOrigin(null);
+    setCalendarPrompt("");
+    setSuggestedPrompt("");
+    setSuggestedDialogOpen(false);
+    setSuggestedPreviewIndex(0);
     setSocialWorkflowChannel("facebook");
     setSocialEditDraft(null);
     setApplyChanges(null);
@@ -2666,7 +3010,7 @@ export default function App() {
     setDeleteToastVisible(false);
     setScheduleToastVisible(false);
     setContextualToast(null);
-    setSaturdayCompletion(null);
+    setSaturdayCompletion({ v3: null, v4: null });
   };
   const toggleChannel = (channel: PreviewChannel) => {
     setEnabledChannels((current) => ({ ...current, [channel]: !current[channel] }));
@@ -2710,8 +3054,14 @@ export default function App() {
         style={{ "--prototype-scale": scale, height: totalHeight } as React.CSSProperties}
       >
         <div className="ab-toolbar">
-          <span>Daisy chain all 5 channels</span>
-          {!LOCKED_VERSION && <div className="version-switcher" aria-label="Prototype version">
+          <span>
+            {version === "v3"
+              ? "Daisy chain social, email and website"
+              : version === "v4"
+                ? "Daisy chain all 5 channels"
+                : "A/B test prototype"}
+          </span>
+          <div className="version-switcher" aria-label="Prototype version">
             <button
               className={version === "v1" ? "selected" : ""}
               type="button"
@@ -2740,7 +3090,7 @@ export default function App() {
             >
               Version 4
             </button>
-          </div>}
+          </div>
         </div>
         <div
           className={`prototype-frame${v4SidebarFree ? " sidebar-free" : ""}`}
@@ -2754,6 +3104,12 @@ export default function App() {
                 inactive={applyChanges !== null}
                 onBack={() => {
                   setApplyChanges(null);
+                  if (v4ReviewOrigin === "suggested") {
+                    setSuggestedPreviewIndex(1);
+                    setSuggestedDialogOpen(true);
+                    setCombinedWorkflow(null);
+                    return;
+                  }
                   setCombinedModalStartIndex(
                     socialWorkflowChannel === "facebook"
                       ? (v4GoogleDeleted ? 0 : 1)
@@ -2825,29 +3181,71 @@ export default function App() {
           ) : screen === "calendar" ? (
             <>
               <CompactSideNavigation />
-              <TopBar compact staticControls marketingEssentials={version !== "v3"} />
+              <TopBar compact staticControls marketingEssentials />
               <CalendarScreen
-                updated={version !== "v3"}
-                targetPublished={version !== "v3" && scheduledChannels[version] !== null}
-                combinedPublished={saturdayCompletion !== null}
-                targetChannels={version !== "v3"
-                  ? PREVIEW_CHANNEL_ORDER
-                    .filter((channel) => scheduledChannels[version]?.[channel])
-                    .map((channel) => CALENDAR_CHANNEL_BY_PREVIEW[channel])
+                updated
+                targetPublished={scheduledChannels[version] !== null}
+                combinedPublished={currentSaturdayCompletion !== null}
+                targetChannels={PREVIEW_CHANNEL_ORDER
+                  .filter((channel) => scheduledChannels[version]?.[channel])
+                  .map((channel) => CALENDAR_CHANNEL_BY_PREVIEW[channel])}
+                v4Prompt={version === "v4" ? calendarPrompt : undefined}
+                onV4PromptChange={version === "v4" ? setCalendarPrompt : undefined}
+                onV4PromptSubmit={version === "v4"
+                  ? () => {
+                      const prompt = calendarPrompt.trim();
+                      if (!prompt) return;
+                      setSuggestedPrompt(prompt);
+                      setCalendarPrompt("");
+                      setSuggestedPreviewIndex(0);
+                      setV4ReviewOrigin(null);
+                      setSuggestedDialogOpen(true);
+                    }
                   : undefined}
-                onOpenPost={() => setCalendarModalOpen(true)}
+                onOpenPost={() => {
+                  setV3ReviewOrigin(null);
+                  setCalendarModalOpen(true);
+                }}
                 onOpenCombinedPost={() => {
-                  if (version === "v4") {
+                  if (version === "v3") {
+                    setV3ContextPreviewChannel("google");
+                    setV3ReviewOrigin(null);
+                    setV3CombinedModalOpen(true);
+                  } else if (version === "v4") {
                     setCombinedModalStartIndex(0);
+                    setV4ReviewOrigin("saturday");
                     setCombinedWorkflow("modal");
                   }
                 }}
-                combinedInteractive={version === "v4"}
-                combinedChannels={saturdayCompletion
+                combinedInteractive={version === "v3" || version === "v4"}
+                combinedChannels={currentSaturdayCompletion
                   ?? (version === "v4" && v4GoogleDeleted
                     ? ["Facebook post", "Instagram post", "Email", "Website"]
                     : undefined)}
               />
+              {suggestedDialogOpen && version === "v4" && (
+                <SuggestedMarketingContentDialog
+                  prompt={suggestedPrompt}
+                  drafts={v4Drafts}
+                  emailMessage={v4EmailMessage}
+                  websiteMessage={v4WebsiteMessage}
+                  activeIndex={suggestedPreviewIndex}
+                  onPromptChange={setSuggestedPrompt}
+                  onActiveIndexChange={setSuggestedPreviewIndex}
+                  onClose={() => {
+                    setSuggestedDialogOpen(false);
+                    setSuggestedPreviewIndex(0);
+                    setV4ReviewOrigin(null);
+                  }}
+                  onFacebookEdit={() => {
+                    setSocialWorkflowChannel("facebook");
+                    setApplyChanges(null);
+                    setV4ReviewOrigin("suggested");
+                    setSuggestedDialogOpen(false);
+                    setCombinedWorkflow("review");
+                  }}
+                />
+              )}
               {calendarModalOpen && (
                 <CalendarContextModal
                   previews={calendarPreviews}
@@ -2856,7 +3254,41 @@ export default function App() {
                   onClose={() => setCalendarModalOpen(false)}
                   onEdit={() => {
                     setCalendarModalOpen(false);
+                    if (version === "v3") setV3ReviewOrigin("friday");
                     setScreen("review");
+                  }}
+                />
+              )}
+              {v3CombinedModalOpen && version === "v3" && (
+                <VersionThreeCombinedContextModal
+                  drafts={v3Drafts}
+                  enabledChannels={enabledChannels}
+                  initialPreviewChannel={v3ContextPreviewChannel}
+                  onToggleChannel={toggleChannel}
+                  onPreviewChannelChange={setV3ContextPreviewChannel}
+                  onClose={() => {
+                    setV3ContextPreviewChannel("google");
+                    setV3CombinedModalOpen(false);
+                  }}
+                  onEdit={(channel) => {
+                    setV3ContextPreviewChannel(channel);
+                    setV3ReviewOrigin("saturday");
+                    setV3CombinedModalOpen(false);
+                    setScreen("review");
+                  }}
+                  onAction={(page, action, final) => {
+                    showContextualToast(contextualSuccessMessage(page, action));
+                    if (!final) return;
+                    const completedChannels = PREVIEW_CHANNEL_ORDER
+                      .filter((channel) => enabledChannels[channel])
+                      .map((channel) => CALENDAR_CHANNEL_BY_PREVIEW[channel]);
+                    setSaturdayCompletion((current) => ({
+                      ...current,
+                      v3: [...completedChannels, "Email", "Website"],
+                    }));
+                    setV3ContextPreviewChannel("google");
+                    setV3ReviewOrigin(null);
+                    setV3CombinedModalOpen(false);
                   }}
                 />
               )}
@@ -2869,11 +3301,13 @@ export default function App() {
                   googleAvailable={!v4GoogleDeleted}
                   onClose={() => {
                     setCombinedModalStartIndex(0);
+                    setV4ReviewOrigin(null);
                     setCombinedWorkflow(null);
                   }}
                   onSocialEdit={(channel) => {
                     setSocialWorkflowChannel(channel);
                     setApplyChanges(null);
+                    setV4ReviewOrigin("saturday");
                     setCombinedWorkflow("review");
                   }}
                   onDeleteGoogle={() => {
@@ -2885,20 +3319,24 @@ export default function App() {
                   onAction={(channel, action, final) => {
                     showContextualToast(contextualSuccessMessage(channel, action));
                     if (!final) return;
-                    setSaturdayCompletion(CONTEXTUAL_CHANNELS
-                      .filter(({ id }) => id !== "google" || !v4GoogleDeleted)
-                      .map(({ id }) => (
-                        id === "google"
-                          ? "Google post"
-                          : id === "facebook"
-                            ? "Facebook post"
-                            : id === "instagram"
-                              ? "Instagram post"
-                              : id === "email"
-                                ? "Email"
-                                : "Website"
-                      )));
+                    setSaturdayCompletion((current) => ({
+                      ...current,
+                      v4: CONTEXTUAL_CHANNELS
+                        .filter(({ id }) => id !== "google" || !v4GoogleDeleted)
+                        .map(({ id }) => (
+                          id === "google"
+                            ? "Google post"
+                            : id === "facebook"
+                              ? "Facebook post"
+                              : id === "instagram"
+                                ? "Instagram post"
+                                : id === "email"
+                                  ? "Email"
+                                  : "Website"
+                        )),
+                    }));
                     setCombinedModalStartIndex(0);
+                    setV4ReviewOrigin(null);
                     setCombinedWorkflow(null);
                   }}
                 />
@@ -2908,56 +3346,50 @@ export default function App() {
             <>
               {version !== "v4" && <SideNavigation />}
               {version !== "v4" && <TopBar />}
-              {screen === "review" && version === "v3" ? (
-                <VersionThreeReviewScreen
-                  message={v3Message}
-                  images={v3Images}
-                  onEdit={() => setScreen("edit")}
-                  onBack={() => setScreen("calendar")}
-                />
-              ) : screen === "review" ? (
+              {screen === "review" ? (
                 <ReviewScreen
                   message={
                     version === "v1"
                       ? message
-                      : (version === "v4" ? v4Drafts : v2Drafts).google.message
+                      : multiChannelDrafts.google.message
                   }
                   images={
                     version === "v1"
                       ? images
-                      : (version === "v4" ? v4Drafts : v2Drafts).google.images
+                      : multiChannelDrafts.google.images
                   }
                   enabledChannels={enabledChannels}
-                  carouselDrafts={
-                    version === "v2" ? v2Drafts : version === "v4" ? v4Drafts : undefined
-                  }
+                  carouselDrafts={version === "v1" ? undefined : multiChannelDrafts}
                   onToggleChannel={toggleChannel}
                   onEdit={() => setScreen("edit")}
-                  onBack={() => setScreen("calendar")}
-                  onSchedule={() => {
-                    if (version === "v1" || version === "v2" || version === "v4") {
-                      setScheduledChannels((current) => ({
-                        ...current,
-                        [version]: { ...enabledChannels },
-                      }));
+                  onBack={() => {
+                    setScreen("calendar");
+                    if (version === "v3" && v3ReviewOrigin === "saturday") {
+                      setV3CombinedModalOpen(true);
                     }
+                    setV3ReviewOrigin(null);
+                  }}
+                  onSchedule={() => {
+                    setScheduledChannels((current) => ({
+                      ...current,
+                      [version]: { ...enabledChannels },
+                    }));
+                    setV3ReviewOrigin(null);
                     setScreen("calendar");
                     setContextualToast(null);
                     setScheduleToastVisible(true);
                   }}
                 />
-              ) : version === "v3" ? (
-                <VersionThreeEditScreen
-                  message={v3Message}
-                  setMessage={setV3Message}
-                  images={v3Images}
-                  setImages={setV3Images}
-                  onCancel={() => setScreen("review")}
-                />
-              ) : version === "v2" || version === "v4" ? (
+              ) : version === "v2" || version === "v3" || version === "v4" ? (
                 <VersionTwoEditScreen
-                  drafts={version === "v4" ? v4Drafts : v2Drafts}
-                  setDrafts={version === "v4" ? setV4Drafts : setV2Drafts}
+                  drafts={multiChannelDrafts}
+                  setDrafts={
+                    version === "v2"
+                      ? setV2Drafts
+                      : version === "v3"
+                        ? setV3Drafts
+                        : setV4Drafts
+                  }
                   enabledChannels={enabledChannels}
                   onCancel={() => setScreen("review")}
                   allTabLabel={version === "v4" ? "Your posts" : undefined}
