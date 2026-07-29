@@ -97,7 +97,8 @@ async function verifyChannel(channel, index) {
 
 try {
   await page.goto(baseUrl, { waitUntil: "networkidle" });
-  await page.getByRole("button", { name: "Version 4" }).click();
+  const versionFourButton = page.getByRole("button", { name: "Version 4" });
+  if (await versionFourButton.count()) await versionFourButton.click();
   await page.getByLabel("Add to your marketing calendar").fill("Five channel QA prompt");
   await page.getByRole("button", { name: "Generate suggested marketing content" }).click();
   await expectHeading("Suggested Marketing Content");
