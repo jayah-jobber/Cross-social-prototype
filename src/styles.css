@@ -629,24 +629,6 @@ button {
   padding: 18px 0 12px;
 }
 
-.v4-channel-label {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  margin: 0 0 20px;
-  color: #536b74;
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.v4-channel-label .google-g,
-.v4-channel-label .brand-facebook,
-.v4-channel-label .brand-instagram {
-  width: 18px;
-  height: 18px;
-  font-size: 18px;
-}
-
 .v4-context-details h1 {
   max-width: 520px;
   margin-bottom: 42px;
