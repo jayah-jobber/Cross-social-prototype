@@ -563,7 +563,7 @@ button {
   display: grid;
   width: 1232px;
   height: 852px;
-  grid-template-rows: 76px 1fr 82px;
+  grid-template-rows: 76px 1fr;
   overflow: hidden;
   border: 1px solid #d8dddf;
   border-radius: 10px;
@@ -621,8 +621,12 @@ button {
 }
 
 .v4-context-details {
+  display: flex;
   min-width: 0;
-  padding: 18px 0 0;
+  min-height: 0;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 18px 0 12px;
 }
 
 .v4-channel-label {
@@ -724,18 +728,16 @@ button {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 48px;
-  border-top: 1px solid #dce0e1;
-  background: #faf9f6;
+  gap: 16px;
 }
 
 .v4-context-footer > div {
   display: flex;
+  align-items: center;
   gap: 10px;
 }
 
-.v4-context-footer .secondary-button,
-.v4-context-footer .primary-button {
+.v4-context-footer .secondary-button {
   height: 44px;
   padding: 0 18px;
   border-radius: 8px;
@@ -745,6 +747,77 @@ button {
 
 .v4-context-footer [aria-disabled="true"] {
   cursor: default;
+}
+
+.v4-split-action {
+  position: relative;
+}
+
+.v4-split-button {
+  display: flex;
+  height: 44px;
+  overflow: hidden;
+  border-radius: 8px;
+  color: white;
+  background: var(--green);
+}
+
+.v4-split-button button {
+  height: 44px;
+  padding: 0 18px;
+  color: white;
+  cursor: pointer;
+  background: transparent;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.v4-split-button button:first-child {
+  min-width: 158px;
+}
+
+.v4-split-button button:last-child {
+  display: grid;
+  width: 48px;
+  place-items: center;
+  padding: 0;
+  border-left: 1px solid rgb(255 255 255 / 65%);
+}
+
+.v4-split-button button:hover,
+.v4-split-button button:focus-visible {
+  background: var(--green-dark);
+}
+
+.v4-split-menu {
+  position: absolute;
+  z-index: 20;
+  right: 0;
+  bottom: calc(100% + 8px);
+  width: 206px;
+  padding: 6px;
+  border: 1px solid #d6dcde;
+  border-radius: 8px;
+  background: white;
+  box-shadow: 0 10px 24px rgb(3 43 58 / 18%);
+}
+
+.v4-split-menu button {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  background: white;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.v4-split-menu button:hover,
+.v4-split-menu button:focus-visible {
+  outline: 0;
+  background: #f0f4ed;
 }
 
 .google-delete-overlay {
