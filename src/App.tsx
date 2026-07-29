@@ -1402,7 +1402,7 @@ function SuggestedMarketingContentDialog({
             <p><strong>{destinationDetails.label}</strong> {destinationDetails.value}</p>
           </div>
           <hr className="suggested-preview-divider" />
-          <div className="suggested-preview-scroll">
+          <div className="suggested-preview-scroll suggested-preview-compact">
             {active.id === "email" ? (
               <EmailCampaignPreview
                 images={drafts.all.images}
@@ -2009,59 +2009,105 @@ function VersionFourContextModal({
   );
 }
 
-function VersionFourSocialReview({
+function VersionFourChannelReview({
   channel,
-  draft,
+  socialDraft,
+  emailMessage,
+  emailSubject,
+  websiteMessage,
+  websiteTitle,
+  images,
   onBack,
   onEdit,
+  compactPreview = false,
   inactive = false,
 }: {
-  channel: PreviewChannel;
-  draft: ChannelDraft;
+  channel: ContextualChannel;
+  socialDraft?: ChannelDraft;
+  emailMessage: string;
+  emailSubject: string;
+  websiteMessage: string;
+  websiteTitle: string;
+  images: GalleryImage[];
   onBack: () => void;
   onEdit: () => void;
+  compactPreview?: boolean;
   inactive?: boolean;
 }) {
   const visualOnly = (event: React.MouseEvent<HTMLButtonElement>) => event.preventDefault();
-  const summary = [draft.message, draft.hashtags].filter(Boolean).join(" ").replace(/\n+/g, " ");
-  const channelLabel = channel === "facebook" ? "Facebook" : "Instagram";
-  const profile = channel === "facebook"
-    ? "Beegreen Landscaping / Profile 1"
-    : "@beegreenlandscaping";
+  const channelConfig = CONTEXTUAL_CHANNELS.find(({ id }) => id === channel)!;
+  const isEmail = channel === "email";
+  const isWebsite = channel === "website";
+  const socialSummary = socialDraft
+    ? [socialDraft.message, socialDraft.hashtags].filter(Boolean).join(" ").replace(/\n+/g, " ")
+    : "";
+  const summary = isEmail
+    ? `${emailSubject} — ${emailMessage}`.replace(/\n+/g, " ")
+    : isWebsite
+      ? `${websiteTitle} — ${websiteMessage}`.replace(/\n+/g, " ")
+      : socialSummary;
+  const reviewTitle = isEmail
+    ? "Review Email Campaign"
+    : isWebsite
+      ? "Review Website Page"
+      : `Review ${channelConfig.label} Post`;
+  const contentLabel = isWebsite ? "Page" : "Content";
+  const scheduleLabel = isEmail
+    ? "Schedule Campaign"
+    : isWebsite
+      ? "Publish Page"
+      : "Schedule Post";
+  const destinationLabel = isEmail
+    ? "Send to"
+    : isWebsite
+      ? "Publish to"
+      : "Post to";
+  const destination = channel === "google"
+    ? "Google Business Profile · Beegreen Landscaping"
+    : channel === "facebook"
+      ? "Beegreen Landscaping / Profile 1"
+      : channel === "instagram"
+        ? "@beegreenlandscaping"
+        : channel === "email"
+          ? "All clients · 394 of 400 subscribed to email marketing"
+          : INITIAL_EXTERNAL_LINK;
 
   return (
     <main
-      className="app-content v4-facebook-workflow"
-      aria-labelledby="v4-social-review-title"
+      className={`app-content v4-facebook-workflow v4-channel-review${compactPreview ? " v4-suggested-review" : ""}`}
+      aria-labelledby="v4-channel-review-title"
       inert={inactive ? true : undefined}
     >
       <section className="review-panel">
         <div className="review-scroll">
-          <h1 id="v4-social-review-title">Review {channelLabel} Post</h1>
+          <h1 id="v4-channel-review-title">{reviewTitle}</h1>
           <div className="about-content-row">
             <Sparkles size={21} />
-            <strong>About this {channelLabel} post</strong>
+            <strong>{channelConfig.about}</strong>
             <ChevronDown size={19} />
           </div>
           <div className="review-fields">
             <section className="review-field">
-              <header><h2>Content</h2><button type="button" onClick={onEdit}>Edit</button></header>
+              <header><h2>{contentLabel}</h2><button type="button" onClick={onEdit}>Edit</button></header>
               <p className="review-summary">{summary}</p>
               <small>AI-generated content may contain errors. Please verify important information.</small>
             </section>
             <section className="review-field">
               <header>
-                <h2>Schedule Post</h2>
+                <h2>{scheduleLabel}</h2>
                 <button type="button" aria-disabled="true" onClick={visualOnly}>Edit</button>
               </header>
               <p>Nov 7, 2026 9:00 AM</p>
             </section>
             <section className="review-field v4-facebook-post-to">
               <header>
-                <span className="v4-connected-title"><h2>Post to</h2><small>Connected</small></span>
+                <span className="v4-connected-title">
+                  <h2>{destinationLabel}</h2>
+                  {!isEmail && !isWebsite && <small>Connected</small>}
+                </span>
               </header>
               <p>
-                <ContextualChannelIcon channel={channel} /> {profile}
+                <ContextualChannelIcon channel={channel} /> {destination}
               </p>
             </section>
           </div>
@@ -2076,7 +2122,21 @@ function VersionFourSocialReview({
           </button>
         </footer>
       </section>
-      <SocialDraftPreview channel={channel} draft={draft} />
+      {isEmail ? (
+        <section className="preview-panel suggested-review-preview">
+          <div className="preview-content">
+            <EmailCampaignPreview images={images} message={emailMessage} subject={emailSubject} />
+          </div>
+        </section>
+      ) : isWebsite ? (
+        <section className="preview-panel suggested-review-preview">
+          <div className="preview-content">
+            <WebsitePagePreview images={images} message={websiteMessage} title={websiteTitle} />
+          </div>
+        </section>
+      ) : (
+        <SocialDraftPreview channel={channel} draft={socialDraft!} />
+      )}
     </main>
   );
 }
@@ -3189,7 +3249,8 @@ export default function App() {
   const [suggestedPreviewIndex, setSuggestedPreviewIndex] = useState(0);
   const [v4Generating, setV4Generating] = useState(false);
   const suggestionTimerRef = useRef<number | null>(null);
-  const [suggestedEditor, setSuggestedEditor] = useState<"google" | "email" | "website" | null>(null);
+  const [suggestedReviewChannel, setSuggestedReviewChannel] = useState<ContextualChannel | null>(null);
+  const [suggestedEditor, setSuggestedEditor] = useState<ContextualChannel | null>(null);
   const [suggestedGoogleDrafts, setSuggestedGoogleDrafts] = useState<V2Drafts | null>(null);
   const [suggestedTextDraft, setSuggestedTextDraft] = useState<SuggestedTextDraft | null>(null);
   const [suggestedCompletion, setSuggestedCompletion] = useState<SuggestedCompletion | null>(null);
@@ -3212,6 +3273,7 @@ export default function App() {
   const totalHeight = frameHeight + 60;
   const v4SidebarFree = version === "v4" && (
     suggestedEditor !== null
+    || suggestedReviewChannel !== null
     ||
     combinedWorkflow === "review"
     || combinedWorkflow === "edit"
@@ -3277,6 +3339,7 @@ export default function App() {
     setSuggestedDialogOpen(false);
     setSuggestedPreviewIndex(0);
     setV4Generating(false);
+    setSuggestedReviewChannel(null);
     setSuggestedEditor(null);
     setSuggestedGoogleDrafts(null);
     setSuggestedTextDraft(null);
@@ -3297,10 +3360,22 @@ export default function App() {
   const toggleChannel = (channel: PreviewChannel) => {
     setEnabledChannels((current) => ({ ...current, [channel]: !current[channel] }));
   };
-  const returnToSuggestedDialog = () => {
+  const returnToSuggestedReview = () => {
     setSuggestedEditor(null);
     setSuggestedGoogleDrafts(null);
     setSuggestedTextDraft(null);
+    setSocialEditDraft(null);
+  };
+  const returnFromSuggestedReview = () => {
+    if (!suggestedReviewChannel) return;
+    setApplyChanges(null);
+    setSuggestedEditor(null);
+    setSuggestedGoogleDrafts(null);
+    setSuggestedTextDraft(null);
+    setSocialEditDraft(null);
+    setSuggestedPreviewIndex(CONTEXTUAL_CHANNELS.findIndex(({ id }) => id === suggestedReviewChannel));
+    setSuggestedReviewChannel(null);
+    setV4ReviewOrigin(null);
     setSuggestedDialogOpen(true);
   };
 
@@ -3394,10 +3469,31 @@ export default function App() {
             <SuggestedGoogleEditor
               drafts={suggestedGoogleDrafts}
               setDrafts={setSuggestedGoogleDrafts}
-              onCancel={returnToSuggestedDialog}
+              onCancel={returnToSuggestedReview}
               onSave={() => {
                 setV4Drafts(cloneDrafts(suggestedGoogleDrafts));
-                returnToSuggestedDialog();
+                returnToSuggestedReview();
+              }}
+            />
+          ) : (suggestedEditor === "facebook" || suggestedEditor === "instagram") && socialEditDraft ? (
+            <VersionFourSocialEditor
+              channel={suggestedEditor}
+              draft={socialEditDraft}
+              setDraft={setSocialEditDraft}
+              onCancel={returnToSuggestedReview}
+              onSave={() => {
+                setV4Drafts((current) => ({
+                  ...current,
+                  [suggestedEditor]: {
+                    ...socialEditDraft,
+                    images: [...socialEditDraft.images],
+                  },
+                }));
+                setApplyChanges({
+                  source: suggestedEditor,
+                  message: socialEditDraft.message,
+                });
+                returnToSuggestedReview();
               }}
             />
           ) : (suggestedEditor === "email" || suggestedEditor === "website") && suggestedTextDraft ? (
@@ -3406,7 +3502,7 @@ export default function App() {
               draft={suggestedTextDraft}
               images={v4Drafts.all.images}
               setDraft={setSuggestedTextDraft}
-              onCancel={returnToSuggestedDialog}
+              onCancel={returnToSuggestedReview}
               onSave={() => {
                 if (suggestedEditor === "email") {
                   setV4EmailSubject(suggestedTextDraft.title);
@@ -3415,14 +3511,84 @@ export default function App() {
                   setV4WebsiteTitle(suggestedTextDraft.title);
                   setV4WebsiteMessage(suggestedTextDraft.message);
                 }
-                returnToSuggestedDialog();
+                returnToSuggestedReview();
               }}
             />
+          ) : suggestedReviewChannel ? (
+            <>
+              <VersionFourChannelReview
+                channel={suggestedReviewChannel}
+                socialDraft={
+                  suggestedReviewChannel === "google"
+                  || suggestedReviewChannel === "facebook"
+                  || suggestedReviewChannel === "instagram"
+                    ? v4Drafts[suggestedReviewChannel]
+                    : undefined
+                }
+                emailMessage={v4EmailMessage}
+                emailSubject={v4EmailSubject}
+                websiteMessage={v4WebsiteMessage}
+                websiteTitle={v4WebsiteTitle}
+                images={v4Drafts.all.images}
+                compactPreview
+                inactive={applyChanges !== null}
+                onBack={returnFromSuggestedReview}
+                onEdit={() => {
+                  setApplyChanges(null);
+                  setSuggestedEditor(suggestedReviewChannel);
+                  if (suggestedReviewChannel === "google") {
+                    setSuggestedGoogleDrafts(cloneDrafts(v4Drafts));
+                  } else if (
+                    suggestedReviewChannel === "facebook"
+                    || suggestedReviewChannel === "instagram"
+                  ) {
+                    setSocialEditDraft({
+                      ...v4Drafts[suggestedReviewChannel],
+                      images: [...v4Drafts[suggestedReviewChannel].images],
+                    });
+                  } else {
+                    setSuggestedTextDraft({
+                      title: suggestedReviewChannel === "email" ? v4EmailSubject : v4WebsiteTitle,
+                      message: suggestedReviewChannel === "email" ? v4EmailMessage : v4WebsiteMessage,
+                    });
+                  }
+                }}
+              />
+              {applyChanges && (
+                <ApplyChangesDialog
+                  source={applyChanges.source}
+                  googleAvailable={!v4GoogleDeleted}
+                  onClose={() => setApplyChanges(null)}
+                  onApply={(channels) => {
+                    const socialChannels = channels.filter((
+                      channel,
+                    ): channel is PreviewChannel => (
+                      channel === "google" || channel === "facebook" || channel === "instagram"
+                    ));
+                    setV4Drafts((current) => {
+                      const next = { ...current };
+                      socialChannels.forEach((channel) => {
+                        next[channel] = { ...next[channel], message: applyChanges.message };
+                      });
+                      return next;
+                    });
+                    if (channels.includes("email")) setV4EmailMessage(applyChanges.message);
+                    if (channels.includes("website")) setV4WebsiteMessage(applyChanges.message);
+                    setApplyChanges(null);
+                  }}
+                />
+              )}
+            </>
           ) : combinedWorkflow === "review" ? (
             <>
-              <VersionFourSocialReview
+              <VersionFourChannelReview
                 channel={socialWorkflowChannel}
-                draft={v4Drafts[socialWorkflowChannel]}
+                socialDraft={v4Drafts[socialWorkflowChannel]}
+                emailMessage={v4EmailMessage}
+                emailSubject={v4EmailSubject}
+                websiteMessage={v4WebsiteMessage}
+                websiteTitle={v4WebsiteTitle}
+                images={v4Drafts.all.images}
                 inactive={applyChanges !== null}
                 onBack={() => {
                   setApplyChanges(null);
@@ -3570,23 +3736,9 @@ export default function App() {
                   }}
                   onEdit={(channel) => {
                     setSuggestedDialogOpen(false);
-                    if (channel === "facebook" || channel === "instagram") {
-                      setSocialWorkflowChannel(channel);
-                      setApplyChanges(null);
-                      setV4ReviewOrigin("suggested-content");
-                      setCombinedWorkflow("review");
-                      return;
-                    }
-                    if (channel === "google") {
-                      setSuggestedGoogleDrafts(cloneDrafts(v4Drafts));
-                      setSuggestedEditor("google");
-                      return;
-                    }
-                    setSuggestedTextDraft({
-                      title: channel === "email" ? v4EmailSubject : v4WebsiteTitle,
-                      message: channel === "email" ? v4EmailMessage : v4WebsiteMessage,
-                    });
-                    setSuggestedEditor(channel);
+                    setApplyChanges(null);
+                    setSuggestedReviewChannel(channel);
+                    setV4ReviewOrigin("suggested-content");
                   }}
                   onSchedule={(channel, final) => {
                     showContextualToast(contextualSuccessMessage(channel, "schedule"));
