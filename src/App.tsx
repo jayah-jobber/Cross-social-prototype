@@ -813,6 +813,9 @@ function MarketingCalendarCard({
 function CalendarScreen({
   onOpenPost,
   onOpenCombinedPost,
+  v4Prompt,
+  onV4PromptChange,
+  onV4PromptSubmit,
   combinedInteractive = false,
   updated = false,
   targetPublished = false,
@@ -822,6 +825,9 @@ function CalendarScreen({
 }: {
   onOpenPost: () => void;
   onOpenCombinedPost: () => void;
+  v4Prompt?: string;
+  onV4PromptChange?: (value: string) => void;
+  onV4PromptSubmit?: () => void;
   combinedInteractive?: boolean;
   updated?: boolean;
   targetPublished?: boolean;
@@ -857,8 +863,33 @@ function CalendarScreen({
           <div className="calendar-month">
             <ChevronLeft size={24} />
             <ChevronRight size={24} />
-            <strong>November</strong>
+            <strong>{v4Prompt === undefined ? "November" : "Nov"}</strong>
             <span>2026</span>
+            {v4Prompt !== undefined && onV4PromptChange && onV4PromptSubmit && (
+              <form
+                className="v4-calendar-prompt"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  onV4PromptSubmit();
+                }}
+              >
+                <Sparkles size={21} aria-hidden="true" />
+                <input
+                  type="text"
+                  value={v4Prompt}
+                  aria-label="Add to your marketing calendar"
+                  placeholder="Add to your marketing calendar ..."
+                  onChange={(event) => onV4PromptChange(event.target.value)}
+                />
+                <button
+                  type="submit"
+                  aria-label="Generate suggested marketing content"
+                  disabled={!v4Prompt.trim()}
+                >
+                  <Send size={20} aria-hidden="true" />
+                </button>
+              </form>
+            )}
             <small><CalendarDays size={14} /> Today</small>
           </div>
           <div className="calendar-view-control">
@@ -1152,6 +1183,159 @@ function WebsitePagePreview({ images, message }: { images: GalleryImage[]; messa
         <span className="fake-cta">Request a quote</span>
       </section>
     </article>
+  );
+}
+
+function SuggestedMarketingContentDialog({
+  prompt,
+  drafts,
+  emailMessage,
+  websiteMessage,
+  activeIndex,
+  onPromptChange,
+  onActiveIndexChange,
+  onClose,
+  onFacebookEdit,
+}: {
+  prompt: string;
+  drafts: V2Drafts;
+  emailMessage: string;
+  websiteMessage: string;
+  activeIndex: number;
+  onPromptChange: (value: string) => void;
+  onActiveIndexChange: (index: number) => void;
+  onClose: () => void;
+  onFacebookEdit: () => void;
+}) {
+  const active = CONTEXTUAL_CHANNELS[activeIndex];
+  const atStart = activeIndex === 0;
+  const atEnd = activeIndex === CONTEXTUAL_CHANNELS.length - 1;
+  const channelLabel = active.id === "email"
+    ? "Email campaign"
+    : active.id === "website"
+      ? "Website page"
+      : `${active.label} post`;
+  const visualOnlyAction = (event: React.MouseEvent<HTMLButtonElement>) => event.preventDefault();
+  const goPrevious = () => onActiveIndexChange(Math.max(0, activeIndex - 1));
+  const goNext = () => onActiveIndexChange(Math.min(CONTEXTUAL_CHANNELS.length - 1, activeIndex + 1));
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.stopImmediatePropagation();
+        onClose();
+        return;
+      }
+      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
+      if (event.key === "ArrowLeft") goPrevious();
+      if (event.key === "ArrowRight") goNext();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [activeIndex, onClose]);
+
+  return (
+    <div
+      className="calendar-modal-overlay suggested-content-overlay"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <section
+        className="suggested-content-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="suggested-content-title"
+      >
+        <header className="suggested-content-header">
+          <h1 id="suggested-content-title">Suggested Marketing Content</h1>
+          <button type="button" aria-label="Close suggested marketing content" onClick={onClose}>
+            <X size={26} aria-hidden="true" />
+          </button>
+        </header>
+
+        <form
+          className="suggested-prompt-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const nextPrompt = prompt.trim();
+            if (nextPrompt) onPromptChange(nextPrompt);
+          }}
+        >
+          <input
+            value={prompt}
+            aria-label="Edit marketing content prompt"
+            onChange={(event) => onPromptChange(event.target.value)}
+            autoFocus
+          />
+          <button
+            type="submit"
+            aria-label="Regenerate suggestions"
+            disabled={!prompt.trim()}
+          >
+            <Send size={18} aria-hidden="true" />
+          </button>
+        </form>
+        <p className="suggested-prompt-helper">
+          Edit your prompt and regenerate to get a fresh set of suggestions.
+        </p>
+
+        <section className="suggested-preview-section" aria-label={`${channelLabel} preview`}>
+          <header className="suggested-preview-toolbar">
+            <div>
+              <span className="suggested-preview-eyebrow">PREVIEW</span>
+              <span className="suggested-channel-badge">
+                <ContextualChannelIcon channel={active.id} />
+                {channelLabel}
+              </span>
+            </div>
+            <nav aria-label="Suggested content channels">
+              <span aria-live="polite">{activeIndex + 1} of {CONTEXTUAL_CHANNELS.length}</span>
+              <button type="button" onClick={goPrevious} disabled={atStart} aria-label="Previous channel">
+                <ChevronLeft size={20} aria-hidden="true" />
+              </button>
+              <button type="button" onClick={goNext} disabled={atEnd} aria-label="Next channel">
+                <ChevronRight size={20} aria-hidden="true" />
+              </button>
+            </nav>
+          </header>
+          <div className="suggested-preview-scroll">
+            {active.id === "email" ? (
+              <EmailCampaignPreview images={drafts.all.images} message={emailMessage} />
+            ) : active.id === "website" ? (
+              <WebsitePagePreview images={drafts.all.images} message={websiteMessage} />
+            ) : (
+              <PlatformPreviewCard
+                channel={active.id}
+                message={drafts[active.id].message}
+                hashtags={drafts[active.id].hashtags}
+                images={drafts[active.id].images}
+              />
+            )}
+          </div>
+        </section>
+
+        <footer className="suggested-content-footer">
+          <button type="button" className="delete-post" aria-disabled="true" onClick={visualOnlyAction}>
+            Delete
+          </button>
+          <div>
+            <button
+              type="button"
+              className="secondary-button"
+              aria-disabled={active.id === "facebook" ? undefined : "true"}
+              onClick={active.id === "facebook" ? onFacebookEdit : visualOnlyAction}
+            >
+              Edit
+            </button>
+            <button type="button" className="primary-button" aria-disabled="true" onClick={visualOnlyAction}>
+              Schedule Nov 6
+            </button>
+          </div>
+        </footer>
+      </section>
+    </div>
   );
 }
 
@@ -2741,6 +2925,11 @@ export default function App() {
   const [v3ReviewOrigin, setV3ReviewOrigin] = useState<"friday" | "saturday" | null>(null);
   const [combinedWorkflow, setCombinedWorkflow] = useState<"modal" | "review" | "edit" | null>(null);
   const [combinedModalStartIndex, setCombinedModalStartIndex] = useState(0);
+  const [v4ReviewOrigin, setV4ReviewOrigin] = useState<"saturday" | "suggested" | null>(null);
+  const [calendarPrompt, setCalendarPrompt] = useState("");
+  const [suggestedPrompt, setSuggestedPrompt] = useState("");
+  const [suggestedDialogOpen, setSuggestedDialogOpen] = useState(false);
+  const [suggestedPreviewIndex, setSuggestedPreviewIndex] = useState(0);
   const [socialWorkflowChannel, setSocialWorkflowChannel] = useState<PreviewChannel>("facebook");
   const [socialEditDraft, setSocialEditDraft] = useState<ChannelDraft | null>(null);
   const [applyChanges, setApplyChanges] = useState<{ source: PreviewChannel; message: string } | null>(null);
@@ -2807,6 +2996,11 @@ export default function App() {
     setV3ReviewOrigin(null);
     setCombinedWorkflow(null);
     setCombinedModalStartIndex(0);
+    setV4ReviewOrigin(null);
+    setCalendarPrompt("");
+    setSuggestedPrompt("");
+    setSuggestedDialogOpen(false);
+    setSuggestedPreviewIndex(0);
     setSocialWorkflowChannel("facebook");
     setSocialEditDraft(null);
     setApplyChanges(null);
@@ -2910,6 +3104,12 @@ export default function App() {
                 inactive={applyChanges !== null}
                 onBack={() => {
                   setApplyChanges(null);
+                  if (v4ReviewOrigin === "suggested") {
+                    setSuggestedPreviewIndex(1);
+                    setSuggestedDialogOpen(true);
+                    setCombinedWorkflow(null);
+                    return;
+                  }
                   setCombinedModalStartIndex(
                     socialWorkflowChannel === "facebook"
                       ? (v4GoogleDeleted ? 0 : 1)
@@ -2989,6 +3189,19 @@ export default function App() {
                 targetChannels={PREVIEW_CHANNEL_ORDER
                   .filter((channel) => scheduledChannels[version]?.[channel])
                   .map((channel) => CALENDAR_CHANNEL_BY_PREVIEW[channel])}
+                v4Prompt={version === "v4" ? calendarPrompt : undefined}
+                onV4PromptChange={version === "v4" ? setCalendarPrompt : undefined}
+                onV4PromptSubmit={version === "v4"
+                  ? () => {
+                      const prompt = calendarPrompt.trim();
+                      if (!prompt) return;
+                      setSuggestedPrompt(prompt);
+                      setCalendarPrompt("");
+                      setSuggestedPreviewIndex(0);
+                      setV4ReviewOrigin(null);
+                      setSuggestedDialogOpen(true);
+                    }
+                  : undefined}
                 onOpenPost={() => {
                   setV3ReviewOrigin(null);
                   setCalendarModalOpen(true);
@@ -3000,6 +3213,7 @@ export default function App() {
                     setV3CombinedModalOpen(true);
                   } else if (version === "v4") {
                     setCombinedModalStartIndex(0);
+                    setV4ReviewOrigin("saturday");
                     setCombinedWorkflow("modal");
                   }
                 }}
@@ -3009,6 +3223,29 @@ export default function App() {
                     ? ["Facebook post", "Instagram post", "Email", "Website"]
                     : undefined)}
               />
+              {suggestedDialogOpen && version === "v4" && (
+                <SuggestedMarketingContentDialog
+                  prompt={suggestedPrompt}
+                  drafts={v4Drafts}
+                  emailMessage={v4EmailMessage}
+                  websiteMessage={v4WebsiteMessage}
+                  activeIndex={suggestedPreviewIndex}
+                  onPromptChange={setSuggestedPrompt}
+                  onActiveIndexChange={setSuggestedPreviewIndex}
+                  onClose={() => {
+                    setSuggestedDialogOpen(false);
+                    setSuggestedPreviewIndex(0);
+                    setV4ReviewOrigin(null);
+                  }}
+                  onFacebookEdit={() => {
+                    setSocialWorkflowChannel("facebook");
+                    setApplyChanges(null);
+                    setV4ReviewOrigin("suggested");
+                    setSuggestedDialogOpen(false);
+                    setCombinedWorkflow("review");
+                  }}
+                />
+              )}
               {calendarModalOpen && (
                 <CalendarContextModal
                   previews={calendarPreviews}
@@ -3064,11 +3301,13 @@ export default function App() {
                   googleAvailable={!v4GoogleDeleted}
                   onClose={() => {
                     setCombinedModalStartIndex(0);
+                    setV4ReviewOrigin(null);
                     setCombinedWorkflow(null);
                   }}
                   onSocialEdit={(channel) => {
                     setSocialWorkflowChannel(channel);
                     setApplyChanges(null);
+                    setV4ReviewOrigin("saturday");
                     setCombinedWorkflow("review");
                   }}
                   onDeleteGoogle={() => {
@@ -3097,6 +3336,7 @@ export default function App() {
                         )),
                     }));
                     setCombinedModalStartIndex(0);
+                    setV4ReviewOrigin(null);
                     setCombinedWorkflow(null);
                   }}
                 />
