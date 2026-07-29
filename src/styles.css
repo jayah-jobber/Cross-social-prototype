@@ -3472,6 +3472,12 @@ label {
   min-height: 0;
 }
 
+.suggested-preview-compact > .social-card,
+.suggested-preview-compact > .context-email-preview,
+.suggested-preview-compact > .context-website-preview {
+  zoom: 0.72;
+}
+
 .suggested-content-footer {
   display: flex;
   align-items: center;
@@ -3542,6 +3548,25 @@ label {
 .suggested-text-preview .context-email-preview,
 .suggested-text-preview .context-website-preview {
   width: 100%;
+}
+
+.suggested-review-preview .preview-content {
+  width: 540px;
+  margin-top: 28px;
+}
+
+.suggested-review-preview .context-email-preview,
+.suggested-review-preview .context-website-preview {
+  width: 100%;
+}
+
+.v4-suggested-review .preview-content {
+  zoom: 0.72;
+}
+
+.v4-channel-review .review-field [aria-disabled="true"],
+.v4-channel-review .review-footer [aria-disabled="true"] {
+  cursor: default;
 }
 
 @media (max-height: 940px) {
