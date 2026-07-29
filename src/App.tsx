@@ -582,7 +582,19 @@ const CALENDAR_COLUMNS: { day: string; groups: CalendarGroup[] }[] = [
       },
     ],
   },
-  { day: "Saturday, Nov 7", groups: [] },
+  {
+    day: "Saturday, Nov 7",
+    groups: [{
+      label: "Needs review (1)",
+      items: [{
+        title: "Seasonal property clean up in Hamilton",
+        channels: ["Google post", "Facebook post", "Instagram post", "Email", "Website"],
+        status: "Needs review",
+        tone: "review",
+        showDate: false,
+      }],
+    }],
+  },
 ];
 
 const UPDATED_CALENDAR_COLUMNS: { day: string; groups: CalendarGroup[] }[] = [
@@ -678,7 +690,19 @@ const UPDATED_CALENDAR_COLUMNS: { day: string; groups: CalendarGroup[] }[] = [
       ],
     }],
   },
-  { day: "Saturday, Nov 7", groups: [] },
+  {
+    day: "Saturday, Nov 7",
+    groups: [{
+      label: "Needs review (1)",
+      items: [{
+        title: "Seasonal property clean up in Hamilton",
+        channels: ["Google post", "Facebook post", "Instagram post", "Email", "Website"],
+        status: "Needs review",
+        tone: "review",
+        showDate: false,
+      }],
+    }],
+  },
 ];
 
 type CalendarChannel = NonNullable<CalendarItem["channel"]>;
