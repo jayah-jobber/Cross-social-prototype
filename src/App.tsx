@@ -70,6 +70,8 @@ Our work included a general property clean up to remove debris and tidy landscap
 The result was a cleaner, more orderly outdoor space, with garden beds refreshed and ready for the season.
 
 If you’re planning a clean up and mulching project in Hamilton, feel free to reach out to discuss your property and timing.`;
+const INITIAL_EMAIL_MESSAGE = INITIAL_MESSAGE;
+const INITIAL_WEBSITE_MESSAGE = INITIAL_MESSAGE;
 
 const INITIAL_V1_MESSAGE = `${INITIAL_MESSAGE}
 
@@ -1074,7 +1076,7 @@ function ContextualChannelIcon({ channel }: { channel: ContextualChannel }) {
   return <Globe2 size={18} />;
 }
 
-function EmailCampaignPreview({ images }: { images: GalleryImage[] }) {
+function EmailCampaignPreview({ images, message }: { images: GalleryImage[]; message: string }) {
   return (
     <article className="context-email-preview">
       <header className="email-envelope">
@@ -1089,13 +1091,7 @@ function EmailCampaignPreview({ images }: { images: GalleryImage[] }) {
       <div className="email-content">
         <p className="email-eyebrow">PROJECT SHOWCASE · HAMILTON</p>
         <h2>Seasonal property clean up in Hamilton</h2>
-        <p>
-          This Hamilton property needed a seasonal refresh. We cleared debris, tidied the
-          landscaped areas, and added fresh mulch to define and protect the existing garden beds.
-        </p>
-        <p>
-          The result is a cleaner, more orderly outdoor space that is refreshed and ready for the season.
-        </p>
+        <p className="propagated-body">{message}</p>
         <span className="fake-cta">Plan your property clean up</span>
       </div>
       <footer>
@@ -1106,7 +1102,7 @@ function EmailCampaignPreview({ images }: { images: GalleryImage[] }) {
   );
 }
 
-function WebsitePagePreview({ images }: { images: GalleryImage[] }) {
+function WebsitePagePreview({ images, message }: { images: GalleryImage[]; message: string }) {
   return (
     <article className="context-website-preview">
       <header className="website-nav">
@@ -1122,10 +1118,7 @@ function WebsitePagePreview({ images }: { images: GalleryImage[] }) {
       </section>
       <section className="website-copy">
         <h3>A cleaner landscape, ready for the season</h3>
-        <p>
-          We refreshed this Hamilton property with a general clean up, debris removal, tidied
-          landscaped areas, and new mulch throughout the existing garden beds.
-        </p>
+        <p className="propagated-body">{message}</p>
         <div className="website-overview">
           <span><strong>Project</strong>Seasonal clean up</span>
           <span><strong>Location</strong>Hamilton, Ontario</span>
@@ -1145,17 +1138,21 @@ function WebsitePagePreview({ images }: { images: GalleryImage[] }) {
 
 function VersionFourContextModal({
   drafts,
+  emailMessage,
+  websiteMessage,
   initialIndex = 0,
   googleAvailable,
   onClose,
-  onFacebookEdit,
+  onSocialEdit,
   onDeleteGoogle,
 }: {
   drafts: V2Drafts;
+  emailMessage: string;
+  websiteMessage: string;
   initialIndex?: number;
   googleAvailable: boolean;
   onClose: () => void;
-  onFacebookEdit: () => void;
+  onSocialEdit: (channel: PreviewChannel) => void;
   onDeleteGoogle: () => void;
 }) {
   const [activeIndex, setActiveIndex] = useState(initialIndex);
@@ -1248,9 +1245,9 @@ function VersionFourContextModal({
             <header><Sparkles size={20} /><strong>{active.label} preview</strong></header>
             <div className="v4-context-preview-scroll">
               {active.id === "email" ? (
-                <EmailCampaignPreview images={drafts.all.images} />
+                <EmailCampaignPreview images={drafts.all.images} message={emailMessage} />
               ) : active.id === "website" ? (
-                <WebsitePagePreview images={drafts.all.images} />
+                <WebsitePagePreview images={drafts.all.images} message={websiteMessage} />
               ) : (
                 <PlatformPreviewCard
                   channel={active.id}
@@ -1276,8 +1273,12 @@ function VersionFourContextModal({
             <button
               type="button"
               className="secondary-button"
-              aria-disabled={active.id === "facebook" ? undefined : "true"}
-              onClick={active.id === "facebook" ? onFacebookEdit : safeVisualAction}
+              aria-disabled={active.id === "facebook" || active.id === "instagram" ? undefined : "true"}
+              onClick={active.id === "facebook" || active.id === "instagram"
+                ? () => {
+                    if (active.id === "facebook" || active.id === "instagram") onSocialEdit(active.id);
+                  }
+                : safeVisualAction}
             >
               Edit
             </button>
@@ -1336,26 +1337,38 @@ function VersionFourContextModal({
   );
 }
 
-function VersionFourFacebookReview({
+function VersionFourSocialReview({
+  channel,
   draft,
   onBack,
   onEdit,
+  inactive = false,
 }: {
+  channel: PreviewChannel;
   draft: ChannelDraft;
   onBack: () => void;
   onEdit: () => void;
+  inactive?: boolean;
 }) {
   const visualOnly = (event: React.MouseEvent<HTMLButtonElement>) => event.preventDefault();
   const summary = [draft.message, draft.hashtags].filter(Boolean).join(" ").replace(/\n+/g, " ");
+  const channelLabel = channel === "facebook" ? "Facebook" : "Instagram";
+  const profile = channel === "facebook"
+    ? "Beegreen Landscaping / Profile 1"
+    : "@beegreenlandscaping";
 
   return (
-    <main className="app-content v4-facebook-workflow" aria-labelledby="v4-facebook-review-title">
+    <main
+      className="app-content v4-facebook-workflow"
+      aria-labelledby="v4-social-review-title"
+      inert={inactive ? true : undefined}
+    >
       <section className="review-panel">
         <div className="review-scroll">
-          <h1 id="v4-facebook-review-title">Review Facebook Post</h1>
+          <h1 id="v4-social-review-title">Review {channelLabel} Post</h1>
           <div className="about-content-row">
             <Sparkles size={21} />
-            <strong>About this Facebook post</strong>
+            <strong>About this {channelLabel} post</strong>
             <ChevronDown size={19} />
           </div>
           <div className="review-fields">
@@ -1375,7 +1388,9 @@ function VersionFourFacebookReview({
               <header>
                 <span className="v4-connected-title"><h2>Post to</h2><small>Connected</small></span>
               </header>
-              <p><strong className="brand-facebook">f</strong> Beegreen Landscaping / Profile 1</p>
+              <p>
+                <ContextualChannelIcon channel={channel} /> {profile}
+              </p>
             </section>
           </div>
         </div>
@@ -1389,17 +1404,17 @@ function VersionFourFacebookReview({
           </button>
         </footer>
       </section>
-      <FacebookDraftPreview draft={draft} />
+      <SocialDraftPreview channel={channel} draft={draft} />
     </main>
   );
 }
 
-function FacebookDraftPreview({ draft }: { draft: ChannelDraft }) {
+function SocialDraftPreview({ channel, draft }: { channel: PreviewChannel; draft: ChannelDraft }) {
   return (
     <section className="preview-panel facebook-only-preview v4-facebook-preview">
       <div className="preview-content">
         <PlatformPreviewCard
-          channel="facebook"
+          channel={channel}
           message={draft.message}
           hashtags={draft.hashtags}
           images={draft.images}
@@ -1413,37 +1428,40 @@ function FacebookDraftPreview({ draft }: { draft: ChannelDraft }) {
   );
 }
 
-function VersionFourFacebookEditor({
+function VersionFourSocialEditor({
+  channel,
   draft,
   setDraft,
   onCancel,
   onSave,
 }: {
+  channel: PreviewChannel;
   draft: ChannelDraft;
   setDraft: (draft: ChannelDraft) => void;
   onCancel: () => void;
   onSave: () => void;
 }) {
   const combinedMessage = [draft.message, draft.hashtags].filter(Boolean).join("\n\n");
+  const channelLabel = channel === "facebook" ? "Facebook" : "Instagram";
   const updateCombinedMessage = (value: string) => {
     const parsed = splitPostMessage(value);
     setDraft({ ...draft, message: parsed.body, hashtags: parsed.hashtags });
   };
 
   return (
-    <main className="app-content v4-facebook-workflow" aria-labelledby="v4-facebook-editor-title">
+    <main className="app-content v4-facebook-workflow" aria-labelledby="v4-social-editor-title">
       <section className="editor-panel version-three-editor">
         <div className="editor-scroll">
-          <h1 id="v4-facebook-editor-title">Edit Facebook Post</h1>
+          <h1 id="v4-social-editor-title">Edit {channelLabel} Post</h1>
           <div className="about-content-row">
             <Sparkles size={21} />
-            <strong>About this Facebook post</strong>
+            <strong>About this {channelLabel} post</strong>
             <ChevronDown size={19} />
           </div>
           <div className="field-block version-three-message">
-            <label htmlFor="v4-facebook-message">Message body</label>
+            <label htmlFor="v4-social-message">Message body</label>
             <AutoSizeTextarea
-              id="v4-facebook-message"
+              id="v4-social-message"
               maxLength={1500}
               value={combinedMessage}
               onChange={updateCombinedMessage}
@@ -1474,8 +1492,84 @@ function VersionFourFacebookEditor({
           <button className="primary-button" type="button" onClick={onSave}>Save Edit</button>
         </footer>
       </section>
-      <FacebookDraftPreview draft={draft} />
+      <SocialDraftPreview channel={channel} draft={draft} />
     </main>
+  );
+}
+
+function ApplyChangesDialog({
+  source,
+  googleAvailable,
+  onClose,
+  onApply,
+}: {
+  source: PreviewChannel;
+  googleAvailable: boolean;
+  onClose: () => void;
+  onApply: (channels: ContextualChannel[]) => void;
+}) {
+  const [selected, setSelected] = useState<ContextualChannel[]>([]);
+  const options = CONTEXTUAL_CHANNELS.filter(({ id }) => (
+    id !== source && (googleAvailable || id !== "google")
+  ));
+
+  useEffect(() => {
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.stopImmediatePropagation();
+      onClose();
+    };
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [onClose]);
+
+  return (
+    <div className="apply-changes-overlay" role="presentation">
+      <section
+        className="apply-changes-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="apply-changes-title"
+      >
+        <button className="google-delete-close" type="button" aria-label="Close apply changes dialog" onClick={onClose}>
+          <X size={24} />
+        </button>
+        <h2 id="apply-changes-title">Apply changes to other channels?</h2>
+        <p>
+          We noticed that you made a change. Do you want to apply the same change to your other channels?
+        </p>
+        <fieldset>
+          <legend>Select channels</legend>
+          <div className="apply-channel-options">
+            {options.map(({ id, label }) => (
+              <label key={id}>
+                <input
+                  type="checkbox"
+                  checked={selected.includes(id)}
+                  onChange={(event) => {
+                    setSelected((current) => event.target.checked
+                      ? [...current, id]
+                      : current.filter((channel) => channel !== id));
+                  }}
+                />
+                <span><ContextualChannelIcon channel={id} /> {label}</span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+        <footer>
+          <button type="button" className="secondary-button" onClick={onClose}>No, keep separate</button>
+          <button
+            type="button"
+            className="primary-button"
+            disabled={selected.length === 0}
+            onClick={() => onApply(selected)}
+          >
+            Yes, apply changes
+          </button>
+        </footer>
+      </section>
+    </div>
   );
 }
 
@@ -2422,7 +2516,11 @@ export default function App() {
   const [calendarModalOpen, setCalendarModalOpen] = useState(false);
   const [combinedWorkflow, setCombinedWorkflow] = useState<"modal" | "review" | "edit" | null>(null);
   const [combinedModalStartIndex, setCombinedModalStartIndex] = useState(0);
-  const [facebookEditDraft, setFacebookEditDraft] = useState<ChannelDraft | null>(null);
+  const [socialWorkflowChannel, setSocialWorkflowChannel] = useState<PreviewChannel>("facebook");
+  const [socialEditDraft, setSocialEditDraft] = useState<ChannelDraft | null>(null);
+  const [applyChanges, setApplyChanges] = useState<{ source: PreviewChannel; message: string } | null>(null);
+  const [v4EmailMessage, setV4EmailMessage] = useState(INITIAL_EMAIL_MESSAGE);
+  const [v4WebsiteMessage, setV4WebsiteMessage] = useState(INITIAL_WEBSITE_MESSAGE);
   const [v4GoogleDeleted, setV4GoogleDeleted] = useState(false);
   const [deleteToastVisible, setDeleteToastVisible] = useState(false);
   const [scheduleToastVisible, setScheduleToastVisible] = useState(false);
@@ -2465,7 +2563,11 @@ export default function App() {
     setCalendarModalOpen(false);
     setCombinedWorkflow(null);
     setCombinedModalStartIndex(0);
-    setFacebookEditDraft(null);
+    setSocialWorkflowChannel("facebook");
+    setSocialEditDraft(null);
+    setApplyChanges(null);
+    setV4EmailMessage(INITIAL_EMAIL_MESSAGE);
+    setV4WebsiteMessage(INITIAL_WEBSITE_MESSAGE);
     setV4GoogleDeleted(false);
     setDeleteToastVisible(false);
     setScheduleToastVisible(false);
@@ -2543,41 +2645,78 @@ export default function App() {
             <>
               <SideNavigation />
               <TopBar />
-              <VersionFourFacebookReview
-                draft={v4Drafts.facebook}
+              <VersionFourSocialReview
+                channel={socialWorkflowChannel}
+                draft={v4Drafts[socialWorkflowChannel]}
+                inactive={applyChanges !== null}
                 onBack={() => {
-                  setCombinedModalStartIndex(v4GoogleDeleted ? 0 : 1);
+                  setApplyChanges(null);
+                  setCombinedModalStartIndex(
+                    socialWorkflowChannel === "facebook"
+                      ? (v4GoogleDeleted ? 0 : 1)
+                      : (v4GoogleDeleted ? 1 : 2),
+                  );
                   setCombinedWorkflow("modal");
                 }}
                 onEdit={() => {
-                  setFacebookEditDraft({
-                    ...v4Drafts.facebook,
-                    images: [...v4Drafts.facebook.images],
+                  setApplyChanges(null);
+                  setSocialEditDraft({
+                    ...v4Drafts[socialWorkflowChannel],
+                    images: [...v4Drafts[socialWorkflowChannel].images],
                   });
                   setCombinedWorkflow("edit");
                 }}
               />
+              {applyChanges && (
+                <ApplyChangesDialog
+                  source={applyChanges.source}
+                  googleAvailable={!v4GoogleDeleted}
+                  onClose={() => setApplyChanges(null)}
+                  onApply={(channels) => {
+                    const socialChannels = channels.filter((
+                      channel,
+                    ): channel is PreviewChannel => (
+                      channel === "google" || channel === "facebook" || channel === "instagram"
+                    ));
+                    setV4Drafts((current) => {
+                      const next = { ...current };
+                      socialChannels.forEach((channel) => {
+                        next[channel] = { ...next[channel], message: applyChanges.message };
+                      });
+                      return next;
+                    });
+                    if (channels.includes("email")) setV4EmailMessage(applyChanges.message);
+                    if (channels.includes("website")) setV4WebsiteMessage(applyChanges.message);
+                    setApplyChanges(null);
+                  }}
+                />
+              )}
             </>
-          ) : combinedWorkflow === "edit" && facebookEditDraft ? (
+          ) : combinedWorkflow === "edit" && socialEditDraft ? (
             <>
               <SideNavigation />
               <TopBar />
-              <VersionFourFacebookEditor
-                draft={facebookEditDraft}
-                setDraft={setFacebookEditDraft}
+              <VersionFourSocialEditor
+                channel={socialWorkflowChannel}
+                draft={socialEditDraft}
+                setDraft={setSocialEditDraft}
                 onCancel={() => {
-                  setFacebookEditDraft(null);
+                  setSocialEditDraft(null);
                   setCombinedWorkflow("review");
                 }}
                 onSave={() => {
                   setV4Drafts((current) => ({
                     ...current,
-                    facebook: {
-                      ...facebookEditDraft,
-                      images: [...facebookEditDraft.images],
+                    [socialWorkflowChannel]: {
+                      ...socialEditDraft,
+                      images: [...socialEditDraft.images],
                     },
                   }));
-                  setFacebookEditDraft(null);
+                  setApplyChanges({
+                    source: socialWorkflowChannel,
+                    message: socialEditDraft.message,
+                  });
+                  setSocialEditDraft(null);
                   setCombinedWorkflow("review");
                 }}
               />
@@ -2621,13 +2760,19 @@ export default function App() {
               {combinedWorkflow === "modal" && version === "v4" && (
                 <VersionFourContextModal
                   drafts={v4Drafts}
+                  emailMessage={v4EmailMessage}
+                  websiteMessage={v4WebsiteMessage}
                   initialIndex={combinedModalStartIndex}
                   googleAvailable={!v4GoogleDeleted}
                   onClose={() => {
                     setCombinedModalStartIndex(0);
                     setCombinedWorkflow(null);
                   }}
-                  onFacebookEdit={() => setCombinedWorkflow("review")}
+                  onSocialEdit={(channel) => {
+                    setSocialWorkflowChannel(channel);
+                    setApplyChanges(null);
+                    setCombinedWorkflow("review");
+                  }}
                   onDeleteGoogle={() => {
                     setV4GoogleDeleted(true);
                     setCombinedModalStartIndex(0);

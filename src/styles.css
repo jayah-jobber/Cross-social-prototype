@@ -834,6 +834,105 @@ button {
   font-weight: 700;
 }
 
+.apply-changes-overlay {
+  position: absolute;
+  z-index: 70;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgb(3 43 58 / 34%);
+}
+
+.apply-changes-dialog {
+  position: relative;
+  width: 600px;
+  padding: 42px 40px 32px;
+  border-radius: 10px;
+  background: white;
+  box-shadow: 0 24px 64px rgb(3 43 58 / 30%);
+}
+
+.apply-changes-dialog h2 {
+  margin: 0 0 16px;
+  font-size: 28px;
+  line-height: 1.15;
+}
+
+.apply-changes-dialog > p {
+  margin: 0 0 26px;
+  color: #455f68;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.apply-changes-dialog fieldset {
+  padding: 0;
+  border: 0;
+  margin: 0;
+}
+
+.apply-changes-dialog legend {
+  margin-bottom: 10px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.apply-channel-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.apply-channel-options label {
+  display: flex;
+  min-height: 46px;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 0 13px;
+  border: 1px solid #d5dbdd;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.apply-channel-options label:has(input:checked) {
+  border-color: var(--green);
+  background: #f2f8ef;
+}
+
+.apply-channel-options input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--green);
+}
+
+.apply-channel-options span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.apply-changes-dialog footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 30px;
+}
+
+.apply-changes-dialog footer button {
+  height: 44px;
+  padding: 0 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.apply-changes-dialog .primary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 .google-delete-toast {
   position: absolute;
   z-index: 60;
@@ -944,6 +1043,11 @@ button {
 .email-content p {
   font-size: 12px;
   line-height: 1.55;
+}
+
+.email-content .propagated-body,
+.website-copy .propagated-body {
+  white-space: pre-wrap;
 }
 
 .fake-cta {
