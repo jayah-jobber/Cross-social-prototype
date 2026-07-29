@@ -95,21 +95,11 @@ const INITIAL_V2_MESSAGE = `${INITIAL_MESSAGE}
 const INITIAL_HASHTAGS = "#HamiltonLandscaping #OutdoorLiving #HomeUpgrade";
 const INITIAL_EXTERNAL_LINK = "http://yourwebsite.com";
 
-const INITIAL_V3_MESSAGE = `Landscaping isn’t just about appearances—it can completely change how you use and enjoy your yard.
-
-We worked with a homeowner in Hamilton who wanted better use of their outdoor space. Our team reshaped the layout, added fresh features, and improved the overall flow of the yard. Now, the space not only looks inviting but also makes life outdoors easier and more enjoyable.
-
-Have ideas for your own yard? Let’s talk!
-
-📞 416-624-3188
-
-#HamiltonLandscaping #OutdoorLiving #HomeUpgrade`;
-
 type PrototypeVersion = "v1" | "v2" | "v3" | "v4";
 type V2Tab = "all" | "google" | "facebook" | "instagram";
 type PreviewChannel = Exclude<V2Tab, "all">;
 type EnabledChannels = Record<PreviewChannel, boolean>;
-type SchedulableVersion = Exclude<PrototypeVersion, "v3">;
+type SchedulableVersion = PrototypeVersion;
 
 type ChannelDraft = {
   message: string;
@@ -1463,7 +1453,7 @@ function VersionFourSocialReview({
 
 function SocialDraftPreview({ channel, draft }: { channel: PreviewChannel; draft: ChannelDraft }) {
   return (
-    <section className="preview-panel facebook-only-preview v4-facebook-preview">
+    <section className="preview-panel social-only-preview v4-facebook-preview">
       <div className="preview-content">
         <PlatformPreviewCard
           channel={channel}
@@ -1502,7 +1492,7 @@ function VersionFourSocialEditor({
 
   return (
     <main className="app-content v4-facebook-workflow" aria-labelledby="v4-social-editor-title">
-      <section className="editor-panel version-three-editor">
+      <section className="editor-panel v4-social-editor">
         <div className="editor-scroll">
           <h1 id="v4-social-editor-title">Edit {channelLabel} Post</h1>
           <div className="about-content-row">
@@ -1510,7 +1500,7 @@ function VersionFourSocialEditor({
             <strong>About this {channelLabel} post</strong>
             <ChevronDown size={19} />
           </div>
-          <div className="field-block version-three-message">
+          <div className="field-block v4-social-message">
             <label htmlFor="v4-social-message">Message body</label>
             <AutoSizeTextarea
               id="v4-social-message"
@@ -1520,7 +1510,7 @@ function VersionFourSocialEditor({
             />
             <span className="character-count">{combinedMessage.length}/1500 characters</span>
           </div>
-          <div className="image-section version-three-images">
+          <div className="image-section v4-social-images">
             <div>
               <label>Image <span className="optional">(optional)</span></label>
               <p className="helper image-helper">
@@ -1532,7 +1522,7 @@ function VersionFourSocialEditor({
               images={draft.images}
               setImages={(images) => setDraft({ ...draft, images })}
             />
-            <div className="version-three-dropzone">
+            <div className="v4-social-dropzone">
               <button type="button" aria-disabled="true">Choose image</button>
               <span>Select or drag files here to upload</span>
               <small>Maximum size 5MB per file</small>
@@ -2286,144 +2276,6 @@ function VersionTwoEditScreen({
   );
 }
 
-function FacebookOnlyPreview({
-  message,
-  images,
-}: {
-  message: string;
-  images: GalleryImage[];
-}) {
-  return (
-    <section className="preview-panel facebook-only-preview">
-      <div className="preview-content">
-        <PlatformPreviewCard channel="facebook" message={message} images={images} />
-        <p className="preview-disclaimer">
-          Social networks regularly make updates to formatting so your post may appear slightly
-          different when published
-        </p>
-      </div>
-    </section>
-  );
-}
-
-function VersionThreeReviewScreen({
-  message,
-  images,
-  onEdit,
-  onBack,
-}: {
-  message: string;
-  images: GalleryImage[];
-  onEdit: () => void;
-  onBack: () => void;
-}) {
-  return (
-    <main className="app-content">
-      <section className="review-panel version-three-review">
-        <div className="review-scroll">
-          <h1>Review Facebook Post</h1>
-          <div className="about-content-row">
-            <Sparkles size={21} />
-            <strong>About this {"{content type}"}</strong>
-            <ChevronDown size={19} />
-          </div>
-          <div className="review-fields">
-            <section className="review-field">
-              <header><h2>Content</h2><button type="button" onClick={onEdit}>Edit</button></header>
-              <p className="review-summary">{message.replace(/\n+/g, " ")}</p>
-              <small>AI-generated content may contain errors. Please verify important information.</small>
-            </section>
-            <section className="review-field">
-              <header><h2>Schedule Post</h2><button type="button">Edit</button></header>
-              <p>Jan 01, 2026 9:00AM</p>
-            </section>
-            <section className="review-field version-three-post-to">
-              <header>
-                <span className="not-connected-title">
-                  <h2>Post to</h2><small>Not Connected</small>
-                </span>
-                <button type="button">Connect</button>
-              </header>
-              <p>
-                We’ll help you connect or create a Facebook Business Page in the next step.
-                You’ll need full admin permissions for the business profile to connect.
-              </p>
-            </section>
-          </div>
-        </div>
-        <footer className="review-footer">
-          <div>
-            <button className="secondary-button" type="button" onClick={onBack}>Back</button>
-            <button className="delete-post" type="button">Delete Post</button>
-          </div>
-          <div className="schedule-split">
-            <span>Schedule {"{date}"}</span><ChevronDown size={20} />
-          </div>
-        </footer>
-      </section>
-      <FacebookOnlyPreview message={message} images={images} />
-    </main>
-  );
-}
-
-function VersionThreeEditScreen({
-  message,
-  setMessage,
-  images,
-  setImages,
-  onCancel,
-}: {
-  message: string;
-  setMessage: (message: string) => void;
-  images: GalleryImage[];
-  setImages: (images: GalleryImage[]) => void;
-  onCancel: () => void;
-}) {
-  return (
-    <main className="app-content">
-      <section className="editor-panel version-three-editor">
-        <div className="editor-scroll">
-          <h1>Edit Facebook Post</h1>
-          <div className="about-content-row">
-            <Sparkles size={21} />
-            <strong>About this {"{content type}"}</strong>
-            <ChevronDown size={19} />
-          </div>
-          <div className="field-block version-three-message">
-            <label htmlFor="v3-message">Message body</label>
-            <AutoSizeTextarea
-              id="v3-message"
-              maxLength={1500}
-              value={message}
-              onChange={setMessage}
-            />
-          </div>
-          <div className="image-section version-three-images">
-            <div>
-              <label>Image <span className="optional">(optional)</span></label>
-              <p className="helper image-helper">
-                Max 10 images. Landscape image works best.<br />
-                To show before-and-after work, you can combine two images into one with the <u>collage tool</u>.
-              </p>
-            </div>
-            <InteractiveGallery images={images} setImages={setImages} />
-            <div className="version-three-dropzone">
-              <button type="button">Choose image</button>
-              <span>Select or drag files here to upload</span>
-              <small>Maximum size 5MB per file</small>
-            </div>
-          </div>
-        </div>
-        <footer className="editor-footer">
-          <button className="secondary-button" type="button" onClick={onCancel}>Cancel</button>
-          <button className="primary-button" type="button" onClick={onCancel}>Save Edit</button>
-        </footer>
-      </section>
-      <FacebookOnlyPreview message={message} images={images} />
-    </main>
-  );
-}
-
 function ReviewScreen({
   message,
   images,
@@ -2551,9 +2403,8 @@ export default function App() {
   const [images, setImages] = useState(INITIAL_IMAGES);
   const [version, setVersion] = useState<PrototypeVersion>("v1");
   const [v2Drafts, setV2Drafts] = useState<V2Drafts>(createInitialV2Drafts);
+  const [v3Drafts, setV3Drafts] = useState<V2Drafts>(createInitialV2Drafts);
   const [v4Drafts, setV4Drafts] = useState<V2Drafts>(createInitialV4Drafts);
-  const [v3Message, setV3Message] = useState(INITIAL_V3_MESSAGE);
-  const [v3Images, setV3Images] = useState(INITIAL_IMAGES);
   const [enabledChannels, setEnabledChannels] = useState<EnabledChannels>({
     google: true,
     facebook: true,
@@ -2562,6 +2413,7 @@ export default function App() {
   const [scheduledChannels, setScheduledChannels] = useState<Record<SchedulableVersion, EnabledChannels | null>>({
     v1: null,
     v2: null,
+    v3: null,
     v4: null,
   });
   const [screen, setScreen] = useState<"calendar" | "review" | "edit">("calendar");
@@ -2584,20 +2436,21 @@ export default function App() {
     || combinedWorkflow === "edit"
     || (combinedWorkflow === null && screen !== "calendar")
   );
-  const sharedCalendarDraft = version === "v1"
-    ? { message, images }
-    : { message: v3Message, images: v3Images };
-  const calendarPreviews: Record<PreviewChannel, ChannelDraft> =
-    version === "v2" || version === "v4"
+  const multiChannelDrafts = version === "v2"
+    ? v2Drafts
+    : version === "v3"
+      ? v3Drafts
+      : v4Drafts;
+  const calendarPreviews: Record<PreviewChannel, ChannelDraft> = version === "v1"
     ? {
-        google: (version === "v4" ? v4Drafts : v2Drafts).google,
-        facebook: (version === "v4" ? v4Drafts : v2Drafts).facebook,
-        instagram: (version === "v4" ? v4Drafts : v2Drafts).instagram,
+        google: { message, images },
+        facebook: { message, images },
+        instagram: { message, images },
       }
     : {
-        google: sharedCalendarDraft,
-        facebook: sharedCalendarDraft,
-        instagram: sharedCalendarDraft,
+        google: multiChannelDrafts.google,
+        facebook: multiChannelDrafts.facebook,
+        instagram: multiChannelDrafts.instagram,
       };
   const switchVersion = (nextVersion: PrototypeVersion) => {
     if (nextVersion === version) return;
@@ -2605,15 +2458,14 @@ export default function App() {
     setMessage(INITIAL_V1_MESSAGE);
     setImages([...INITIAL_IMAGES]);
     setV2Drafts(createInitialV2Drafts());
+    setV3Drafts(createInitialV2Drafts());
     setV4Drafts(createInitialV4Drafts());
-    setV3Message(INITIAL_V3_MESSAGE);
-    setV3Images([...INITIAL_IMAGES]);
     setEnabledChannels({
       google: true,
       facebook: true,
       instagram: true,
     });
-    setScheduledChannels({ v1: null, v2: null, v4: null });
+    setScheduledChannels({ v1: null, v2: null, v3: null, v4: null });
     setVersion(nextVersion);
     setScreen("calendar");
     setCalendarModalOpen(false);
@@ -2781,15 +2633,13 @@ export default function App() {
           ) : screen === "calendar" ? (
             <>
               <CompactSideNavigation />
-              <TopBar compact staticControls marketingEssentials={version !== "v3"} />
+              <TopBar compact staticControls marketingEssentials />
               <CalendarScreen
-                updated={version !== "v3"}
-                targetPublished={version !== "v3" && scheduledChannels[version] !== null}
-                targetChannels={version !== "v3"
-                  ? PREVIEW_CHANNEL_ORDER
-                    .filter((channel) => scheduledChannels[version]?.[channel])
-                    .map((channel) => CALENDAR_CHANNEL_BY_PREVIEW[channel])
-                  : undefined}
+                updated
+                targetPublished={scheduledChannels[version] !== null}
+                targetChannels={PREVIEW_CHANNEL_ORDER
+                  .filter((channel) => scheduledChannels[version]?.[channel])
+                  .map((channel) => CALENDAR_CHANNEL_BY_PREVIEW[channel])}
                 onOpenPost={() => setCalendarModalOpen(true)}
                 onOpenCombinedPost={() => {
                   if (version === "v4") {
@@ -2842,55 +2692,42 @@ export default function App() {
             <>
               {version !== "v4" && <SideNavigation />}
               <TopBar />
-              {screen === "review" && version === "v3" ? (
-                <VersionThreeReviewScreen
-                  message={v3Message}
-                  images={v3Images}
-                  onEdit={() => setScreen("edit")}
-                  onBack={() => setScreen("calendar")}
-                />
-              ) : screen === "review" ? (
+              {screen === "review" ? (
                 <ReviewScreen
                   message={
                     version === "v1"
                       ? message
-                      : (version === "v4" ? v4Drafts : v2Drafts).google.message
+                      : multiChannelDrafts.google.message
                   }
                   images={
                     version === "v1"
                       ? images
-                      : (version === "v4" ? v4Drafts : v2Drafts).google.images
+                      : multiChannelDrafts.google.images
                   }
                   enabledChannels={enabledChannels}
-                  carouselDrafts={
-                    version === "v2" ? v2Drafts : version === "v4" ? v4Drafts : undefined
-                  }
+                  carouselDrafts={version === "v1" ? undefined : multiChannelDrafts}
                   onToggleChannel={toggleChannel}
                   onEdit={() => setScreen("edit")}
                   onBack={() => setScreen("calendar")}
                   onSchedule={() => {
-                    if (version === "v1" || version === "v2" || version === "v4") {
-                      setScheduledChannels((current) => ({
-                        ...current,
-                        [version]: { ...enabledChannels },
-                      }));
-                    }
+                    setScheduledChannels((current) => ({
+                      ...current,
+                      [version]: { ...enabledChannels },
+                    }));
                     setScreen("calendar");
                     setScheduleToastVisible(true);
                   }}
                 />
-              ) : version === "v3" ? (
-                <VersionThreeEditScreen
-                  message={v3Message}
-                  setMessage={setV3Message}
-                  images={v3Images}
-                  setImages={setV3Images}
-                  onCancel={() => setScreen("review")}
-                />
-              ) : version === "v2" || version === "v4" ? (
+              ) : version === "v2" || version === "v3" || version === "v4" ? (
                 <VersionTwoEditScreen
-                  drafts={version === "v4" ? v4Drafts : v2Drafts}
-                  setDrafts={version === "v4" ? setV4Drafts : setV2Drafts}
+                  drafts={multiChannelDrafts}
+                  setDrafts={
+                    version === "v2"
+                      ? setV2Drafts
+                      : version === "v3"
+                        ? setV3Drafts
+                        : setV4Drafts
+                  }
                   enabledChannels={enabledChannels}
                   onCancel={() => setScreen("review")}
                   allTabLabel={version === "v4" ? "Your posts" : undefined}
