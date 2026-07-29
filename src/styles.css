@@ -300,8 +300,8 @@ button {
   left: 56px;
 }
 
-.prototype-frame.sidebar-free .top-bar,
 .prototype-frame.sidebar-free .app-content {
+  top: 0;
   left: 0;
 }
 

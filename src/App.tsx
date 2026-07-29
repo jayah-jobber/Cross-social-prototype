@@ -2904,7 +2904,6 @@ export default function App() {
         >
           {combinedWorkflow === "review" ? (
             <>
-              <TopBar />
               <VersionFourSocialReview
                 channel={socialWorkflowChannel}
                 draft={v4Drafts[socialWorkflowChannel]}
@@ -2954,7 +2953,6 @@ export default function App() {
             </>
           ) : combinedWorkflow === "edit" && socialEditDraft ? (
             <>
-              <TopBar />
               <VersionFourSocialEditor
                 channel={socialWorkflowChannel}
                 draft={socialEditDraft}
@@ -3107,7 +3105,7 @@ export default function App() {
           ) : (
             <>
               {version !== "v4" && <SideNavigation />}
-              <TopBar />
+              {version !== "v4" && <TopBar />}
               {screen === "review" ? (
                 <ReviewScreen
                   message={
