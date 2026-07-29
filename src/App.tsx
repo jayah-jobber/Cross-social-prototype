@@ -96,6 +96,7 @@ const INITIAL_HASHTAGS = "#HamiltonLandscaping #OutdoorLiving #HomeUpgrade";
 const INITIAL_EXTERNAL_LINK = "http://yourwebsite.com";
 
 type PrototypeVersion = "v1" | "v2" | "v3" | "v4";
+const LOCKED_VERSION: PrototypeVersion | null = "v4";
 type V2Tab = "all" | "google" | "facebook" | "instagram";
 type PreviewChannel = Exclude<V2Tab, "all">;
 type EnabledChannels = Record<PreviewChannel, boolean>;
@@ -2903,7 +2904,7 @@ function ReviewScreen({
 export default function App() {
   const [message, setMessage] = useState(INITIAL_V1_MESSAGE);
   const [images, setImages] = useState(INITIAL_IMAGES);
-  const [version, setVersion] = useState<PrototypeVersion>("v1");
+  const [version, setVersion] = useState<PrototypeVersion>(LOCKED_VERSION ?? "v1");
   const [v2Drafts, setV2Drafts] = useState<V2Drafts>(createInitialV2Drafts);
   const [v3Drafts, setV3Drafts] = useState<V2Drafts>(createInitialV2Drafts);
   const [v4Drafts, setV4Drafts] = useState<V2Drafts>(createInitialV4Drafts);
@@ -3061,7 +3062,7 @@ export default function App() {
                 ? "Daisy chain all 5 channels"
                 : "A/B test prototype"}
           </span>
-          <div className="version-switcher" aria-label="Prototype version">
+          {!LOCKED_VERSION && <div className="version-switcher" aria-label="Prototype version">
             <button
               className={version === "v1" ? "selected" : ""}
               type="button"
@@ -3090,7 +3091,7 @@ export default function App() {
             >
               Version 4
             </button>
-          </div>
+          </div>}
         </div>
         <div
           className={`prototype-frame${v4SidebarFree ? " sidebar-free" : ""}`}
