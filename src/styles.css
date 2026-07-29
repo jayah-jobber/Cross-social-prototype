@@ -677,6 +677,21 @@ button {
   font-size: 13px;
 }
 
+.v3-combined-social-facts {
+  display: grid;
+  gap: 10px;
+  margin-top: 34px;
+  padding-top: 24px;
+  border-top: 1px solid #d9dedf;
+}
+
+.v3-combined-social-facts > p {
+  margin: 0 0 2px;
+  color: #425d66;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
 .v4-context-preview {
   height: 580px;
   overflow: hidden;
@@ -693,6 +708,37 @@ button {
   padding: 0 18px;
   border-bottom: 1px solid #e2e5e5;
   font-size: 14px;
+}
+
+.v4-context-preview > .v3-social-preview-tabs {
+  gap: 0;
+  padding: 0 8px;
+}
+
+.v3-social-preview-tabs button {
+  position: relative;
+  height: 54px;
+  padding: 0 16px;
+  color: #52676e;
+  cursor: pointer;
+  background: transparent;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.v3-social-preview-tabs button.active {
+  color: var(--ink);
+}
+
+.v3-social-preview-tabs button.active::after {
+  position: absolute;
+  right: 12px;
+  bottom: 0;
+  left: 12px;
+  height: 3px;
+  border-radius: 2px 2px 0 0;
+  content: "";
+  background: var(--green);
 }
 
 .v4-context-preview-scroll {

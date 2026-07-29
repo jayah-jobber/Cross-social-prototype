@@ -1125,6 +1125,206 @@ function WebsitePagePreview({ images, message }: { images: GalleryImage[]; messa
   );
 }
 
+function VersionThreeCombinedContextModal({
+  drafts,
+  enabledChannels,
+  onToggleChannel,
+  onClose,
+  onEdit,
+}: {
+  drafts: V2Drafts;
+  enabledChannels: EnabledChannels;
+  onToggleChannel: (channel: PreviewChannel) => void;
+  onClose: () => void;
+  onEdit: () => void;
+}) {
+  const [activePage, setActivePage] = useState(0);
+  const [previewChannel, setPreviewChannel] = useState<PreviewChannel>("google");
+  const pages = [
+    {
+      label: "Social",
+      about: "About these social media posts",
+      destinationLabel: "Post to",
+      destination: "Select the channels that you want to post it to",
+    },
+    {
+      label: "Email",
+      about: "About this email campaign",
+      destinationLabel: "Recipients",
+      destination: "Customers and leads in Hamilton",
+    },
+    {
+      label: "Website",
+      about: "About this website page",
+      destinationLabel: "Publish to",
+      destination: "Beegreen Landscaping website",
+    },
+  ] as const;
+  const active = pages[activePage];
+  const socialChannels = (["google", "facebook", "instagram"] as PreviewChannel[])
+    .filter((channel) => enabledChannels[channel]);
+  const sharedBody = splitPostMessage(drafts.all.message).body;
+  const safeVisualAction = (event: React.MouseEvent<HTMLButtonElement>) => event.preventDefault();
+
+  useEffect(() => {
+    if (!enabledChannels[previewChannel]) {
+      const nextChannel = (["google", "facebook", "instagram"] as PreviewChannel[])
+        .find((channel) => enabledChannels[channel]);
+      if (nextChannel) setPreviewChannel(nextChannel);
+    }
+  }, [enabledChannels, previewChannel]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+      if (event.key === "ArrowLeft") setActivePage((current) => Math.max(0, current - 1));
+      if (event.key === "ArrowRight") setActivePage((current) => Math.min(2, current + 1));
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
+  return (
+    <div className="calendar-modal-overlay v4-context-overlay" role="presentation">
+      <section
+        className="v4-context-modal v3-combined-context-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="v3-combined-context-title"
+      >
+        <nav className="v4-context-navigation" aria-label="Combined content preview">
+          <button
+            type="button"
+            onClick={() => setActivePage((current) => Math.max(0, current - 1))}
+            disabled={activePage === 0}
+            aria-label="Previous page"
+          >
+            <ChevronLeft size={22} />
+          </button>
+          <span aria-live="polite">{activePage + 1} of 3</span>
+          <button
+            type="button"
+            onClick={() => setActivePage((current) => Math.min(2, current + 1))}
+            disabled={activePage === 2}
+            aria-label="Next page"
+          >
+            <ChevronRight size={22} />
+          </button>
+        </nav>
+        <button className="calendar-modal-close" type="button" aria-label="Close" onClick={onClose}>
+          <X size={28} />
+        </button>
+
+        <div className="v4-context-body">
+          <section className="v4-context-details">
+            <div>
+              <h1 id="v3-combined-context-title">Seasonal property clean up in Hamilton</h1>
+              <section className="v4-about-copy">
+                <h2>{active.about}</h2>
+                <p>
+                  Showcase this Hamilton property’s seasonal clean up and fresh mulch to highlight
+                  the work completed, demonstrate the visible results, and help local homeowners
+                  understand when to book a similar landscaping service.
+                </p>
+              </section>
+              {activePage === 0 ? (
+                <div className="v3-combined-social-facts">
+                  <p><strong>Schedule date:</strong> Nov 7, 2026 · 9:00 AM</p>
+                  <p><strong>{active.destinationLabel}:</strong><br />{active.destination}</p>
+                  {(["google", "facebook", "instagram"] as PreviewChannel[]).map((channel) => (
+                    <div className="calendar-channel-row" key={channel}>
+                      <span>
+                        <ContextualChannelIcon channel={channel} />
+                        {channel[0].toUpperCase() + channel.slice(1)}
+                      </span>
+                      <button
+                        className={`channel-visibility-toggle ${enabledChannels[channel] ? "on" : "off"}`}
+                        type="button"
+                        role="switch"
+                        aria-checked={enabledChannels[channel]}
+                        aria-label={`${enabledChannels[channel] ? "Disable" : "Enable"} ${channel}`}
+                        onClick={() => onToggleChannel(channel)}
+                      >
+                        {enabledChannels[channel] ? <Check size={14} /> : <X size={14} />}
+                        <span />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <dl className="v4-context-facts">
+                  <div><dt>Scheduled for</dt><dd>Nov 7, 2026 · 9:00 AM</dd></div>
+                  <div><dt>{active.destinationLabel}</dt><dd>{active.destination}</dd></div>
+                </dl>
+              )}
+            </div>
+            <footer className="v4-context-footer">
+              <button type="button" className="delete-post" aria-disabled="true" onClick={safeVisualAction}>
+                Delete
+              </button>
+              <div>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  aria-disabled={activePage === 0 ? undefined : "true"}
+                  onClick={activePage === 0 ? onEdit : safeVisualAction}
+                >
+                  Edit
+                </button>
+                <span className="v4-split-button">
+                  <button type="button" onClick={safeVisualAction}>Schedule and next</button>
+                  <button type="button" aria-label="Show publishing options" onClick={safeVisualAction}>
+                    <ChevronDown size={20} />
+                  </button>
+                </span>
+              </div>
+            </footer>
+          </section>
+
+          <section className="v4-context-preview v3-context-preview" aria-label={`${active.label} content preview`}>
+            {activePage === 0 ? (
+              <header className="v3-social-preview-tabs" role="tablist" aria-label="Social preview channel">
+                {socialChannels.map((channel) => (
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={previewChannel === channel}
+                    className={previewChannel === channel ? "active" : ""}
+                    onClick={() => setPreviewChannel(channel)}
+                    key={channel}
+                  >
+                    {channel[0].toUpperCase() + channel.slice(1)}
+                  </button>
+                ))}
+              </header>
+            ) : (
+              <header><Sparkles size={20} /><strong>{active.label} preview</strong></header>
+            )}
+            <div className="v4-context-preview-scroll">
+              {activePage === 0 ? (
+                enabledChannels[previewChannel] ? (
+                  <PlatformPreviewCard
+                    channel={previewChannel}
+                    message={drafts[previewChannel].message}
+                    hashtags={drafts[previewChannel].hashtags}
+                    images={drafts[previewChannel].images}
+                  />
+                ) : (
+                  <div className="no-channel-preview">No channels selected for this post.</div>
+                )
+              ) : activePage === 1 ? (
+                <EmailCampaignPreview images={drafts.all.images} message={sharedBody} />
+              ) : (
+                <WebsitePagePreview images={drafts.all.images} message={sharedBody} />
+              )}
+            </div>
+          </section>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function VersionFourContextModal({
   drafts,
   emailMessage,
@@ -2418,6 +2618,7 @@ export default function App() {
   });
   const [screen, setScreen] = useState<"calendar" | "review" | "edit">("calendar");
   const [calendarModalOpen, setCalendarModalOpen] = useState(false);
+  const [v3CombinedModalOpen, setV3CombinedModalOpen] = useState(false);
   const [combinedWorkflow, setCombinedWorkflow] = useState<"modal" | "review" | "edit" | null>(null);
   const [combinedModalStartIndex, setCombinedModalStartIndex] = useState(0);
   const [socialWorkflowChannel, setSocialWorkflowChannel] = useState<PreviewChannel>("facebook");
@@ -2469,6 +2670,7 @@ export default function App() {
     setVersion(nextVersion);
     setScreen("calendar");
     setCalendarModalOpen(false);
+    setV3CombinedModalOpen(false);
     setCombinedWorkflow(null);
     setCombinedModalStartIndex(0);
     setSocialWorkflowChannel("facebook");
@@ -2642,12 +2844,14 @@ export default function App() {
                   .map((channel) => CALENDAR_CHANNEL_BY_PREVIEW[channel])}
                 onOpenPost={() => setCalendarModalOpen(true)}
                 onOpenCombinedPost={() => {
-                  if (version === "v4") {
+                  if (version === "v3") {
+                    setV3CombinedModalOpen(true);
+                  } else if (version === "v4") {
                     setCombinedModalStartIndex(0);
                     setCombinedWorkflow("modal");
                   }
                 }}
-                combinedInteractive={version === "v4"}
+                combinedInteractive={version === "v3" || version === "v4"}
                 combinedChannels={version === "v4" && v4GoogleDeleted
                   ? ["Facebook post", "Instagram post", "Email", "Website"]
                   : undefined}
@@ -2660,6 +2864,18 @@ export default function App() {
                   onClose={() => setCalendarModalOpen(false)}
                   onEdit={() => {
                     setCalendarModalOpen(false);
+                    setScreen("review");
+                  }}
+                />
+              )}
+              {v3CombinedModalOpen && version === "v3" && (
+                <VersionThreeCombinedContextModal
+                  drafts={v3Drafts}
+                  enabledChannels={enabledChannels}
+                  onToggleChannel={toggleChannel}
+                  onClose={() => setV3CombinedModalOpen(false)}
+                  onEdit={() => {
+                    setV3CombinedModalOpen(false);
                     setScreen("review");
                   }}
                 />
