@@ -522,6 +522,7 @@ type CalendarItem = {
   tone?: "critical" | "warning" | "review";
   automated?: boolean;
   target?: boolean;
+  combinedTarget?: boolean;
   showDate?: boolean;
 };
 
@@ -619,6 +620,7 @@ const CALENDAR_COLUMNS: { day: string; groups: CalendarGroup[] }[] = [
         channels: ["Google post", "Facebook post", "Instagram post", "Email", "Website"],
         status: "Needs review",
         tone: "review",
+        combinedTarget: true,
         showDate: false,
       }],
     }],
@@ -727,6 +729,7 @@ const UPDATED_CALENDAR_COLUMNS: { day: string; groups: CalendarGroup[] }[] = [
         channels: ["Google post", "Facebook post", "Instagram post", "Email", "Website"],
         status: "Needs review",
         tone: "review",
+        combinedTarget: true,
         showDate: false,
       }],
     }],
@@ -746,19 +749,25 @@ function ChannelIcon({ channel }: { channel: CalendarChannel }) {
 function MarketingCalendarCard({
   item,
   onOpen,
+  combinedInteractive = false,
   updated = false,
   targetPublished = false,
   targetChannels,
+  combinedChannels,
 }: {
   item: CalendarItem;
   onOpen: () => void;
+  combinedInteractive?: boolean;
   updated?: boolean;
   targetPublished?: boolean;
   targetChannels?: CalendarChannel[];
+  combinedChannels?: CalendarChannel[];
 }) {
-  const channels = item.target && targetPublished && targetChannels
-    ? targetChannels
-    : item.channels ?? (item.channel ? [item.channel] : []);
+  const channels = item.combinedTarget && combinedChannels
+    ? combinedChannels
+    : item.target && targetPublished && targetChannels
+      ? targetChannels
+      : item.channels ?? (item.channel ? [item.channel] : []);
   const status = item.target && targetPublished ? "Sent" : item.status;
   const content = (
     <>
@@ -780,10 +789,13 @@ function MarketingCalendarCard({
     </>
   );
 
-  return item.target ? (
+  const isInteractive = item.target || (item.combinedTarget && combinedInteractive);
+
+  return isInteractive ? (
     <button
       className={[
         "marketing-calendar-card target-card review",
+        item.combinedTarget ? "combined-target-card" : "",
         updated ? "updated-card" : "",
         targetPublished ? "published-card" : "",
       ].filter(Boolean).join(" ")}
@@ -801,14 +813,20 @@ function MarketingCalendarCard({
 
 function CalendarScreen({
   onOpenPost,
+  onOpenCombinedPost,
+  combinedInteractive = false,
   updated = false,
   targetPublished = false,
   targetChannels,
+  combinedChannels,
 }: {
   onOpenPost: () => void;
+  onOpenCombinedPost: () => void;
+  combinedInteractive?: boolean;
   updated?: boolean;
   targetPublished?: boolean;
   targetChannels?: CalendarChannel[];
+  combinedChannels?: CalendarChannel[];
 }) {
   const columns = updated ? UPDATED_CALENDAR_COLUMNS : CALENDAR_COLUMNS;
 
@@ -859,10 +877,12 @@ function CalendarScreen({
                     <MarketingCalendarCard
                       key={`${item.title}-${index}`}
                       item={item}
-                      onOpen={onOpenPost}
+                      onOpen={item.combinedTarget ? onOpenCombinedPost : onOpenPost}
+                      combinedInteractive={combinedInteractive}
                       updated={updated}
                       targetPublished={targetPublished}
                       targetChannels={targetChannels}
+                      combinedChannels={combinedChannels}
                     />
                   ))}
                 </div>
@@ -997,6 +1017,465 @@ function CalendarContextModal({
         </section>
       </section>
     </div>
+  );
+}
+
+type ContextualChannel = PreviewChannel | "email" | "website";
+
+const CONTEXTUAL_CHANNELS: Array<{
+  id: ContextualChannel;
+  label: string;
+  about: string;
+  destinationLabel: string;
+  destination: string;
+}> = [
+  {
+    id: "google",
+    label: "Google",
+    about: "About this Google post",
+    destinationLabel: "Post to",
+    destination: "Google Business Profile · Beegreen Landscaping",
+  },
+  {
+    id: "facebook",
+    label: "Facebook",
+    about: "About this Facebook post",
+    destinationLabel: "Post to",
+    destination: "Facebook · Beegreen Landscaping",
+  },
+  {
+    id: "instagram",
+    label: "Instagram",
+    about: "About this Instagram post",
+    destinationLabel: "Post to",
+    destination: "Instagram · @beegreenlandscaping",
+  },
+  {
+    id: "email",
+    label: "Email",
+    about: "About this email campaign",
+    destinationLabel: "Recipients",
+    destination: "Customers and leads in Hamilton",
+  },
+  {
+    id: "website",
+    label: "Website",
+    about: "About this website page",
+    destinationLabel: "Publish to",
+    destination: "Beegreen Landscaping website",
+  },
+];
+
+function ContextualChannelIcon({ channel }: { channel: ContextualChannel }) {
+  if (channel === "google") return <strong className="google-g">G</strong>;
+  if (channel === "facebook") return <strong className="brand-facebook">f</strong>;
+  if (channel === "instagram") return <strong className="brand-instagram">◎</strong>;
+  if (channel === "email") return <Mail size={18} />;
+  return <Globe2 size={18} />;
+}
+
+function EmailCampaignPreview({ images }: { images: GalleryImage[] }) {
+  return (
+    <article className="context-email-preview">
+      <header className="email-envelope">
+        <p><strong>Subject:</strong> A seasonal refresh for this Hamilton property</p>
+        <p><strong>From:</strong> Beegreen Landscaping &lt;hello@beegreenlandscaping.ca&gt;</p>
+      </header>
+      <div className="email-brand">
+        <img src="/assets/avatar.png" alt="" />
+        <strong>Beegreen Landscaping</strong>
+      </div>
+      {images[0] && <img className="email-hero" src={images[0].src} alt={images[0].alt} />}
+      <div className="email-content">
+        <p className="email-eyebrow">PROJECT SHOWCASE · HAMILTON</p>
+        <h2>Seasonal property clean up in Hamilton</h2>
+        <p>
+          This Hamilton property needed a seasonal refresh. We cleared debris, tidied the
+          landscaped areas, and added fresh mulch to define and protect the existing garden beds.
+        </p>
+        <p>
+          The result is a cleaner, more orderly outdoor space that is refreshed and ready for the season.
+        </p>
+        <span className="fake-cta">Plan your property clean up</span>
+      </div>
+      <footer>
+        Beegreen Landscaping · Hamilton, Ontario<br />
+        You’re receiving this project update because you asked to hear from us.
+      </footer>
+    </article>
+  );
+}
+
+function WebsitePagePreview({ images }: { images: GalleryImage[] }) {
+  return (
+    <article className="context-website-preview">
+      <header className="website-nav">
+        <span><img src="/assets/avatar.png" alt="" /><strong>Beegreen</strong></span>
+        <span>Services&nbsp;&nbsp; Projects&nbsp;&nbsp; Contact</span>
+      </header>
+      <section className="website-hero">
+        {images[0] && <img src={images[0].src} alt={images[0].alt} />}
+        <div>
+          <p>HAMILTON PROJECT SHOWCASE</p>
+          <h2>Seasonal property clean up in Hamilton</h2>
+        </div>
+      </section>
+      <section className="website-copy">
+        <h3>A cleaner landscape, ready for the season</h3>
+        <p>
+          We refreshed this Hamilton property with a general clean up, debris removal, tidied
+          landscaped areas, and new mulch throughout the existing garden beds.
+        </p>
+        <div className="website-overview">
+          <span><strong>Project</strong>Seasonal clean up</span>
+          <span><strong>Location</strong>Hamilton, Ontario</span>
+          <span><strong>Services</strong>Clean up + mulching</span>
+        </div>
+        <h3>Project gallery</h3>
+        <div className="website-gallery">
+          {images.map((image) => <img src={image.src} alt={image.alt} key={image.id} />)}
+        </div>
+        <h3>Planning a seasonal refresh?</h3>
+        <p>Talk with our team about your Hamilton property and the right timing for your project.</p>
+        <span className="fake-cta">Request a quote</span>
+      </section>
+    </article>
+  );
+}
+
+function VersionFourContextModal({
+  drafts,
+  initialIndex = 0,
+  googleAvailable,
+  onClose,
+  onFacebookEdit,
+  onDeleteGoogle,
+}: {
+  drafts: V2Drafts;
+  initialIndex?: number;
+  googleAvailable: boolean;
+  onClose: () => void;
+  onFacebookEdit: () => void;
+  onDeleteGoogle: () => void;
+}) {
+  const [activeIndex, setActiveIndex] = useState(initialIndex);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteFeedback, setDeleteFeedback] = useState("");
+  const channels = googleAvailable
+    ? CONTEXTUAL_CHANNELS
+    : CONTEXTUAL_CHANNELS.filter(({ id }) => id !== "google");
+  const active = channels[Math.min(activeIndex, channels.length - 1)];
+  const atStart = activeIndex === 0;
+  const atEnd = activeIndex === channels.length - 1;
+  const goPrevious = () => setActiveIndex((current) => Math.max(0, current - 1));
+  const goNext = () => setActiveIndex((current) => Math.min(channels.length - 1, current + 1));
+  const safeVisualAction = (event: React.MouseEvent<HTMLButtonElement>) => event.preventDefault();
+  const closeDeleteDialog = () => {
+    setDeleteDialogOpen(false);
+    setDeleteFeedback("");
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && deleteDialogOpen) {
+        event.stopImmediatePropagation();
+        closeDeleteDialog();
+        return;
+      }
+      if (event.key === "Escape") onClose();
+      if (deleteDialogOpen) return;
+      if (event.key === "ArrowLeft") goPrevious();
+      if (event.key === "ArrowRight") goNext();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [deleteDialogOpen, onClose]);
+
+  return (
+    <div className="calendar-modal-overlay v4-context-overlay" role="presentation">
+      <section
+        className={`v4-context-modal ${deleteDialogOpen ? "delete-dialog-open" : ""}`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="v4-context-title"
+      >
+        <nav
+          className="v4-context-navigation"
+          aria-label="Channel preview"
+          inert={deleteDialogOpen ? true : undefined}
+        >
+          <button type="button" onClick={goPrevious} disabled={atStart} aria-label="Previous channel">
+            <ChevronLeft size={22} />
+          </button>
+          <span aria-live="polite">{activeIndex + 1} of {channels.length}</span>
+          <button type="button" onClick={goNext} disabled={atEnd} aria-label="Next channel">
+            <ChevronRight size={22} />
+          </button>
+        </nav>
+        <button
+          className="calendar-modal-close"
+          type="button"
+          aria-label="Close"
+          onClick={onClose}
+          inert={deleteDialogOpen ? true : undefined}
+        >
+          <X size={28} />
+        </button>
+
+        <div className="v4-context-body" inert={deleteDialogOpen ? true : undefined}>
+          <section className="v4-context-details">
+            <div>
+              <p className="v4-channel-label">
+                <ContextualChannelIcon channel={active.id} /> {active.label}
+              </p>
+              <h1 id="v4-context-title">Seasonal property clean up in Hamilton</h1>
+              <section className="v4-about-copy">
+                <h2>{active.about}</h2>
+                <p>
+                  Showcase this Hamilton property’s seasonal clean up and fresh mulch to highlight
+                  the work completed, demonstrate the visible results, and help local homeowners
+                  understand when to book a similar landscaping service.
+                </p>
+              </section>
+              <dl className="v4-context-facts">
+                <div><dt>Scheduled for</dt><dd>Nov 7, 2026 · 9:00 AM</dd></div>
+                <div><dt>{active.destinationLabel}</dt><dd>{active.destination}</dd></div>
+              </dl>
+            </div>
+          </section>
+
+          <section className="v4-context-preview" aria-label={`${active.label} content preview`}>
+            <header><Sparkles size={20} /><strong>{active.label} preview</strong></header>
+            <div className="v4-context-preview-scroll">
+              {active.id === "email" ? (
+                <EmailCampaignPreview images={drafts.all.images} />
+              ) : active.id === "website" ? (
+                <WebsitePagePreview images={drafts.all.images} />
+              ) : (
+                <PlatformPreviewCard
+                  channel={active.id}
+                  message={drafts[active.id].message}
+                  hashtags={drafts[active.id].hashtags}
+                  images={drafts[active.id].images}
+                />
+              )}
+            </div>
+          </section>
+        </div>
+
+        <footer className="v4-context-footer" inert={deleteDialogOpen ? true : undefined}>
+          <button
+            type="button"
+            className="delete-post"
+            aria-disabled={active.id === "google" ? undefined : "true"}
+            onClick={active.id === "google" ? () => setDeleteDialogOpen(true) : safeVisualAction}
+          >
+            Delete
+          </button>
+          <div>
+            <button
+              type="button"
+              className="secondary-button"
+              aria-disabled={active.id === "facebook" ? undefined : "true"}
+              onClick={active.id === "facebook" ? onFacebookEdit : safeVisualAction}
+            >
+              Edit
+            </button>
+            <button type="button" className="secondary-button" aria-disabled="true" onClick={safeVisualAction}>
+              Schedule and next
+            </button>
+            <button type="button" className="primary-button" aria-disabled="true" onClick={safeVisualAction}>
+              Publish page
+            </button>
+          </div>
+        </footer>
+        {deleteDialogOpen && (
+          <div className="google-delete-overlay" role="presentation">
+            <section
+              className="google-delete-dialog"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="google-delete-title"
+            >
+              <button type="button" className="google-delete-close" aria-label="Close deletion feedback" onClick={closeDeleteDialog}>
+                <X size={24} />
+              </button>
+              <h2 id="google-delete-title">Improve future recommendations</h2>
+              <p>
+                Tell us why this post wasn’t right for your business. Your feedback helps us make
+                future recommendations more useful.
+              </p>
+              <label htmlFor="google-delete-feedback">Feedback <span>(optional)</span></label>
+              <input
+                id="google-delete-feedback"
+                value={deleteFeedback}
+                placeholder="What should we know for next time?"
+                onChange={(event) => setDeleteFeedback(event.target.value)}
+                autoFocus
+              />
+              <footer>
+                <button type="button" className="secondary-button" onClick={closeDeleteDialog}>Cancel</button>
+                <button
+                  type="button"
+                  className="primary-button"
+                  onClick={() => {
+                    setDeleteDialogOpen(false);
+                    setDeleteFeedback("");
+                    setActiveIndex(0);
+                    onDeleteGoogle();
+                  }}
+                >
+                  Delete Post
+                </button>
+              </footer>
+            </section>
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function VersionFourFacebookReview({
+  draft,
+  onBack,
+  onEdit,
+}: {
+  draft: ChannelDraft;
+  onBack: () => void;
+  onEdit: () => void;
+}) {
+  const visualOnly = (event: React.MouseEvent<HTMLButtonElement>) => event.preventDefault();
+  const summary = [draft.message, draft.hashtags].filter(Boolean).join(" ").replace(/\n+/g, " ");
+
+  return (
+    <main className="app-content v4-facebook-workflow" aria-labelledby="v4-facebook-review-title">
+      <section className="review-panel">
+        <div className="review-scroll">
+          <h1 id="v4-facebook-review-title">Review Facebook Post</h1>
+          <div className="about-content-row">
+            <Sparkles size={21} />
+            <strong>About this Facebook post</strong>
+            <ChevronDown size={19} />
+          </div>
+          <div className="review-fields">
+            <section className="review-field">
+              <header><h2>Content</h2><button type="button" onClick={onEdit}>Edit</button></header>
+              <p className="review-summary">{summary}</p>
+              <small>AI-generated content may contain errors. Please verify important information.</small>
+            </section>
+            <section className="review-field">
+              <header>
+                <h2>Schedule Post</h2>
+                <button type="button" aria-disabled="true" onClick={visualOnly}>Edit</button>
+              </header>
+              <p>Nov 7, 2026 9:00 AM</p>
+            </section>
+            <section className="review-field v4-facebook-post-to">
+              <header>
+                <span className="v4-connected-title"><h2>Post to</h2><small>Connected</small></span>
+              </header>
+              <p><strong className="brand-facebook">f</strong> Beegreen Landscaping / Profile 1</p>
+            </section>
+          </div>
+        </div>
+        <footer className="review-footer">
+          <div>
+            <button className="secondary-button" type="button" onClick={onBack}>Back</button>
+            <button className="delete-post" type="button" aria-disabled="true" onClick={visualOnly}>Delete Post</button>
+          </div>
+          <button className="schedule-split" type="button" aria-disabled="true" onClick={visualOnly}>
+            <span>Schedule Nov 7</span><ChevronDown size={20} />
+          </button>
+        </footer>
+      </section>
+      <FacebookDraftPreview draft={draft} />
+    </main>
+  );
+}
+
+function FacebookDraftPreview({ draft }: { draft: ChannelDraft }) {
+  return (
+    <section className="preview-panel facebook-only-preview v4-facebook-preview">
+      <div className="preview-content">
+        <PlatformPreviewCard
+          channel="facebook"
+          message={draft.message}
+          hashtags={draft.hashtags}
+          images={draft.images}
+        />
+        <p className="preview-disclaimer">
+          Social networks regularly make updates to formatting so your post may appear slightly
+          different when published
+        </p>
+      </div>
+    </section>
+  );
+}
+
+function VersionFourFacebookEditor({
+  draft,
+  setDraft,
+  onCancel,
+  onSave,
+}: {
+  draft: ChannelDraft;
+  setDraft: (draft: ChannelDraft) => void;
+  onCancel: () => void;
+  onSave: () => void;
+}) {
+  const combinedMessage = [draft.message, draft.hashtags].filter(Boolean).join("\n\n");
+  const updateCombinedMessage = (value: string) => {
+    const parsed = splitPostMessage(value);
+    setDraft({ ...draft, message: parsed.body, hashtags: parsed.hashtags });
+  };
+
+  return (
+    <main className="app-content v4-facebook-workflow" aria-labelledby="v4-facebook-editor-title">
+      <section className="editor-panel version-three-editor">
+        <div className="editor-scroll">
+          <h1 id="v4-facebook-editor-title">Edit Facebook Post</h1>
+          <div className="about-content-row">
+            <Sparkles size={21} />
+            <strong>About this Facebook post</strong>
+            <ChevronDown size={19} />
+          </div>
+          <div className="field-block version-three-message">
+            <label htmlFor="v4-facebook-message">Message body</label>
+            <AutoSizeTextarea
+              id="v4-facebook-message"
+              maxLength={1500}
+              value={combinedMessage}
+              onChange={updateCombinedMessage}
+            />
+            <span className="character-count">{combinedMessage.length}/1500 characters</span>
+          </div>
+          <div className="image-section version-three-images">
+            <div>
+              <label>Image <span className="optional">(optional)</span></label>
+              <p className="helper image-helper">
+                Max 10 images. Landscape image works best.<br />
+                To show before-and-after work, combine two images into one with the <u>collage tool</u>.
+              </p>
+            </div>
+            <InteractiveGallery
+              images={draft.images}
+              setImages={(images) => setDraft({ ...draft, images })}
+            />
+            <div className="version-three-dropzone">
+              <button type="button" aria-disabled="true">Choose image</button>
+              <span>Select or drag files here to upload</span>
+              <small>Maximum size 5MB per file</small>
+            </div>
+          </div>
+        </div>
+        <footer className="editor-footer">
+          <button className="secondary-button" type="button" onClick={onCancel}>Cancel</button>
+          <button className="primary-button" type="button" onClick={onSave}>Save Edit</button>
+        </footer>
+      </section>
+      <FacebookDraftPreview draft={draft} />
+    </main>
   );
 }
 
@@ -1941,6 +2420,11 @@ export default function App() {
   });
   const [screen, setScreen] = useState<"calendar" | "review" | "edit">("calendar");
   const [calendarModalOpen, setCalendarModalOpen] = useState(false);
+  const [combinedWorkflow, setCombinedWorkflow] = useState<"modal" | "review" | "edit" | null>(null);
+  const [combinedModalStartIndex, setCombinedModalStartIndex] = useState(0);
+  const [facebookEditDraft, setFacebookEditDraft] = useState<ChannelDraft | null>(null);
+  const [v4GoogleDeleted, setV4GoogleDeleted] = useState(false);
+  const [deleteToastVisible, setDeleteToastVisible] = useState(false);
   const [scheduleToastVisible, setScheduleToastVisible] = useState(false);
   const [scale, setScale] = useState(1);
   const frameHeight = 1024;
@@ -1979,6 +2463,11 @@ export default function App() {
     setVersion(nextVersion);
     setScreen("calendar");
     setCalendarModalOpen(false);
+    setCombinedWorkflow(null);
+    setCombinedModalStartIndex(0);
+    setFacebookEditDraft(null);
+    setV4GoogleDeleted(false);
+    setDeleteToastVisible(false);
     setScheduleToastVisible(false);
   };
   const toggleChannel = (channel: PreviewChannel) => {
@@ -1991,6 +2480,12 @@ export default function App() {
     const timeout = window.setTimeout(() => setScheduleToastVisible(false), 4000);
     return () => window.clearTimeout(timeout);
   }, [scheduleToastVisible]);
+
+  useEffect(() => {
+    if (!deleteToastVisible) return;
+    const timeout = window.setTimeout(() => setDeleteToastVisible(false), 4000);
+    return () => window.clearTimeout(timeout);
+  }, [deleteToastVisible]);
 
   useEffect(() => {
     const fitPrototypeToViewport = () => {
@@ -2044,7 +2539,50 @@ export default function App() {
           </div>}
         </div>
         <div className="prototype-frame" style={{ height: frameHeight }}>
-          {screen === "calendar" ? (
+          {combinedWorkflow === "review" ? (
+            <>
+              <SideNavigation />
+              <TopBar />
+              <VersionFourFacebookReview
+                draft={v4Drafts.facebook}
+                onBack={() => {
+                  setCombinedModalStartIndex(v4GoogleDeleted ? 0 : 1);
+                  setCombinedWorkflow("modal");
+                }}
+                onEdit={() => {
+                  setFacebookEditDraft({
+                    ...v4Drafts.facebook,
+                    images: [...v4Drafts.facebook.images],
+                  });
+                  setCombinedWorkflow("edit");
+                }}
+              />
+            </>
+          ) : combinedWorkflow === "edit" && facebookEditDraft ? (
+            <>
+              <SideNavigation />
+              <TopBar />
+              <VersionFourFacebookEditor
+                draft={facebookEditDraft}
+                setDraft={setFacebookEditDraft}
+                onCancel={() => {
+                  setFacebookEditDraft(null);
+                  setCombinedWorkflow("review");
+                }}
+                onSave={() => {
+                  setV4Drafts((current) => ({
+                    ...current,
+                    facebook: {
+                      ...facebookEditDraft,
+                      images: [...facebookEditDraft.images],
+                    },
+                  }));
+                  setFacebookEditDraft(null);
+                  setCombinedWorkflow("review");
+                }}
+              />
+            </>
+          ) : screen === "calendar" ? (
             <>
               <CompactSideNavigation />
               <TopBar compact staticControls marketingEssentials={version !== "v3"} />
@@ -2057,6 +2595,16 @@ export default function App() {
                     .map((channel) => CALENDAR_CHANNEL_BY_PREVIEW[channel])
                   : undefined}
                 onOpenPost={() => setCalendarModalOpen(true)}
+                onOpenCombinedPost={() => {
+                  if (version === "v4") {
+                    setCombinedModalStartIndex(0);
+                    setCombinedWorkflow("modal");
+                  }
+                }}
+                combinedInteractive={version === "v4"}
+                combinedChannels={version === "v4" && v4GoogleDeleted
+                  ? ["Facebook post", "Instagram post", "Email", "Website"]
+                  : undefined}
               />
               {calendarModalOpen && (
                 <CalendarContextModal
@@ -2067,6 +2615,23 @@ export default function App() {
                   onEdit={() => {
                     setCalendarModalOpen(false);
                     setScreen("review");
+                  }}
+                />
+              )}
+              {combinedWorkflow === "modal" && version === "v4" && (
+                <VersionFourContextModal
+                  drafts={v4Drafts}
+                  initialIndex={combinedModalStartIndex}
+                  googleAvailable={!v4GoogleDeleted}
+                  onClose={() => {
+                    setCombinedModalStartIndex(0);
+                    setCombinedWorkflow(null);
+                  }}
+                  onFacebookEdit={() => setCombinedWorkflow("review")}
+                  onDeleteGoogle={() => {
+                    setV4GoogleDeleted(true);
+                    setCombinedModalStartIndex(0);
+                    setDeleteToastVisible(true);
                   }}
                 />
               )}
@@ -2157,6 +2722,15 @@ export default function App() {
                 onClick={() => setScheduleToastVisible(false)}
               >
                 <X size={18} />
+              </button>
+            </div>
+          )}
+          {deleteToastVisible && (
+            <div className="google-delete-toast" role="status" aria-live="polite">
+              <Check size={22} />
+              <span>Google post is deleted</span>
+              <button type="button" aria-label="Dismiss notification" onClick={() => setDeleteToastVisible(false)}>
+                <X size={20} />
               </button>
             </div>
           )}
