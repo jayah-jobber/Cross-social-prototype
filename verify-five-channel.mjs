@@ -35,14 +35,100 @@ async function editFields(channel, marker) {
     await page.locator("#v2-message-google").fill(marker);
     await page.getByLabel("Button URL").fill(`https://example.com/${marker}`);
   } else if (channel === "facebook" || channel === "instagram") {
-    await page.locator("#v4-social-message").fill(marker);
+    await page.locator("#v4-social-message").fill(`${marker}-body`);
+    await page.locator("#v4-social-cta").fill(`${marker}-cta-line-1\n${marker}-cta-line-2`);
+    await page.locator("#v4-social-hashtags").fill(`#${marker}-hashtag`);
   } else {
     await page.locator(`#suggested-${channel}-title`).fill(`${marker} title`);
     await page.locator(`#suggested-${channel}-body`).fill(`${marker} body`);
   }
 }
 
+async function assertInsetField(fieldSelector, labelText) {
+  const field = page.locator(fieldSelector);
+  const wrapper = field.locator("..");
+  const label = wrapper.locator("label");
+
+  assert.equal(await wrapper.evaluate((element) => element.classList.contains("v4-inset-field")), true);
+  assert.equal((await label.textContent())?.trim(), labelText);
+  assert.equal(await label.getAttribute("for"), fieldSelector.slice(1));
+  assert.deepEqual(
+    await label.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return [style.fontSize, style.fontWeight];
+    }),
+    ["12px", "400"],
+  );
+  assert.equal(await field.evaluate((element) => getComputedStyle(element).fontSize), "14px");
+  assert.equal(
+    await wrapper.evaluate((element) => getComputedStyle(element).borderTopWidth),
+    "1px",
+  );
+
+  await field.focus();
+  assert.notEqual(
+    await wrapper.evaluate((element) => getComputedStyle(element).boxShadow),
+    "none",
+  );
+  assert.equal(await field.evaluate((element) => getComputedStyle(element).boxShadow), "none");
+}
+
+async function assertInitialSocialFields(channel) {
+  const body = await page.locator("#v4-social-message").inputValue();
+  const cta = await page.locator("#v4-social-cta").inputValue();
+  const hashtags = await page.locator("#v4-social-hashtags").inputValue();
+
+  assert.equal(body.includes("416-624-3188"), false);
+  assert.equal(body.includes("mycompany@gmail.com"), false);
+  assert.equal(body.includes("#HamiltonLandscaping"), false);
+  assert.equal(cta, "📞 416-624-3188\n💬 mycompany@gmail.com");
+  assert.equal(hashtags, "#HamiltonLandscaping #OutdoorLiving #HomeUpgrade");
+
+  const editorFieldIds = await page.locator(
+    ".v4-social-editor .field-block textarea, .v4-social-editor .field-block input",
+  ).evaluateAll((fields) => fields.slice(0, 3).map((field) => field.id));
+  assert.deepEqual(editorFieldIds, [
+    "v4-social-message",
+    "v4-social-cta",
+    "v4-social-hashtags",
+  ]);
+  assert.equal(
+    await page.locator(".v4-social-editor > label").count(),
+    0,
+    "V4 Contact info and Hashtag labels must remain inside their bordered fields",
+  );
+  await assertInsetField("#v4-social-cta", "Contact info");
+  await assertInsetField("#v4-social-hashtags", "Hashtag");
+
+  const previewCopy = page.locator(
+    channel === "facebook" ? ".channel-post-copy" : ".instagram-post-copy",
+  );
+  const previewText = await previewCopy.textContent();
+  assert.ok(previewText.indexOf(body) < previewText.indexOf(cta));
+  assert.ok(previewText.indexOf(cta) < previewText.indexOf(hashtags));
+
+  if (channel === "instagram") {
+    assert.equal(
+      await page.locator(".instagram-post-card").evaluate((card) => {
+        const copy = card.querySelector(".instagram-post-copy");
+        const image = card.querySelector(".instagram-post-image");
+        return Boolean(copy && image && (copy.compareDocumentPosition(image) & Node.DOCUMENT_POSITION_FOLLOWING));
+      }),
+      true,
+      "V4 Instagram copy should render before its images",
+    );
+  }
+}
+
 async function verifyChannel(channel, index) {
+  if (channel.id === "instagram") {
+    assert.equal(
+      (await page.locator(".suggested-preview-section").textContent()).includes("facebook-saved"),
+      false,
+      "Suggested Facebook edits must not change the Instagram draft",
+    );
+  }
+
   await suggestedFooterEdit().click();
   await expectHeading(channel.review);
   assert.equal(await page.getByRole("heading", { name: channel.editor, exact: true }).count(), 0);
@@ -62,6 +148,17 @@ async function verifyChannel(channel, index) {
   await contentEdit().click();
   await expectHeading(channel.editor);
   await assertSidebarFree();
+  if (channel.id === "facebook" || channel.id === "instagram") {
+    await assertInitialSocialFields(channel.id);
+  } else {
+    assert.equal(
+      await page.locator(
+        "#v4-social-cta, #v4-social-hashtags, [id^='v4-cta-'], [id^='v4-hashtags-']",
+      ).count(),
+      0,
+      `V4 ${channel.id} editor must not show social CTA or Hashtag fields`,
+    );
+  }
 
   const cancelMarker = `${channel.id}-cancelled`;
   await editFields(channel.id, cancelMarker);
@@ -76,8 +173,11 @@ async function verifyChannel(channel, index) {
   await expectHeading(channel.review);
 
   if (channel.id === "facebook" || channel.id === "instagram") {
-    await page.getByRole("dialog", { name: "Apply changes to other channels?" }).waitFor();
-    await page.keyboard.press("Escape");
+    assert.equal(
+      await page.getByRole("dialog", { name: "Apply changes to other channels?" }).count(),
+      0,
+      "V4 social save must not render a propagation dialog",
+    );
   }
 
   await expectHeading(channel.review);
@@ -89,6 +189,18 @@ async function verifyChannel(channel, index) {
   await reviewBack().click();
   await expectHeading("Suggested Marketing Content");
   assert.ok((await page.locator(".suggested-preview-section").textContent()).includes(saveMarker));
+
+  if (channel.id === "instagram") {
+    await page.getByRole("button", { name: "Previous channel" }).click();
+    const facebookPreview = await page.locator(".suggested-preview-section").textContent();
+    assert.ok(facebookPreview.includes("facebook-saved"));
+    assert.equal(
+      facebookPreview.includes("instagram-saved"),
+      false,
+      "Suggested Instagram edits must not change the Facebook draft",
+    );
+    await page.getByRole("button", { name: "Next channel" }).click();
+  }
 
   if (index < channels.length - 1) {
     await page.getByRole("button", { name: "Next channel" }).click();
@@ -112,18 +224,116 @@ try {
   await page.getByRole("button", { name: "Next channel" }).click();
   await page.locator(".v4-context-footer").getByRole("button", { name: "Edit" }).click();
   await expectHeading("Review Facebook Post");
+  await contentEdit().click();
+  await page.locator("#v4-social-message").fill("saturday-facebook-saved");
+  await page.locator("#v4-social-cta").fill("saturday-facebook-cta");
+  await page.locator("#v4-social-hashtags").fill("#saturday-facebook-hashtag");
+  await page.locator(".editor-footer").getByRole("button", { name: "Save Edit" }).click();
+  await expectHeading("Review Facebook Post");
+  assert.equal(
+    await page.getByRole("dialog", { name: "Apply changes to other channels?" }).count(),
+    0,
+  );
   await reviewBack().click();
   await page.getByRole("dialog").waitFor();
   await page.getByText("2 of 5", { exact: true }).waitFor();
+  await page.getByRole("button", { name: "Next channel" }).click();
+  assert.equal(
+    (await page.locator(".v4-context-preview").textContent()).includes("saturday-facebook-saved"),
+    false,
+    "Saturday Facebook edits must not change the Instagram draft",
+  );
+  await page.locator(".v4-context-footer").getByRole("button", { name: "Edit" }).click();
+  await expectHeading("Review Instagram Post");
+  await contentEdit().click();
+  await page.locator("#v4-social-message").fill("saturday-instagram-saved");
+  await page.locator("#v4-social-cta").fill("saturday-instagram-cta");
+  await page.locator("#v4-social-hashtags").fill("#saturday-instagram-hashtag");
+  await page.locator(".editor-footer").getByRole("button", { name: "Save Edit" }).click();
+  await expectHeading("Review Instagram Post");
+  assert.equal(
+    await page.getByRole("dialog", { name: "Apply changes to other channels?" }).count(),
+    0,
+  );
+  await reviewBack().click();
+  await page.getByRole("button", { name: "Previous channel" }).click();
+  const saturdayFacebookPreview = await page.locator(".v4-context-preview").textContent();
+  assert.ok(saturdayFacebookPreview.includes("saturday-facebook-saved"));
+  assert.equal(
+    saturdayFacebookPreview.includes("saturday-instagram-saved"),
+    false,
+    "Saturday Instagram edits must not change the Facebook draft",
+  );
   await page.getByRole("button", { name: "Close", exact: true }).click();
 
   await page.locator(".target-card:not(.combined-target-card)").click();
   await page.locator(".calendar-modal-actions").getByRole("button", { name: "Edit" }).click();
   await expectHeading("Review Social Posts");
+  await contentEdit().click();
+  await page.getByRole("heading", { name: "Edit Google Post" }).waitFor();
+  assert.equal(
+    await page.locator("[id^='v4-cta-'], [id^='v4-hashtags-']").count(),
+    0,
+    "V4 Friday Google editor must not show social CTA or Hashtag fields",
+  );
+  assert.equal(
+    await page.getByRole("tab", { name: "Your posts" }).count(),
+    0,
+    "V4 Friday editor must not expose an all-channel edit tab",
+  );
+  await page.getByRole("tab", { name: "Facebook" }).click();
+  await assertInsetField("#v4-cta-facebook", "Contact info");
+  await assertInsetField("#v4-hashtags-facebook", "Hashtag");
+  await page.locator("#v2-message-facebook").fill("friday-facebook-saved");
+  await page.locator("#v4-cta-facebook").fill("friday-facebook-cta");
+  await page.locator("#v4-hashtags-facebook").fill("#friday-facebook-hashtag");
+  await page.getByRole("tab", { name: "Instagram" }).click();
+  await page.locator("#v2-message-instagram").fill("friday-instagram-unsaved");
+  await page.locator("#v4-cta-instagram").fill("friday-instagram-unsaved-cta");
+  await page.locator("#v4-hashtags-instagram").fill("#friday-instagram-unsaved");
+  await page.getByRole("tab", { name: "Facebook" }).click();
+  await page.locator(".editor-footer").getByRole("button", { name: "Save Edit" }).click();
+  await expectHeading("Review Social Posts");
+  await contentEdit().click();
+  await page.getByRole("tab", { name: "Instagram" }).click();
+  assert.equal(
+    (await page.locator("#v2-message-instagram").inputValue()).includes("friday-facebook-saved"),
+    false,
+    "Friday Facebook edits must not change the Instagram draft",
+  );
+  assert.equal(
+    (await page.locator("#v2-message-instagram").inputValue()).includes("friday-instagram-unsaved"),
+    false,
+    "Friday save must commit only the active channel",
+  );
+  assert.equal(await page.locator("#v4-cta-instagram").inputValue(), "saturday-instagram-cta");
+  assert.equal(
+    await page.locator("#v4-hashtags-instagram").inputValue(),
+    "#saturday-instagram-hashtag",
+  );
+  await page.getByRole("tab", { name: "Facebook" }).click();
+  assert.equal(await page.locator("#v2-message-facebook").inputValue(), "friday-facebook-saved");
+  await page.locator("#v2-message-facebook").fill("friday-facebook-cancelled");
+  await page.locator("#v4-cta-facebook").fill("friday-facebook-cancelled-cta");
+  await page.locator("#v4-hashtags-facebook").fill("#friday-facebook-cancelled");
+  await page.locator(".editor-footer").getByRole("button", { name: "Cancel" }).click();
+  await expectHeading("Review Social Posts");
+  await contentEdit().click();
+  await page.getByRole("tab", { name: "Facebook" }).click();
+  assert.equal(await page.locator("#v2-message-facebook").inputValue(), "friday-facebook-saved");
+  assert.equal(
+    await page.locator("#v4-cta-facebook").inputValue(),
+    "friday-facebook-cta",
+  );
+  assert.equal(
+    await page.locator("#v4-hashtags-facebook").inputValue(),
+    "#friday-facebook-hashtag",
+  );
+  await page.locator(".editor-footer").getByRole("button", { name: "Cancel" }).click();
   await page.locator(".review-footer").getByRole("button", { name: "Back" }).click();
   await expectHeading("Marketing Plan");
 
-  console.log("Verified five Suggested review-before-edit flows plus Saturday and Friday origins.");
+  console.log("Verified V4 channel-isolated saves across Suggested, Saturday, and Friday origins.");
 } finally {
   await browser.close();
 }

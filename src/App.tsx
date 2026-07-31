@@ -40,7 +40,7 @@ import {
   Clock3,
   FileChartColumn,
   FileText,
-  Globe2,
+  ExternalLink,
   GripVertical,
   Heart,
   Home,
@@ -57,6 +57,7 @@ import {
   SlidersHorizontal,
   Sparkles,
   Trash2,
+  TriangleAlert,
   Upload,
   Users,
   WalletCards,
@@ -95,16 +96,19 @@ const INITIAL_V2_MESSAGE = `${INITIAL_MESSAGE}
 
 #HamiltonLandscaping #OutdoorLiving #HomeUpgrade`;
 const INITIAL_HASHTAGS = "#HamiltonLandscaping #OutdoorLiving #HomeUpgrade";
+const INITIAL_SOCIAL_CTA = "📞 416-624-3188\n💬 mycompany@gmail.com";
 const INITIAL_EXTERNAL_LINK = "http://yourwebsite.com";
 
 type PrototypeVersion = "v1" | "v2" | "v3" | "v4";
 const LOCKED_VERSION: PrototypeVersion | null = "v4";
 type V2Tab = "all" | "google" | "facebook" | "instagram";
 type PreviewChannel = Exclude<V2Tab, "all">;
+type GoogleButtonAction = "learn-more" | "book" | "call-now";
+type GoogleLinkDestination = "external" | "booking" | "default-form" | "other-form";
 type EnabledChannels = Record<PreviewChannel, boolean>;
 type SchedulableVersion = PrototypeVersion;
 type ContextualAction = "schedule" | "post";
-type ContextualToast = { message: string; id: number };
+type ContextualToast = { message: string; id: number; dark?: boolean };
 type SuggestedTextDraft = { title: string; message: string };
 type SuggestedCompletion = {
   card: CalendarItem;
@@ -114,8 +118,12 @@ type SuggestedCompletion = {
 type ChannelDraft = {
   message: string;
   images: GalleryImage[];
+  cta?: string;
   hashtags?: string;
   externalLink?: string;
+  googleButtonEnabled?: boolean;
+  googleButtonAction?: GoogleButtonAction;
+  googleLinkDestination?: GoogleLinkDestination;
 };
 
 type V2Drafts = Record<V2Tab, ChannelDraft>;
@@ -138,15 +146,20 @@ const createInitialV4Drafts = (): V2Drafts => ({
     images: [...INITIAL_IMAGES],
     hashtags: "",
     externalLink: INITIAL_EXTERNAL_LINK,
+    googleButtonEnabled: true,
+    googleButtonAction: "learn-more",
+    googleLinkDestination: "external",
   },
   facebook: {
     message: INITIAL_MESSAGE,
     images: [...INITIAL_IMAGES],
+    cta: INITIAL_SOCIAL_CTA,
     hashtags: INITIAL_HASHTAGS,
   },
   instagram: {
     message: INITIAL_MESSAGE,
     images: [...INITIAL_IMAGES],
+    cta: INITIAL_SOCIAL_CTA,
     hashtags: INITIAL_HASHTAGS,
   },
 });
@@ -542,6 +555,8 @@ type CalendarItem = {
   combinedTarget?: boolean;
   generatedSuggestion?: boolean;
   showDate?: boolean;
+  campaignDate?: string;
+  channelStatuses?: Partial<Record<CalendarChannel, CalendarChannelStatus>>;
 };
 
 type CalendarGroup = {
@@ -721,7 +736,7 @@ const UPDATED_CALENDAR_COLUMNS: { day: string; groups: CalendarGroup[] }[] = [
           showDate: false,
         },
         {
-          title: "Seasonal property clean up in Hamilton",
+          title: "Post title 1",
           channels: ["Facebook post", "Google post", "Instagram post"],
           status: "Needs review",
           tone: "review",
@@ -755,13 +770,87 @@ const UPDATED_CALENDAR_COLUMNS: { day: string; groups: CalendarGroup[] }[] = [
 ];
 
 type CalendarChannel = NonNullable<CalendarItem["channel"]>;
+type CalendarChannelStatus = "scheduled" | "sent" | "missed" | "error";
+type CalendarCardStatusKey = "friday-social" | "saturday-campaign" | "suggested";
+type CalendarCardStatuses = Partial<
+  Record<CalendarCardStatusKey, Partial<Record<CalendarChannel, CalendarChannelStatus>>>
+>;
+type CalendarStatusMap = Record<PrototypeVersion, CalendarCardStatuses>;
+type V4CampaignCalendarCard = {
+  date: string;
+  item: CalendarItem;
+};
+
+const createInitialCalendarStatuses = (): CalendarStatusMap => ({
+  v1: {},
+  v2: {},
+  v3: {},
+  v4: {},
+});
+
+const CONTEXTUAL_TO_CALENDAR_CHANNEL: Record<ContextualChannel, CalendarChannel> = {
+  google: "Google post",
+  facebook: "Facebook post",
+  instagram: "Instagram post",
+  email: "Email",
+  website: "Website",
+};
+
+const STATUS_LABELS: Record<CalendarChannelStatus, string> = {
+  scheduled: "Scheduled",
+  sent: "Sent",
+  missed: "Missed",
+  error: "Error",
+};
+
+function calendarCardStatusKey(item: CalendarItem): CalendarCardStatusKey | undefined {
+  if (item.generatedSuggestion) return "suggested";
+  if (item.combinedTarget) return "saturday-campaign";
+  if (item.target) return "friday-social";
+  return undefined;
+}
+
+function ChannelStatusDot({ status }: { status: CalendarChannelStatus }) {
+  const label = STATUS_LABELS[status];
+  return (
+    <span
+      className={`channel-status-dot status-${status}`}
+      role="img"
+      aria-label={`Status: ${label}`}
+      title={label}
+    >
+      <span className="sr-only">{label}</span>
+    </span>
+  );
+}
+
+function WebsiteChannelIcon({
+  width,
+  height,
+  label,
+}: {
+  width: number;
+  height: number;
+  label?: string;
+}) {
+  return (
+    <img
+      className="website-channel-icon"
+      src="/assets/website-channel-icon.svg"
+      width={width}
+      height={height}
+      alt={label ?? ""}
+      aria-hidden={label ? undefined : true}
+    />
+  );
+}
 
 function ChannelIcon({ channel }: { channel: CalendarChannel }) {
   if (channel === "Facebook post") return <strong className="brand-facebook">f</strong>;
   if (channel === "Instagram post") return <strong className="brand-instagram">◎</strong>;
   if (channel === "Google post") return <strong className="google-g">G</strong>;
   if (channel === "Email") return <Mail size={14} />;
-  return <Globe2 size={14} />;
+  return <WebsiteChannelIcon width={14} height={14} />;
 }
 
 function MarketingCalendarCard({
@@ -773,6 +862,7 @@ function MarketingCalendarCard({
   combinedPublished = false,
   targetChannels,
   combinedChannels,
+  channelStatuses,
 }: {
   item: CalendarItem;
   onOpen: () => void;
@@ -782,6 +872,7 @@ function MarketingCalendarCard({
   combinedPublished?: boolean;
   targetChannels?: CalendarChannel[];
   combinedChannels?: CalendarChannel[];
+  channelStatuses?: CalendarCardStatuses;
 }) {
   const channels = item.combinedTarget && combinedChannels
     ? combinedChannels
@@ -791,14 +882,21 @@ function MarketingCalendarCard({
   const status = (item.target && targetPublished) || (item.combinedTarget && combinedPublished)
     ? "Sent"
     : item.status;
-  const isPublished = (item.target && targetPublished) || (item.combinedTarget && combinedPublished);
+  const isPublished = (item.target && targetPublished)
+    || (item.combinedTarget && (combinedPublished || item.status === "Sent"));
+  const statusKey = calendarCardStatusKey(item);
+  const cardStatuses = item.channelStatuses
+    ?? (statusKey ? channelStatuses?.[statusKey] : undefined);
   const content = (
     <>
       <span className="calendar-card-title">{item.title}</span>
       {channels.map((channel) => (
         <span className="calendar-card-meta channel" key={channel}>
-          <ChannelIcon channel={channel} />
-          {channel}
+          <span className="calendar-channel-label">
+            <ChannelIcon channel={channel} />
+            {channel}
+          </span>
+          {cardStatuses?.[channel] && <ChannelStatusDot status={cardStatuses[channel]} />}
         </span>
       ))}
       <span className="calendar-card-details">
@@ -854,9 +952,11 @@ function CalendarScreen({
   targetChannels,
   combinedChannels,
   generatedSuggestionCard,
+  channelStatuses,
+  v4CampaignCards,
 }: {
   onOpenPost: () => void;
-  onOpenCombinedPost: () => void;
+  onOpenCombinedPost: (campaignDate?: string) => void;
   v4Prompt?: string;
   v4Generating?: boolean;
   onV4PromptChange?: (value: string) => void;
@@ -868,8 +968,36 @@ function CalendarScreen({
   targetChannels?: CalendarChannel[];
   combinedChannels?: CalendarChannel[];
   generatedSuggestionCard?: CalendarItem;
+  channelStatuses?: CalendarCardStatuses;
+  v4CampaignCards?: V4CampaignCalendarCard[];
 }) {
-  const baseColumns = updated ? UPDATED_CALENDAR_COLUMNS : CALENDAR_COLUMNS;
+  const baseColumns = v4CampaignCards
+    ? [
+        ...UPDATED_CALENDAR_COLUMNS
+          .filter((column) => column.day !== "Sunday, Nov 1")
+          .map((column) => ({
+            ...column,
+            groups: column.groups
+              .map((group) => ({
+                ...group,
+                items: group.items.filter((item) => !item.combinedTarget),
+              }))
+              .filter((group) => group.items.length > 0),
+          })),
+        { day: "Sunday, Nov 8", groups: [] },
+      ].map((column) => {
+        const date = `2026-11-${column.day.match(/Nov (\d+)/)?.[1].padStart(2, "0")}`;
+        const campaignGroups = v4CampaignCards
+          .filter((card) => card.date === date)
+          .map((card) => ({
+            label: `${card.item.status} (1)`,
+            items: [card.item],
+          }));
+        return { ...column, groups: [...campaignGroups, ...column.groups] };
+      })
+    : updated
+      ? UPDATED_CALENDAR_COLUMNS
+      : CALENDAR_COLUMNS;
   const columns = generatedSuggestionCard
     ? baseColumns.map((column) => (
         column.day === "Friday, Nov 6"
@@ -966,18 +1094,25 @@ function CalendarScreen({
               <h2 className={column.day.startsWith("Friday") ? "today" : ""}>{column.day}</h2>
               {column.groups.map((group) => (
                 <div className="calendar-group" key={group.label}>
-                  <h3>{group.label}</h3>
+                  {!group.label.startsWith("Needs review")
+                    && !group.label.startsWith("Posted")
+                    && !group.label.startsWith("Sent") && (
+                    <h3>{group.label}</h3>
+                  )}
                   {group.items.map((item, index) => (
                     <MarketingCalendarCard
                       key={`${item.title}-${index}`}
                       item={item}
-                      onOpen={item.combinedTarget ? onOpenCombinedPost : onOpenPost}
+                      onOpen={item.combinedTarget
+                        ? () => onOpenCombinedPost(item.campaignDate)
+                        : onOpenPost}
                       combinedInteractive={combinedInteractive}
                       updated={updated}
                       targetPublished={targetPublished}
                       combinedPublished={combinedPublished}
                       targetChannels={targetChannels}
                       combinedChannels={combinedChannels}
+                      channelStatuses={channelStatuses}
                     />
                   ))}
                 </div>
@@ -1102,9 +1237,13 @@ function CalendarContextModal({
               <PlatformPreviewCard
                 channel={previewChannel}
                 message={previews[previewChannel].message}
+                cta={previews[previewChannel].cta}
                 hashtags={previews[previewChannel].hashtags}
                 images={previews[previewChannel].images}
                 externalLink={previews[previewChannel].externalLink}
+                googleLinkDestination={previews[previewChannel].googleLinkDestination}
+                googleButtonEnabled={previews[previewChannel].googleButtonEnabled}
+                googleButtonAction={previews[previewChannel].googleButtonAction}
               />
             ) : (
               <div className="no-channel-preview">No channels selected for this post.</div>
@@ -1117,6 +1256,66 @@ function CalendarContextModal({
 }
 
 type ContextualChannel = PreviewChannel | "email" | "website";
+type V4ChannelState = "unscheduled" | "scheduled" | "sent";
+type V4LifecycleAction = "schedule" | "send" | "cancel";
+type GoogleContextDemoState = "suggested" | "scheduled" | "sent" | "missed" | "error";
+type V4ChannelDelivery = {
+  lifecycle: V4ChannelState;
+  date: string;
+  time: string;
+  timezone: "America/Toronto";
+  deleted: boolean;
+  statusOverride: Extract<CalendarChannelStatus, "missed" | "error"> | null;
+};
+type V4ChannelDeliveries = Record<ContextualChannel, V4ChannelDelivery>;
+
+const V4_INITIAL_DATE = "2026-11-07";
+const V4_TODAY_DATE = "2026-11-06";
+const V4_INITIAL_TIME = "09:00";
+const V4_TIMEZONE = "America/Toronto" as const;
+const V4_WEEK_MIN = "2026-11-02";
+const V4_WEEK_MAX = "2026-11-08";
+
+const createInitialV4ChannelDeliveries = (): V4ChannelDeliveries => Object.fromEntries(
+  (["google", "facebook", "instagram", "email", "website"] as ContextualChannel[])
+    .map((channel) => [channel, {
+      lifecycle: "unscheduled",
+      date: V4_INITIAL_DATE,
+      time: V4_INITIAL_TIME,
+      timezone: V4_TIMEZONE,
+      deleted: false,
+      statusOverride: null,
+    }]),
+) as V4ChannelDeliveries;
+
+function formatV4DeliveryDate(date: string) {
+  const day = Number(date.slice(-2));
+  return `Nov ${day}, 2026`;
+}
+
+function formatV4DeliveryTime(time: string) {
+  const [hourValue, minute] = time.split(":").map(Number);
+  const suffix = hourValue >= 12 ? "PM" : "AM";
+  const hour = hourValue % 12 || 12;
+  return `${hour}:${String(minute).padStart(2, "0")} ${suffix}`;
+}
+
+function formatV4DeliveryDateTime(delivery: V4ChannelDelivery) {
+  return `${formatV4DeliveryDate(delivery.date)} · ${formatV4DeliveryTime(delivery.time)}`;
+}
+
+function v4CalendarStatus(delivery: V4ChannelDelivery): CalendarChannelStatus | undefined {
+  if (delivery.statusOverride) return delivery.statusOverride;
+  if (delivery.lifecycle === "scheduled") return "scheduled";
+  if (delivery.lifecycle === "sent") return "sent";
+  return undefined;
+}
+
+function googleDemoCalendarStatus(
+  state: GoogleContextDemoState,
+): CalendarChannelStatus | undefined {
+  return state === "suggested" ? undefined : state;
+}
 
 const CONTEXTUAL_CHANNELS: Array<{
   id: ContextualChannel;
@@ -1192,12 +1391,39 @@ function contextualSuccessMessage(
   return `Your ${label} post has been successfully posted.`;
 }
 
+function contextualDeletionMessage(channel: ContextualChannel) {
+  const label = CONTEXTUAL_CHANNELS.find(({ id }) => id === channel)!.label;
+  if (channel === "email") return "Email campaign is deleted";
+  if (channel === "website") return "Website page is deleted";
+  return `${label} post is deleted`;
+}
+
+function nextAvailableChannel(
+  actedOn: ContextualChannel,
+  availableChannels: ContextualChannel[],
+  deliveries: V4ChannelDeliveries,
+) {
+  const otherChannels = availableChannels.filter((channel) => channel !== actedOn);
+  if (otherChannels.length === 0) return null;
+  const actedIndex = CONTEXTUAL_CHANNELS.findIndex(({ id }) => id === actedOn);
+  const orderedAfter = Array.from(
+    { length: CONTEXTUAL_CHANNELS.length },
+    (_, offset) => CONTEXTUAL_CHANNELS[(actedIndex + offset + 1) % CONTEXTUAL_CHANNELS.length].id,
+  ).filter((channel) => otherChannels.includes(channel));
+
+  return orderedAfter.find((channel) => (
+    deliveries[channel].lifecycle === "unscheduled"
+  ))
+    ?? orderedAfter[0]
+    ?? otherChannels[0];
+}
+
 function ContextualChannelIcon({ channel }: { channel: ContextualChannel }) {
   if (channel === "google") return <strong className="google-g">G</strong>;
   if (channel === "facebook") return <strong className="brand-facebook">f</strong>;
   if (channel === "instagram") return <strong className="brand-instagram">◎</strong>;
   if (channel === "email") return <Mail size={18} />;
-  return <Globe2 size={18} />;
+  return <WebsiteChannelIcon width={18} height={18} />;
 }
 
 function EmailCampaignPreview({
@@ -1402,7 +1628,7 @@ function SuggestedMarketingContentDialog({
             <p><strong>{destinationDetails.label}</strong> {destinationDetails.value}</p>
           </div>
           <hr className="suggested-preview-divider" />
-          <div className="suggested-preview-scroll suggested-preview-compact">
+          <div className="suggested-preview-scroll">
             {active.id === "email" ? (
               <EmailCampaignPreview
                 images={drafts.all.images}
@@ -1419,9 +1645,13 @@ function SuggestedMarketingContentDialog({
               <PlatformPreviewCard
                 channel={active.id}
                 message={drafts[active.id].message}
+                cta={drafts[active.id].cta}
                 hashtags={drafts[active.id].hashtags}
                 images={drafts[active.id].images}
                 externalLink={drafts[active.id].externalLink}
+                googleLinkDestination={drafts[active.id].googleLinkDestination}
+                googleButtonEnabled={drafts[active.id].googleButtonEnabled}
+                googleButtonAction={drafts[active.id].googleButtonAction}
               />
             )}
           </div>
@@ -1718,9 +1948,13 @@ function VersionThreeCombinedContextModal({
                   <PlatformPreviewCard
                     channel={previewChannel}
                     message={drafts[previewChannel].message}
+                    cta={drafts[previewChannel].cta}
                     hashtags={drafts[previewChannel].hashtags}
                     images={drafts[previewChannel].images}
                     externalLink={drafts[previewChannel].externalLink}
+                    googleLinkDestination={drafts[previewChannel].googleLinkDestination}
+                  googleButtonEnabled={drafts[previewChannel].googleButtonEnabled}
+                  googleButtonAction={drafts[previewChannel].googleButtonAction}
                   />
                 ) : (
                   <div className="no-channel-preview">No channels selected for this post.</div>
@@ -1738,6 +1972,74 @@ function VersionThreeCombinedContextModal({
   );
 }
 
+function DeletionFeedbackDialog({
+  channel,
+  onCancel,
+  onConfirm,
+}: {
+  channel: ContextualChannel;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const [feedback, setFeedback] = useState("");
+  const isEmail = channel === "email";
+  const isWebsite = channel === "website";
+  const contentNoun = isEmail ? "campaign" : isWebsite ? "page" : "post";
+  const buttonNoun = isEmail ? "Campaign" : isWebsite ? "Page" : "Post";
+  const titleId = `v4-delete-title-${channel}`;
+  const feedbackId = `v4-delete-feedback-${channel}`;
+
+  useEffect(() => {
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.stopImmediatePropagation();
+      onCancel();
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [onCancel]);
+
+  return (
+    <div
+      className="google-delete-overlay"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onCancel();
+      }}
+    >
+      <section
+        className="google-delete-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+      >
+        <button type="button" className="google-delete-close" aria-label="Close deletion feedback" onClick={onCancel}>
+          <X size={24} />
+        </button>
+        <h2 id={titleId}>Improve future recommendations</h2>
+        <p>
+          Tell us why this {contentNoun} wasn’t right for your business. Your feedback helps us make
+          future recommendations more useful.
+        </p>
+        <label htmlFor={feedbackId}>Feedback <span>(optional)</span></label>
+        <input
+          id={feedbackId}
+          value={feedback}
+          placeholder="What should we know for next time?"
+          onChange={(event) => setFeedback(event.target.value)}
+          autoFocus
+        />
+        <footer>
+          <button type="button" className="secondary-button" onClick={onCancel}>Cancel</button>
+          <button type="button" className="primary-button" onClick={onConfirm}>
+            Delete {buttonNoun}
+          </button>
+        </footer>
+      </section>
+    </div>
+  );
+}
+
 function VersionFourContextModal({
   drafts,
   emailMessage,
@@ -1745,11 +2047,14 @@ function VersionFourContextModal({
   websiteMessage,
   websiteTitle,
   initialIndex = 0,
-  googleAvailable,
+  availableChannels,
+  channelDeliveries,
   onClose,
-  onSocialEdit,
-  onDeleteGoogle,
-  onAction,
+  onEdit,
+  onDelete,
+  onLifecycleAction,
+  googleDemoState,
+  onActiveChannelChange,
 }: {
   drafts: V2Drafts;
   emailMessage: string;
@@ -1757,23 +2062,43 @@ function VersionFourContextModal({
   websiteMessage: string;
   websiteTitle: string;
   initialIndex?: number;
-  googleAvailable: boolean;
+  availableChannels: ContextualChannel[];
+  channelDeliveries: V4ChannelDeliveries;
   onClose: () => void;
-  onSocialEdit: (channel: PreviewChannel) => void;
-  onDeleteGoogle: () => void;
-  onAction: (channel: ContextualChannel, action: ContextualAction, final: boolean) => void;
+  onEdit: (channel: ContextualChannel) => void;
+  onDelete: (channel: ContextualChannel) => void;
+  onLifecycleAction: (
+    channel: ContextualChannel,
+    action: V4LifecycleAction,
+    advance?: boolean,
+  ) => void;
+  googleDemoState: GoogleContextDemoState;
+  onActiveChannelChange: (channel: ContextualChannel | null) => void;
 }) {
   const [activeIndex, setActiveIndex] = useState(initialIndex);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [deleteFeedback, setDeleteFeedback] = useState("");
   const [splitMenuOpen, setSplitMenuOpen] = useState(false);
   const splitMenuRef = useRef<HTMLDivElement>(null);
   const splitToggleRef = useRef<HTMLButtonElement>(null);
   const splitOptionRef = useRef<HTMLButtonElement>(null);
-  const channels = googleAvailable
-    ? CONTEXTUAL_CHANNELS
-    : CONTEXTUAL_CHANNELS.filter(({ id }) => id !== "google");
+  const channels = CONTEXTUAL_CHANNELS.filter(({ id }) => availableChannels.includes(id));
   const active = channels[Math.min(activeIndex, channels.length - 1)];
+  const activeDelivery = channelDeliveries[active.id];
+  const activeState = activeDelivery.lifecycle;
+  const isGoogleDemo = active.id === "google";
+  const googleStatus = isGoogleDemo && googleDemoState !== "suggested"
+    ? {
+        scheduled: { label: "Scheduled", tone: "scheduled" },
+        sent: { label: "Sent", tone: "sent" },
+        missed: { label: "Missed", tone: "missed" },
+        error: { label: "Failed", tone: "failed" },
+      }[googleDemoState]
+    : null;
+  const presentationState = isGoogleDemo
+    ? googleDemoState
+    : activeState;
+  const hasOriginalScheduleDate = isGoogleDemo
+    && (googleDemoState === "missed" || googleDemoState === "error");
   const atStart = activeIndex === 0;
   const atEnd = activeIndex === channels.length - 1;
   const goPrevious = () => {
@@ -1784,16 +2109,26 @@ function VersionFourContextModal({
     setSplitMenuOpen(false);
     setActiveIndex((current) => Math.min(channels.length - 1, current + 1));
   };
-  const performAction = (action: ContextualAction) => {
+  const scheduleCurrent = () => {
     setSplitMenuOpen(false);
-    onAction(active.id, action, atEnd);
-    if (!atEnd) setActiveIndex((current) => current + 1);
+    onLifecycleAction(active.id, "schedule", true);
   };
-  const safeVisualAction = (event: React.MouseEvent<HTMLButtonElement>) => event.preventDefault();
+  const sendCurrentNow = () => {
+    setSplitMenuOpen(false);
+    onLifecycleAction(active.id, "send", true);
+  };
+  const editCurrent = () => {
+    setSplitMenuOpen(false);
+    onEdit(active.id);
+  };
   const closeDeleteDialog = () => {
     setDeleteDialogOpen(false);
-    setDeleteFeedback("");
   };
+
+  useEffect(() => {
+    onActiveChannelChange(active.id);
+    return () => onActiveChannelChange(null);
+  }, [active.id, onActiveChannelChange]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -1830,23 +2165,26 @@ function VersionFourContextModal({
   return (
     <div className="calendar-modal-overlay v4-context-overlay" role="presentation">
       <section
-        className={`v4-context-modal ${deleteDialogOpen ? "delete-dialog-open" : ""}`}
+        className={`v4-context-modal v4-five-channel-modal ${deleteDialogOpen ? "delete-dialog-open" : ""}`}
         role="dialog"
         aria-modal="true"
-        aria-labelledby="v4-context-title"
+        aria-labelledby="v4-context-navigation-title"
       >
         <nav
           className="v4-context-navigation"
           aria-label="Channel preview"
           inert={deleteDialogOpen ? true : undefined}
         >
-          <button type="button" onClick={goPrevious} disabled={atStart} aria-label="Previous channel">
-            <ChevronLeft size={22} />
-          </button>
-          <span aria-live="polite">{activeIndex + 1} of {channels.length}</span>
-          <button type="button" onClick={goNext} disabled={atEnd} aria-label="Next channel">
-            <ChevronRight size={22} />
-          </button>
+          <h2 id="v4-context-navigation-title">Review multiple channels</h2>
+          <div className="v4-context-navigation-controls">
+            <button type="button" onClick={goPrevious} disabled={atStart} aria-label="Previous channel">
+              <ChevronLeft size={22} aria-hidden="true" />
+            </button>
+            <span aria-live="polite">{activeIndex + 1} of {channels.length}</span>
+            <button type="button" onClick={goNext} disabled={atEnd} aria-label="Next channel">
+              <ChevronRight size={22} aria-hidden="true" />
+            </button>
+          </div>
         </nav>
         <button
           className="calendar-modal-close"
@@ -1863,7 +2201,25 @@ function VersionFourContextModal({
             <div>
               <h1 id="v4-context-title">Seasonal property clean up in Hamilton</h1>
               <section className="v4-about-copy">
-                <h2>{active.about}</h2>
+                <div className="v4-about-heading">
+                  <h2>{active.about}</h2>
+                  {isGoogleDemo ? googleStatus && (
+                    <span className={`v4-context-status status-${googleStatus.tone}`}>
+                      <span
+                        className={`channel-status-dot status-${
+                          googleDemoState === "error" ? "error" : googleDemoState
+                        }`}
+                        aria-hidden="true"
+                      />
+                      {googleStatus.label}
+                    </span>
+                  ) : activeState === "scheduled" && (
+                    <span className="v4-context-status status-scheduled">
+                      <span className="channel-status-dot status-scheduled" aria-hidden="true" />
+                      Scheduled
+                    </span>
+                  )}
+                </div>
                 <p>
                   Showcase this Hamilton property’s seasonal clean up and fresh mulch to highlight
                   the work completed, demonstrate the visible results, and help local homeowners
@@ -1871,67 +2227,141 @@ function VersionFourContextModal({
                 </p>
               </section>
               <dl className="v4-context-facts">
-                <div><dt>Scheduled for</dt><dd>Nov 7, 2026 · 9:00 AM</dd></div>
+                <div>
+                  <dt>{hasOriginalScheduleDate ? "Original schedule date" : "Schedule date"}</dt>
+                  <dd className={hasOriginalScheduleDate ? "v4-warning-fact" : undefined}>
+                    {hasOriginalScheduleDate && <TriangleAlert size={16} aria-hidden="true" />}
+                    {formatV4DeliveryDateTime(activeDelivery)}
+                  </dd>
+                </div>
                 <div><dt>{active.destinationLabel}</dt><dd>{active.destination}</dd></div>
               </dl>
             </div>
-            <footer className="v4-context-footer" inert={deleteDialogOpen ? true : undefined}>
-              <button
-                type="button"
-                className="delete-post"
-                aria-disabled={active.id === "google" ? undefined : "true"}
-                onClick={active.id === "google"
-                  ? () => {
+            <div className="v4-context-actions">
+              {isGoogleDemo && googleDemoState === "error" && (
+                <div className="v4-context-error-banner" role="alert">
+                  <TriangleAlert size={18} aria-hidden="true" />
+                  <span>Posting failed due to a connection issue.</span>
+                </div>
+              )}
+              <footer className="v4-context-footer" inert={deleteDialogOpen ? true : undefined}>
+                {isGoogleDemo && googleDemoState === "sent" ? (
+                  <button type="button" className="v4-duplicate-campaign">
+                    Duplicate Campaign
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="delete-post"
+                    onClick={() => {
                       setSplitMenuOpen(false);
                       setDeleteDialogOpen(true);
-                    }
-                  : safeVisualAction}
-              >
-                Delete
-              </button>
-              <div>
-                <button
-                  type="button"
-                  className="secondary-button"
-                  aria-disabled={active.id === "facebook" || active.id === "instagram" ? undefined : "true"}
-                  onClick={active.id === "facebook" || active.id === "instagram"
-                    ? () => {
-                        setSplitMenuOpen(false);
-                        if (active.id === "facebook" || active.id === "instagram") onSocialEdit(active.id);
-                      }
-                    : safeVisualAction}
-                >
-                  Edit
-                </button>
-                <div className="v4-split-action" ref={splitMenuRef}>
-                  {splitMenuOpen && (
-                    <div className="v4-split-menu" role="menu" aria-label="Publishing options">
-                      <button
-                        ref={splitOptionRef}
-                        type="button"
-                        role="menuitem"
-                        onClick={() => performAction("post")}
-                      >
-                        Post now and next
-                      </button>
-                    </div>
-                  )}
-                  <span className="v4-split-button">
-                    <button type="button" onClick={() => performAction("schedule")}>Schedule and next</button>
-                    <button
-                      ref={splitToggleRef}
-                      type="button"
-                      aria-label="Show publishing options"
-                      aria-haspopup="menu"
-                      aria-expanded={splitMenuOpen}
-                      onClick={() => setSplitMenuOpen((open) => !open)}
-                    >
-                      <ChevronDown size={20} />
+                    }}
+                  >
+                    {isGoogleDemo && googleDemoState !== "suggested" ? "Delete Post" : "Delete"}
+                  </button>
+                )}
+                <div>
+                  {isGoogleDemo && googleDemoState === "sent" ? (
+                    <button type="button" className="primary-button v4-view-performance">
+                      View Performance
+                      <ExternalLink size={17} aria-hidden="true" />
                     </button>
-                  </span>
+                  ) : isGoogleDemo
+                    && (googleDemoState === "missed" || googleDemoState === "error") ? (
+                    <>
+                      <button type="button" className="secondary-button" onClick={editCurrent}>
+                        Edit
+                      </button>
+                      <button type="button" className="primary-button v4-send-now" onClick={sendCurrentNow}>
+                        {googleDemoState === "missed" ? "Send Now" : "Post Now"}
+                      </button>
+                    </>
+                  ) : presentationState === "unscheduled" || presentationState === "suggested" ? (
+                  <>
+                    <button type="button" className="secondary-button" onClick={editCurrent}>
+                      Edit
+                    </button>
+                    <div className="v4-split-action" ref={splitMenuRef}>
+                      {splitMenuOpen && (
+                        <div className="v4-split-menu" role="menu" aria-label="Publishing options">
+                          <button
+                            ref={splitOptionRef}
+                            type="button"
+                            role="menuitem"
+                            onClick={sendCurrentNow}
+                          >
+                            Post now and view next
+                          </button>
+                        </div>
+                      )}
+                      <span className="v4-split-button v4-schedule-next-button">
+                        <button type="button" onClick={scheduleCurrent}>
+                          Schedule and view next
+                        </button>
+                        <button
+                          ref={splitToggleRef}
+                          type="button"
+                          aria-label="Show publishing options"
+                          aria-haspopup="menu"
+                          aria-expanded={splitMenuOpen}
+                          onClick={() => setSplitMenuOpen((open) => !open)}
+                        >
+                          <ChevronDown size={20} />
+                        </button>
+                      </span>
+                    </div>
+                  </>
+                  ) : presentationState === "scheduled" ? (
+                  <div className="v4-split-action" ref={splitMenuRef}>
+                    {splitMenuOpen && (
+                      <div className="v4-split-menu" role="menu" aria-label="Scheduled post options">
+                        <button
+                          ref={splitOptionRef}
+                          type="button"
+                          role="menuitem"
+                          onClick={sendCurrentNow}
+                        >
+                          Send now
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            setSplitMenuOpen(false);
+                            onLifecycleAction(active.id, "cancel");
+                          }}
+                        >
+                          Cancel schedule
+                        </button>
+                      </div>
+                    )}
+                    <span className="v4-split-button">
+                      <button type="button" onClick={editCurrent}>Edit</button>
+                      <button
+                        ref={splitToggleRef}
+                        type="button"
+                        aria-label="Show scheduled post options"
+                        aria-haspopup="menu"
+                        aria-expanded={splitMenuOpen}
+                        onClick={() => setSplitMenuOpen((open) => !open)}
+                      >
+                        <ChevronDown size={20} />
+                      </button>
+                    </span>
+                  </div>
+                  ) : (
+                  <button
+                    type="button"
+                    className="primary-button v4-sent-edit-button"
+                    onClick={editCurrent}
+                  >
+                    Edit
+                  </button>
+                  )}
                 </div>
-              </div>
-            </footer>
+              </footer>
+            </div>
           </section>
 
           <section className="v4-context-preview" aria-label={`${active.label} content preview`}>
@@ -1953,9 +2383,13 @@ function VersionFourContextModal({
                 <PlatformPreviewCard
                   channel={active.id}
                   message={drafts[active.id].message}
+                  cta={drafts[active.id].cta}
                   hashtags={drafts[active.id].hashtags}
                   images={drafts[active.id].images}
                   externalLink={drafts[active.id].externalLink}
+                  googleLinkDestination={drafts[active.id].googleLinkDestination}
+                  googleButtonEnabled={drafts[active.id].googleButtonEnabled}
+                  googleButtonAction={drafts[active.id].googleButtonAction}
                 />
               )}
             </div>
@@ -1963,47 +2397,151 @@ function VersionFourContextModal({
         </div>
 
         {deleteDialogOpen && (
-          <div className="google-delete-overlay" role="presentation">
-            <section
-              className="google-delete-dialog"
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="google-delete-title"
-            >
-              <button type="button" className="google-delete-close" aria-label="Close deletion feedback" onClick={closeDeleteDialog}>
-                <X size={24} />
-              </button>
-              <h2 id="google-delete-title">Improve future recommendations</h2>
-              <p>
-                Tell us why this post wasn’t right for your business. Your feedback helps us make
-                future recommendations more useful.
-              </p>
-              <label htmlFor="google-delete-feedback">Feedback <span>(optional)</span></label>
-              <input
-                id="google-delete-feedback"
-                value={deleteFeedback}
-                placeholder="What should we know for next time?"
-                onChange={(event) => setDeleteFeedback(event.target.value)}
-                autoFocus
-              />
-              <footer>
-                <button type="button" className="secondary-button" onClick={closeDeleteDialog}>Cancel</button>
-                <button
-                  type="button"
-                  className="primary-button"
-                  onClick={() => {
-                    setDeleteDialogOpen(false);
-                    setDeleteFeedback("");
-                    setActiveIndex(0);
-                    onDeleteGoogle();
-                  }}
-                >
-                  Delete Post
-                </button>
-              </footer>
-            </section>
-          </div>
+          <DeletionFeedbackDialog
+            channel={active.id}
+            onCancel={closeDeleteDialog}
+            onConfirm={() => {
+              setDeleteDialogOpen(false);
+              onDelete(active.id);
+            }}
+          />
         )}
+      </section>
+    </div>
+  );
+}
+
+function GooglePrototypeStatusControls({
+  state,
+  onChange,
+}: {
+  state: GoogleContextDemoState;
+  onChange: (state: GoogleContextDemoState) => void;
+}) {
+  const controls: Array<{
+    state: GoogleContextDemoState;
+    label: string;
+    dotStatus?: CalendarChannelStatus;
+  }> = [
+    { state: "suggested", label: "Suggested" },
+    { state: "scheduled", label: "Scheduled", dotStatus: "scheduled" },
+    { state: "sent", label: "Sent", dotStatus: "sent" },
+    { state: "missed", label: "Missed", dotStatus: "missed" },
+    { state: "error", label: "Error", dotStatus: "error" },
+  ];
+
+  return (
+    <fieldset className="prototype-status-controls">
+      <legend>Prototype status controls — not part of final UI</legend>
+      <div role="group" aria-label="Google contextual modal demo status">
+        {controls.map((control) => (
+          <button
+            type="button"
+            className={`${state === control.state ? "active " : ""}status-${control.state}`.trim()}
+            aria-pressed={state === control.state}
+            onClick={() => onChange(control.state)}
+            key={control.state}
+          >
+            {control.dotStatus ? (
+              <span
+                className={`channel-status-dot status-${control.dotStatus}`}
+                aria-hidden="true"
+              />
+            ) : (
+              <span className="prototype-neutral-dot" aria-hidden="true" />
+            )}
+            {control.label}
+          </button>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
+function ScheduleDateDialog({
+  channel,
+  delivery,
+  onCancel,
+  onSave,
+}: {
+  channel: ContextualChannel;
+  delivery: V4ChannelDelivery;
+  onCancel: () => void;
+  onSave: (date: string, time: string) => void;
+}) {
+  const [date, setDate] = useState(delivery.date);
+  const [time, setTime] = useState(delivery.time);
+  const channelLabel = CONTEXTUAL_CHANNELS.find(({ id }) => id === channel)!.label;
+
+  useEffect(() => {
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.stopImmediatePropagation();
+      onCancel();
+    };
+    window.addEventListener("keydown", closeOnEscape, true);
+    return () => window.removeEventListener("keydown", closeOnEscape, true);
+  }, [onCancel]);
+
+  return (
+    <div
+      className="calendar-modal-overlay schedule-date-overlay"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onCancel();
+      }}
+    >
+      <section
+        className="schedule-date-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="schedule-date-title"
+      >
+        <header>
+          <h2 id="schedule-date-title">Schedule Date</h2>
+          <button type="button" aria-label="Close Schedule Date" onClick={onCancel}>
+            <X size={24} />
+          </button>
+        </header>
+        <div className="schedule-date-body">
+          <p>
+            We recommend that all communications occur between 9 AM – 5 PM. This post can be
+            scheduled to be sent on:
+          </p>
+          <div className="schedule-date-inputs">
+            <label>
+              Date
+              <input
+                type="date"
+                aria-label={`Schedule date for ${channelLabel}`}
+                min={V4_WEEK_MIN}
+                max={V4_WEEK_MAX}
+                value={date}
+                onChange={(event) => setDate(event.target.value)}
+              />
+            </label>
+            <label>
+              Time
+              <input
+                type="time"
+                aria-label={`Schedule time for ${channelLabel}`}
+                value={time}
+                onChange={(event) => setTime(event.target.value)}
+              />
+            </label>
+          </div>
+          <p className="schedule-timezone">Time zone: (GMT-05:00) America/Toronto (EST)</p>
+        </div>
+        <footer>
+          <button
+            type="button"
+            className="primary-button"
+            disabled={!date || !time}
+            onClick={() => onSave(date, time)}
+          >
+            Save Edits
+          </button>
+        </footer>
       </section>
     </div>
   );
@@ -2019,6 +2557,12 @@ function VersionFourChannelReview({
   images,
   onBack,
   onEdit,
+  onDelete,
+  onSchedule,
+  onSendNow,
+  onEditSchedule,
+  delivery,
+  lifecycleEnabled = false,
   compactPreview = false,
   inactive = false,
 }: {
@@ -2031,15 +2575,28 @@ function VersionFourChannelReview({
   images: GalleryImage[];
   onBack: () => void;
   onEdit: () => void;
+  onDelete?: () => void;
+  onSchedule?: () => void;
+  onSendNow?: () => void;
+  onEditSchedule?: () => void;
+  delivery?: V4ChannelDelivery;
+  lifecycleEnabled?: boolean;
   compactPreview?: boolean;
   inactive?: boolean;
 }) {
+  const [splitMenuOpen, setSplitMenuOpen] = useState(false);
+  const splitMenuRef = useRef<HTMLDivElement>(null);
+  const splitToggleRef = useRef<HTMLButtonElement>(null);
+  const splitOptionRef = useRef<HTMLButtonElement>(null);
   const visualOnly = (event: React.MouseEvent<HTMLButtonElement>) => event.preventDefault();
   const channelConfig = CONTEXTUAL_CHANNELS.find(({ id }) => id === channel)!;
   const isEmail = channel === "email";
   const isWebsite = channel === "website";
   const socialSummary = socialDraft
-    ? [socialDraft.message, socialDraft.hashtags].filter(Boolean).join(" ").replace(/\n+/g, " ")
+    ? [socialDraft.message, socialDraft.cta, socialDraft.hashtags]
+      .filter(Boolean)
+      .join(" ")
+      .replace(/\n+/g, " ")
     : "";
   const summary = isEmail
     ? `${emailSubject} — ${emailMessage}`.replace(/\n+/g, " ")
@@ -2071,6 +2628,28 @@ function VersionFourChannelReview({
         : channel === "email"
           ? "All clients · 394 of 400 subscribed to email marketing"
           : INITIAL_EXTERNAL_LINK;
+  const deleteLabel = isEmail ? "Delete Campaign" : isWebsite ? "Delete Page" : "Delete Post";
+  const immediateActionLabel = isEmail ? "Send now" : isWebsite ? "Publish now" : "Post now";
+
+  useEffect(() => {
+    if (!splitMenuOpen) return;
+    splitOptionRef.current?.focus();
+    const closeMenu = (event: MouseEvent) => {
+      if (!splitMenuRef.current?.contains(event.target as Node)) setSplitMenuOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.stopImmediatePropagation();
+      setSplitMenuOpen(false);
+      splitToggleRef.current?.focus();
+    };
+    document.addEventListener("mousedown", closeMenu);
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("mousedown", closeMenu);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [splitMenuOpen]);
 
   return (
     <main
@@ -2095,9 +2674,17 @@ function VersionFourChannelReview({
             <section className="review-field">
               <header>
                 <h2>{scheduleLabel}</h2>
-                <button type="button" aria-disabled="true" onClick={visualOnly}>Edit</button>
+                <button
+                  type="button"
+                  aria-disabled={onEditSchedule ? undefined : "true"}
+                  onClick={onEditSchedule ?? visualOnly}
+                >
+                  Edit
+                </button>
               </header>
-              <p>Nov 7, 2026 9:00 AM</p>
+              <p>{delivery
+                ? formatV4DeliveryDateTime(delivery).replace(" · ", " ")
+                : "Nov 7, 2026 9:00 AM"}</p>
             </section>
             <section className="review-field v4-facebook-post-to">
               <header>
@@ -2115,11 +2702,53 @@ function VersionFourChannelReview({
         <footer className="review-footer">
           <div>
             <button className="secondary-button" type="button" onClick={onBack}>Back</button>
-            <button className="delete-post" type="button" aria-disabled="true" onClick={visualOnly}>Delete Post</button>
+            <button
+              className="delete-post"
+              type="button"
+              aria-disabled={lifecycleEnabled ? undefined : "true"}
+              onClick={lifecycleEnabled ? onDelete : visualOnly}
+            >
+              {lifecycleEnabled ? deleteLabel : "Delete Post"}
+            </button>
           </div>
-          <button className="schedule-split" type="button" aria-disabled="true" onClick={visualOnly}>
-            <span>Schedule Nov 7</span><ChevronDown size={20} />
-          </button>
+          {lifecycleEnabled ? (
+            <div className="v4-split-action v4-review-split-action" ref={splitMenuRef}>
+              {splitMenuOpen && (
+                <div className="v4-split-menu" role="menu" aria-label="Publishing options">
+                  <button
+                    ref={splitOptionRef}
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setSplitMenuOpen(false);
+                      onSendNow?.();
+                    }}
+                  >
+                    {immediateActionLabel}
+                  </button>
+                </div>
+              )}
+              <span className="v4-split-button">
+                <button type="button" onClick={onSchedule}>
+                  Schedule {delivery ? formatV4DeliveryDate(delivery.date).replace(", 2026", "") : "Nov 7"}
+                </button>
+                <button
+                  ref={splitToggleRef}
+                  type="button"
+                  aria-label="Show publishing options"
+                  aria-haspopup="menu"
+                  aria-expanded={splitMenuOpen}
+                  onClick={() => setSplitMenuOpen((open) => !open)}
+                >
+                  <ChevronDown size={20} />
+                </button>
+              </span>
+            </div>
+          ) : (
+            <button className="schedule-split" type="button" aria-disabled="true" onClick={visualOnly}>
+              <span>Schedule Nov 7</span><ChevronDown size={20} />
+            </button>
+          )}
         </footer>
       </section>
       {isEmail ? (
@@ -2148,9 +2777,13 @@ function SocialDraftPreview({ channel, draft }: { channel: PreviewChannel; draft
         <PlatformPreviewCard
           channel={channel}
           message={draft.message}
+          cta={draft.cta}
           hashtags={draft.hashtags}
           images={draft.images}
           externalLink={draft.externalLink}
+          googleLinkDestination={draft.googleLinkDestination}
+          googleButtonEnabled={draft.googleButtonEnabled}
+          googleButtonAction={draft.googleButtonAction}
         />
         <p className="preview-disclaimer">
           Social networks regularly make updates to formatting so your post may appear slightly
@@ -2174,12 +2807,7 @@ function VersionFourSocialEditor({
   onCancel: () => void;
   onSave: () => void;
 }) {
-  const combinedMessage = [draft.message, draft.hashtags].filter(Boolean).join("\n\n");
   const channelLabel = channel === "facebook" ? "Facebook" : "Instagram";
-  const updateCombinedMessage = (value: string) => {
-    const parsed = splitPostMessage(value);
-    setDraft({ ...draft, message: parsed.body, hashtags: parsed.hashtags });
-  };
 
   return (
     <main className="app-content v4-facebook-workflow" aria-labelledby="v4-social-editor-title">
@@ -2196,10 +2824,27 @@ function VersionFourSocialEditor({
             <AutoSizeTextarea
               id="v4-social-message"
               maxLength={1500}
-              value={combinedMessage}
-              onChange={updateCombinedMessage}
+              value={draft.message}
+              onChange={(message) => setDraft({ ...draft, message })}
             />
-            <span className="character-count">{combinedMessage.length}/1500 characters</span>
+            <span className="character-count">{draft.message.length}/1500 characters</span>
+          </div>
+          <div className="field-block v4-cta-field v4-inset-field">
+            <label htmlFor="v4-social-cta">Contact info</label>
+            <AutoSizeTextarea
+              id="v4-social-cta"
+              maxLength={500}
+              value={draft.cta ?? ""}
+              onChange={(cta) => setDraft({ ...draft, cta })}
+            />
+          </div>
+          <div className="field-block v4-hashtag-field v4-inset-field">
+            <label htmlFor="v4-social-hashtags">Hashtag</label>
+            <input
+              id="v4-social-hashtags"
+              value={draft.hashtags ?? ""}
+              onChange={(event) => setDraft({ ...draft, hashtags: event.target.value })}
+            />
           </div>
           <div className="image-section v4-social-images">
             <div>
@@ -2230,78 +2875,259 @@ function VersionFourSocialEditor({
   );
 }
 
-function ApplyChangesDialog({
-  source,
-  googleAvailable,
-  onClose,
-  onApply,
+const GOOGLE_BUTTON_OPTIONS: Array<{ value: GoogleButtonAction; label: string }> = [
+  { value: "learn-more", label: "Learn more" },
+  { value: "book", label: "Book" },
+  { value: "call-now", label: "Call now" },
+];
+
+const GOOGLE_LINK_OPTIONS: Array<{ value: GoogleLinkDestination; label: string; requestForm?: boolean }> = [
+  { value: "external", label: "External link" },
+  { value: "booking", label: "Online booking page" },
+  { value: "default-form", label: "Untitled Form (Default)", requestForm: true },
+  { value: "other-form", label: "My other form", requestForm: true },
+];
+
+function googleButtonLabel(action: GoogleButtonAction | undefined) {
+  return GOOGLE_BUTTON_OPTIONS.find((option) => option.value === action)?.label ?? "Learn more";
+}
+
+function googleLinkLabel(destination: GoogleLinkDestination | undefined) {
+  return GOOGLE_LINK_OPTIONS.find((option) => option.value === destination)?.label ?? "External link";
+}
+
+function VersionFourGoogleButtonEditor({
+  draft,
+  onChange,
 }: {
-  source: PreviewChannel;
-  googleAvailable: boolean;
-  onClose: () => void;
-  onApply: (channels: ContextualChannel[]) => void;
+  draft: ChannelDraft;
+  onChange: (draft: ChannelDraft) => void;
 }) {
-  const [selected, setSelected] = useState<ContextualChannel[]>([]);
-  const options = CONTEXTUAL_CHANNELS.filter(({ id }) => (
-    id !== source && (googleAvailable || id !== "google")
-  ));
+  const enabled = draft.googleButtonEnabled ?? true;
+  const action = draft.googleButtonAction ?? "learn-more";
+  const destination = draft.googleLinkDestination ?? "external";
+  const [openMenu, setOpenMenu] = useState<"text" | "link" | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const textTriggerRef = useRef<HTMLButtonElement>(null);
+  const linkTriggerRef = useRef<HTMLButtonElement>(null);
+  const textOptionRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const linkOptionRefs = useRef<Array<HTMLButtonElement | null>>([]);
+
+  const closeMenu = (restoreFocus = false, menu = openMenu) => {
+    setOpenMenu(null);
+    if (restoreFocus) {
+      (menu === "link" ? linkTriggerRef : textTriggerRef).current?.focus();
+    }
+  };
+  const showMenu = (menu: "text" | "link", focusIndex: number) => {
+    setOpenMenu(menu);
+    const refs = menu === "text" ? textOptionRefs : linkOptionRefs;
+    window.requestAnimationFrame(() => refs.current[Math.max(focusIndex, 0)]?.focus());
+  };
+  const selectAction = (nextAction: GoogleButtonAction) => {
+    onChange({ ...draft, googleButtonAction: nextAction });
+    closeMenu(true, "text");
+  };
+  const selectDestination = (nextDestination: GoogleLinkDestination) => {
+    onChange({ ...draft, googleLinkDestination: nextDestination });
+    closeMenu(true, "link");
+  };
+  const moveOptionFocus = (
+    refs: { current: Array<HTMLButtonElement | null> },
+    direction: 1 | -1,
+  ) => {
+    const currentIndex = refs.current.findIndex((option) => option === document.activeElement);
+    const nextIndex = (currentIndex + direction + refs.current.length) % refs.current.length;
+    refs.current[nextIndex]?.focus();
+  };
 
   useEffect(() => {
+    if (!openMenu) return;
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (containerRef.current?.contains(event.target as Node)) return;
+      const target = event.target as HTMLElement;
+      const targetReceivesFocus = Boolean(
+        target.closest("button, a, input, select, textarea, [tabindex]"),
+      );
+      closeMenu(!targetReceivesFocus);
+    };
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
+      event.preventDefault();
       event.stopImmediatePropagation();
-      onClose();
+      closeMenu(true);
     };
+    document.addEventListener("mousedown", handleOutsideClick);
     window.addEventListener("keydown", handleEscape);
-    return () => window.removeEventListener("keydown", handleEscape);
-  }, [onClose]);
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [openMenu]);
 
   return (
-    <div className="apply-changes-overlay" role="presentation">
-      <section
-        className="apply-changes-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="apply-changes-title"
-      >
-        <button className="google-delete-close" type="button" aria-label="Close apply changes dialog" onClick={onClose}>
-          <X size={24} />
+    <div className="button-section v2-google-button v4-google-button" ref={containerRef}>
+      <div className="section-heading">
+        <label id="v4-google-button-heading">Button</label>
+        <button
+          className={`toggle ${enabled ? "on" : "off"}`}
+          type="button"
+          role="switch"
+          aria-checked={enabled}
+          aria-labelledby="v4-google-button-heading"
+          onClick={() => {
+            setOpenMenu(null);
+            onChange({ ...draft, googleButtonEnabled: !enabled });
+          }}
+        >
+          <span />
         </button>
-        <h2 id="apply-changes-title">Apply changes to other channels?</h2>
-        <p>
-          We noticed that you made a change. Do you want to apply the same change to your other channels?
-        </p>
-        <fieldset>
-          <legend>Select channels</legend>
-          <div className="apply-channel-options">
-            {options.map(({ id, label }) => (
-              <label key={id}>
-                <input
-                  type="checkbox"
-                  checked={selected.includes(id)}
-                  onChange={(event) => {
-                    setSelected((current) => event.target.checked
-                      ? [...current, id]
-                      : current.filter((channel) => channel !== id));
-                  }}
-                />
-                <span><ContextualChannelIcon channel={id} /> {label}</span>
-              </label>
-            ))}
+      </div>
+      {enabled && (
+        <>
+          <div className="v4-google-input-group">
+            <button
+              ref={textTriggerRef}
+              className={`select-row${action === "call-now" ? " single" : ""}`}
+              type="button"
+              aria-label={`Button text, ${googleButtonLabel(action)}`}
+              aria-haspopup="menu"
+              aria-expanded={openMenu === "text"}
+              aria-controls="v4-google-button-menu"
+              onClick={() => {
+                if (openMenu === "text") closeMenu();
+                else showMenu("text", GOOGLE_BUTTON_OPTIONS.findIndex((option) => option.value === action));
+              }}
+              onKeyDown={(event) => {
+                if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+                event.preventDefault();
+                showMenu("text", event.key === "ArrowDown" ? 0 : GOOGLE_BUTTON_OPTIONS.length - 1);
+              }}
+            >
+              <span><small>Text</small>{googleButtonLabel(action)}</span>
+              <ChevronDown size={20} aria-hidden="true" />
+            </button>
+            {openMenu === "text" && (
+              <div
+                className="v4-google-button-menu"
+                id="v4-google-button-menu"
+                role="menu"
+                aria-label="Button text options"
+                onKeyDown={(event) => {
+                  if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+                    event.preventDefault();
+                    moveOptionFocus(textOptionRefs, event.key === "ArrowDown" ? 1 : -1);
+                  } else if (event.key === "Home") {
+                    event.preventDefault();
+                    textOptionRefs.current[0]?.focus();
+                  } else if (event.key === "End") {
+                    event.preventDefault();
+                    textOptionRefs.current[GOOGLE_BUTTON_OPTIONS.length - 1]?.focus();
+                  }
+                }}
+              >
+                {GOOGLE_BUTTON_OPTIONS.map((option, index) => (
+                  <button
+                    ref={(element) => { textOptionRefs.current[index] = element; }}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={action === option.value}
+                    onClick={() => selectAction(option.value)}
+                    key={option.value}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            )}
+            {action !== "call-now" && (
+              <button
+                ref={linkTriggerRef}
+                className="select-row joined"
+                type="button"
+                aria-label={`Link destination, ${googleLinkLabel(destination)}`}
+                aria-haspopup="menu"
+                aria-expanded={openMenu === "link"}
+                aria-controls="v4-google-link-menu"
+                onClick={() => {
+                  if (openMenu === "link") closeMenu();
+                  else showMenu("link", GOOGLE_LINK_OPTIONS.findIndex((option) => option.value === destination));
+                }}
+                onKeyDown={(event) => {
+                  if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+                  event.preventDefault();
+                  showMenu("link", event.key === "ArrowDown" ? 0 : GOOGLE_LINK_OPTIONS.length - 1);
+                }}
+              >
+                <span><small>Link</small>{googleLinkLabel(destination)}</span>
+                <ChevronDown size={20} aria-hidden="true" />
+              </button>
+            )}
+            {openMenu === "link" && action !== "call-now" && (
+              <div
+                className="v4-google-button-menu v4-google-link-menu"
+                id="v4-google-link-menu"
+                role="menu"
+                aria-label="Link destination options"
+                onKeyDown={(event) => {
+                  if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+                    event.preventDefault();
+                    moveOptionFocus(linkOptionRefs, event.key === "ArrowDown" ? 1 : -1);
+                  } else if (event.key === "Home") {
+                    event.preventDefault();
+                    linkOptionRefs.current[0]?.focus();
+                  } else if (event.key === "End") {
+                    event.preventDefault();
+                    linkOptionRefs.current[GOOGLE_LINK_OPTIONS.length - 1]?.focus();
+                  }
+                }}
+              >
+                {GOOGLE_LINK_OPTIONS.map((option, index) => (
+                  <div key={option.value}>
+                    {index === 2 && (
+                      <div className="v4-google-menu-label" role="presentation">Request Forms</div>
+                    )}
+                    <button
+                      ref={(element) => { linkOptionRefs.current[index] = element; }}
+                      className={option.requestForm ? "request-form-option" : ""}
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={destination === option.value}
+                      onClick={() => selectDestination(option.value)}
+                    >
+                      <span>{option.label}</span>
+                      {destination === option.value && <Check size={17} aria-hidden="true" />}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-        </fieldset>
-        <footer>
-          <button type="button" className="secondary-button" onClick={onClose}>No, keep separate</button>
-          <button
-            type="button"
-            className="primary-button"
-            disabled={selected.length === 0}
-            onClick={() => onApply(selected)}
-          >
-            Yes, apply changes
-          </button>
-        </footer>
-      </section>
+          {action === "call-now" ? (
+            <p className="helper muted v4-google-phone-helper">
+              Customer will call the phone number registered with your Google Business Profile (778-8888-8888)
+              <br />
+              Contact info can be modified in Google setting.
+            </p>
+          ) : destination === "external" ? (
+            <>
+              <div className="link-input v4-google-link-input">
+                <Link2 size={19} aria-hidden="true" />
+                <input
+                  id="v4-google-button-url"
+                  aria-label="Button URL"
+                  type="url"
+                  value={draft.externalLink ?? INITIAL_EXTERNAL_LINK}
+                  onChange={(event) => onChange({ ...draft, externalLink: event.target.value })}
+                />
+              </div>
+              <p className="helper muted">
+                Make sure your link doesn’t lead to illegal, harmful, or otherwise prohibited content.
+              </p>
+            </>
+          ) : null}
+        </>
+      )}
     </div>
   );
 }
@@ -2408,8 +3234,10 @@ function VersionTwoEditorPanel({
   enabledChannels,
   onCancel,
   onSave,
-  allTabLabel = "Your post",
   separateHashtags = false,
+  separateCta = false,
+  versionFourGoogleButton = false,
+  showAllTab = true,
   focusedChannel,
 }: {
   activeTab: V2Tab;
@@ -2418,14 +3246,18 @@ function VersionTwoEditorPanel({
   setDrafts: (drafts: V2Drafts) => void;
   enabledChannels: EnabledChannels;
   onCancel: () => void;
-  onSave?: () => void;
-  allTabLabel?: string;
+  onSave?: (activeTab: V2Tab) => void;
   separateHashtags?: boolean;
+  separateCta?: boolean;
+  versionFourGoogleButton?: boolean;
+  showAllTab?: boolean;
   focusedChannel?: PreviewChannel;
 }) {
   const activeDraft = drafts[activeTab];
   const visibleImages =
     activeTab === "google" ? activeDraft.images.slice(0, 1) : activeDraft.images;
+  const titleChannel = focusedChannel
+    ?? (separateCta && activeTab !== "all" ? activeTab : undefined);
 
   const updateMessage = (message: string) => {
     if (activeTab === "all") {
@@ -2469,7 +3301,11 @@ function VersionTwoEditorPanel({
   return (
     <section className="editor-panel version-two-editor">
       <div className="editor-scroll">
-        <h1>{focusedChannel ? `Edit ${focusedChannel[0].toUpperCase() + focusedChannel.slice(1)} Post` : "Edit Social Post"}</h1>
+        <h1>
+          {titleChannel
+            ? `Edit ${titleChannel[0].toUpperCase() + titleChannel.slice(1)} Post`
+            : "Edit Social Post"}
+        </h1>
         {!focusedChannel && <div className="channel-editor-tabs" role="tablist" aria-label="Post channel">
           {([
             ["all", "Your post"],
@@ -2477,8 +3313,7 @@ function VersionTwoEditorPanel({
             ["facebook", "Facebook"],
             ["instagram", "Instagram"],
           ] as [V2Tab, string][])
-            .map(([tab, label]) => [tab, tab === "all" ? allTabLabel : label] as [V2Tab, string])
-            .filter(([tab]) => tab === "all" || enabledChannels[tab])
+            .filter(([tab]) => tab === "all" ? showAllTab : enabledChannels[tab])
             .map(([tab, label]) => (
             <button
               className={activeTab === tab ? "active" : ""}
@@ -2493,7 +3328,7 @@ function VersionTwoEditorPanel({
           ))}
         </div>}
 
-        {activeTab === "all" && (
+        {showAllTab && activeTab === "all" && (
           <p className="channel-customize-note">
             Customize channel-specific content in each channel tab
           </p>
@@ -2510,8 +3345,25 @@ function VersionTwoEditorPanel({
           <span className="character-count">{activeDraft.message.length}/1500 characters</span>
         </div>
 
+        {separateCta && (activeTab === "facebook" || activeTab === "instagram") && (
+          <div className="field-block v4-cta-field v4-inset-field">
+            <label htmlFor={`v4-cta-${activeTab}`}>Contact info</label>
+            <AutoSizeTextarea
+              id={`v4-cta-${activeTab}`}
+              maxLength={500}
+              value={activeDraft.cta ?? ""}
+              onChange={(cta) => {
+                setDrafts({
+                  ...drafts,
+                  [activeTab]: { ...activeDraft, cta },
+                });
+              }}
+            />
+          </div>
+        )}
+
         {separateHashtags && (activeTab === "facebook" || activeTab === "instagram") && (
-          <div className="field-block v4-hashtag-field">
+          <div className="field-block v4-hashtag-field v4-inset-field">
             <label htmlFor={`v4-hashtags-${activeTab}`}>Hashtag</label>
             <input
               id={`v4-hashtags-${activeTab}`}
@@ -2551,7 +3403,14 @@ function VersionTwoEditorPanel({
           </div>
         </div>
 
-        {activeTab === "google" && (
+        {activeTab === "google" && versionFourGoogleButton && (
+          <VersionFourGoogleButtonEditor
+            draft={activeDraft}
+            onChange={(google) => setDrafts({ ...drafts, google })}
+          />
+        )}
+
+        {activeTab === "google" && !versionFourGoogleButton && (
           <div className="button-section v2-google-button">
             <div className="section-heading">
               <label>Button</label>
@@ -2585,7 +3444,13 @@ function VersionTwoEditorPanel({
       </div>
       <footer className="editor-footer">
         <button className="secondary-button" type="button" onClick={onCancel}>Cancel</button>
-        <button className="primary-button" type="button" onClick={onSave ?? onCancel}>Save Edit</button>
+        <button
+          className="primary-button"
+          type="button"
+          onClick={() => onSave ? onSave(activeTab) : onCancel()}
+        >
+          Save Edit
+        </button>
       </footer>
     </section>
   );
@@ -2632,26 +3497,44 @@ function PreviewChannelControl({
 function PlatformPreviewCard({
   channel,
   message,
+  cta,
   hashtags: explicitHashtags = "",
   images,
   externalLink,
+  googleLinkDestination,
+  googleButtonEnabled,
+  googleButtonAction,
 }: {
   channel: PreviewChannel;
   message: string;
+  cta?: string;
   hashtags?: string;
   images: GalleryImage[];
   externalLink?: string;
+  googleLinkDestination?: GoogleLinkDestination;
+  googleButtonEnabled?: boolean;
+  googleButtonAction?: GoogleButtonAction;
 }) {
   const [instagramImage, setInstagramImage] = useState(0);
-  const parsed = splitPostMessage(message);
+  const usesExplicitSocialFields = cta !== undefined;
+  const parsed = usesExplicitSocialFields
+    ? { body: message, hashtags: "" }
+    : splitPostMessage(message);
   const body = parsed.body || "Your post preview will appear here.";
-  const hashtags = explicitHashtags || parsed.hashtags;
+  const hashtags = usesExplicitSocialFields
+    ? explicitHashtags
+    : explicitHashtags || parsed.hashtags;
 
   useEffect(() => {
     if (instagramImage >= images.length) setInstagramImage(Math.max(images.length - 1, 0));
   }, [images.length, instagramImage]);
 
   if (channel === "google") {
+    const usesV4GoogleButton = googleButtonEnabled !== undefined || googleButtonAction !== undefined;
+    const showGoogleButton = usesV4GoogleButton ? googleButtonEnabled !== false : true;
+    const googleAction = googleButtonAction ?? "learn-more";
+    const isExternalAction = googleAction !== "call-now";
+    const usesExternalLink = isExternalAction && (googleLinkDestination ?? "external") === "external";
     return (
       <article className="social-card">
         <header className="post-header">
@@ -2668,10 +3551,18 @@ function PlatformPreviewCard({
         )}
         <div className="post-copy">
           <p>{body}{hashtags ? `\n\n${hashtags}` : ""}</p>
-          <div className="google-post-link">
-            <button type="button">Learn more</button>
-            {externalLink && <span>{externalLink}</span>}
-          </div>
+          {showGoogleButton && (
+            <div className="google-post-link">
+              {usesV4GoogleButton && usesExternalLink && externalLink ? (
+                <a href={externalLink} target="_blank" rel="noreferrer">
+                  {googleButtonLabel(googleAction)}
+                </a>
+              ) : (
+                <button type="button">{googleButtonLabel(googleAction)}</button>
+              )}
+              {usesExternalLink && externalLink && <span>{externalLink}</span>}
+            </div>
+          )}
         </div>
       </article>
     );
@@ -2686,6 +3577,7 @@ function PlatformPreviewCard({
         </header>
         <div className="channel-post-copy">
           <p>{body}</p>
+          {cta && <p className="post-cta">{cta}</p>}
           {hashtags && <p className="post-hashtags">{hashtags}</p>}
         </div>
         <div className={`channel-image-grid count-${Math.min(images.length, 3)}`}>
@@ -2702,12 +3594,20 @@ function PlatformPreviewCard({
   }
 
   const selectedImage = images[instagramImage];
+  const instagramCopy = (
+    <div className="instagram-post-copy">
+      <p>{body}</p>
+      {cta && <p className="post-cta">{cta}</p>}
+      {hashtags && <p className="post-hashtags">{hashtags}</p>}
+    </div>
+  );
   return (
     <article className="social-card instagram-post-card">
       <header className="channel-post-header">
         <img src="/assets/avatar.png" alt="" />
         <div><strong>Landscape Service</strong><span>Just now · ◉</span></div>
       </header>
+      {usesExplicitSocialFields && instagramCopy}
       {selectedImage ? (
         <img className="instagram-post-image" src={selectedImage.src} alt={selectedImage.alt} />
       ) : (
@@ -2730,10 +3630,7 @@ function PlatformPreviewCard({
           <Bookmark size={24} />
         </div>
       </div>
-      <div className="instagram-post-copy">
-        <p>{body}</p>
-        {hashtags && <p className="post-hashtags">{hashtags}</p>}
-      </div>
+      {!usesExplicitSocialFields && instagramCopy}
     </article>
   );
 }
@@ -2823,9 +3720,13 @@ function MultiChannelPreviewCarousel({
               <PlatformPreviewCard
                 channel={channel}
                 message={drafts[channel].message}
+                cta={drafts[channel].cta}
                 hashtags={drafts[channel].hashtags}
                 images={drafts[channel].images}
                 externalLink={drafts[channel].externalLink}
+                googleLinkDestination={drafts[channel].googleLinkDestination}
+                googleButtonEnabled={drafts[channel].googleButtonEnabled}
+                googleButtonAction={drafts[channel].googleButtonAction}
               />
             </div>
           ))}
@@ -2916,9 +3817,13 @@ function VersionTwoPreview({
           <PlatformPreviewCard
             channel={previewChannel}
             message={draft.message}
+            cta={draft.cta}
             hashtags={draft.hashtags}
             images={draft.images}
             externalLink={draft.externalLink}
+            googleLinkDestination={draft.googleLinkDestination}
+            googleButtonEnabled={draft.googleButtonEnabled}
+            googleButtonAction={draft.googleButtonAction}
           />
         ) : (
           <div className="no-channel-preview">No channels selected for this post.</div>
@@ -2937,28 +3842,41 @@ function VersionTwoEditScreen({
   setDrafts,
   enabledChannels,
   onCancel,
-  allTabLabel,
+  onSave,
   separateHashtags,
+  separateCta,
+  channelSpecificOnly = false,
 }: {
   drafts: V2Drafts;
   setDrafts: (drafts: V2Drafts) => void;
   enabledChannels: EnabledChannels;
   onCancel: () => void;
-  allTabLabel?: string;
+  onSave?: (activeTab: V2Tab) => void;
   separateHashtags?: boolean;
+  separateCta?: boolean;
+  channelSpecificOnly?: boolean;
 }) {
-  const [activeTab, setActiveTab] = useState<V2Tab>("all");
+  const firstEnabledChannel = PREVIEW_CHANNEL_ORDER.find((channel) => enabledChannels[channel]) ?? "google";
+  const [activeTab, setActiveTab] = useState<V2Tab>(
+    channelSpecificOnly ? firstEnabledChannel : "all",
+  );
 
   useEffect(() => {
-    if (activeTab !== "all" && !enabledChannels[activeTab]) setActiveTab("all");
-  }, [activeTab, enabledChannels]);
+    if (channelSpecificOnly && activeTab === "all") {
+      setActiveTab(firstEnabledChannel);
+      return;
+    }
+    if (activeTab !== "all" && !enabledChannels[activeTab]) {
+      setActiveTab(channelSpecificOnly ? firstEnabledChannel : "all");
+    }
+  }, [activeTab, channelSpecificOnly, enabledChannels, firstEnabledChannel]);
 
   const selectEditorTab = (tab: V2Tab) => {
     setActiveTab(tab);
   };
 
   return (
-    <main className="app-content">
+    <main className={`app-content${separateCta ? " v4-social-edit-screen" : ""}`}>
       <VersionTwoEditorPanel
         activeTab={activeTab}
         setActiveTab={selectEditorTab}
@@ -2966,8 +3884,11 @@ function VersionTwoEditScreen({
         setDrafts={setDrafts}
         enabledChannels={enabledChannels}
         onCancel={onCancel}
-        allTabLabel={allTabLabel}
+        onSave={onSave}
         separateHashtags={separateHashtags}
+        separateCta={separateCta}
+        versionFourGoogleButton={separateCta}
+        showAllTab={!channelSpecificOnly}
       />
       <VersionTwoPreview
         drafts={drafts}
@@ -3129,6 +4050,7 @@ function SuggestedGoogleEditor({
         onSave={onSave}
         focusedChannel="google"
         separateHashtags
+        versionFourGoogleButton
       />
       <VersionTwoPreview
         drafts={drafts}
@@ -3163,7 +4085,7 @@ function SuggestedTextEditor({
         <div className="editor-scroll">
           <h1>Edit {channelLabel}</h1>
           <div className="about-content-row">
-            {isEmail ? <Mail size={21} /> : <Globe2 size={21} />}
+            {isEmail ? <Mail size={21} /> : <WebsiteChannelIcon width={21} height={21} />}
             <strong>{isEmail ? "Email campaign details" : "Website page details"}</strong>
           </div>
           <div className="suggested-editor-context">
@@ -3224,6 +4146,7 @@ export default function App() {
   const [v2Drafts, setV2Drafts] = useState<V2Drafts>(createInitialV2Drafts);
   const [v3Drafts, setV3Drafts] = useState<V2Drafts>(createInitialV2Drafts);
   const [v4Drafts, setV4Drafts] = useState<V2Drafts>(createInitialV4Drafts);
+  const [v4FridayEditDrafts, setV4FridayEditDrafts] = useState<V2Drafts | null>(null);
   const [enabledChannels, setEnabledChannels] = useState<EnabledChannels>({
     google: true,
     facebook: true,
@@ -3235,6 +4158,9 @@ export default function App() {
     v3: null,
     v4: null,
   });
+  const [calendarStatuses, setCalendarStatuses] = useState<CalendarStatusMap>(
+    createInitialCalendarStatuses,
+  );
   const [screen, setScreen] = useState<"calendar" | "review" | "edit">("calendar");
   const [calendarModalOpen, setCalendarModalOpen] = useState(false);
   const [v3CombinedModalOpen, setV3CombinedModalOpen] = useState(false);
@@ -3254,15 +4180,22 @@ export default function App() {
   const [suggestedGoogleDrafts, setSuggestedGoogleDrafts] = useState<V2Drafts | null>(null);
   const [suggestedTextDraft, setSuggestedTextDraft] = useState<SuggestedTextDraft | null>(null);
   const [suggestedCompletion, setSuggestedCompletion] = useState<SuggestedCompletion | null>(null);
-  const [socialWorkflowChannel, setSocialWorkflowChannel] = useState<PreviewChannel>("facebook");
+  const [socialWorkflowChannel, setSocialWorkflowChannel] = useState<ContextualChannel>("facebook");
   const [socialEditDraft, setSocialEditDraft] = useState<ChannelDraft | null>(null);
-  const [applyChanges, setApplyChanges] = useState<{ source: PreviewChannel; message: string } | null>(null);
   const [v4EmailMessage, setV4EmailMessage] = useState(INITIAL_EMAIL_MESSAGE);
   const [v4EmailSubject, setV4EmailSubject] = useState(INITIAL_EMAIL_SUBJECT);
   const [v4WebsiteMessage, setV4WebsiteMessage] = useState(INITIAL_WEBSITE_MESSAGE);
   const [v4WebsiteTitle, setV4WebsiteTitle] = useState(INITIAL_WEBSITE_TITLE);
-  const [v4GoogleDeleted, setV4GoogleDeleted] = useState(false);
-  const [deleteToastVisible, setDeleteToastVisible] = useState(false);
+  const [v4ChannelDeliveries, setV4ChannelDeliveries] = useState<V4ChannelDeliveries>(
+    createInitialV4ChannelDeliveries,
+  );
+  const [googleContextDemoState, setGoogleContextDemoState] =
+    useState<GoogleContextDemoState>("suggested");
+  const [activeV4ContextChannel, setActiveV4ContextChannel] =
+    useState<ContextualChannel | null>(null);
+  const [activeV4GroupDate, setActiveV4GroupDate] = useState<string | null>(null);
+  const [scheduleEditorChannel, setScheduleEditorChannel] = useState<ContextualChannel | null>(null);
+  const [reviewDeleteChannel, setReviewDeleteChannel] = useState<ContextualChannel | null>(null);
   const [scheduleToastVisible, setScheduleToastVisible] = useState(false);
   const [contextualToast, setContextualToast] = useState<ContextualToast | null>(null);
   const [saturdayCompletion, setSaturdayCompletion] = useState<
@@ -3295,13 +4228,165 @@ export default function App() {
         facebook: multiChannelDrafts.facebook,
         instagram: multiChannelDrafts.instagram,
       };
-  const currentSaturdayCompletion = version === "v3" || version === "v4"
-    ? saturdayCompletion[version]
-    : null;
-  const showContextualToast = (message: string) => {
-    setDeleteToastVisible(false);
+  const currentSaturdayCompletion = version === "v3" ? saturdayCompletion.v3 : null;
+  const availableV4Channels = CONTEXTUAL_CHANNELS
+    .filter(({ id }) => !v4ChannelDeliveries[id].deleted)
+    .map(({ id }) => id);
+  const scopedV4Channels = activeV4GroupDate
+    ? availableV4Channels.filter((channel) => v4ChannelDeliveries[channel].date === activeV4GroupDate)
+    : availableV4Channels;
+  const v4CampaignCards: V4CampaignCalendarCard[] = Array.from(
+    new Set(availableV4Channels.map((channel) => v4ChannelDeliveries[channel].date)),
+  ).sort().map((date) => {
+    const channels = CONTEXTUAL_CHANNELS
+      .map(({ id }) => id)
+      .filter((channel) => (
+        !v4ChannelDeliveries[channel].deleted
+        && v4ChannelDeliveries[channel].date === date
+      ));
+    const allSent = channels.every((channel) => v4ChannelDeliveries[channel].lifecycle === "sent");
+    const allScheduledOrSent = channels.every((channel) => (
+      v4ChannelDeliveries[channel].lifecycle === "scheduled"
+      || v4ChannelDeliveries[channel].lifecycle === "sent"
+    ));
+    const status: CalendarItem["status"] = allSent
+      ? "Sent"
+      : allScheduledOrSent
+        ? "Scheduled"
+        : "Needs review";
+    return {
+      date,
+      item: {
+        title: "Seasonal property cleanup in Hamilton",
+        channels: channels.map((channel) => CONTEXTUAL_TO_CALENDAR_CHANNEL[channel]),
+        status,
+        tone: status === "Needs review" ? "review" : undefined,
+        combinedTarget: true,
+        campaignDate: date,
+        showDate: false,
+        channelStatuses: Object.fromEntries(channels.flatMap((channel) => {
+          const calendarStatus = channel === "google"
+            ? googleDemoCalendarStatus(googleContextDemoState)
+            : v4CalendarStatus(v4ChannelDeliveries[channel]);
+          return calendarStatus
+            ? [[CONTEXTUAL_TO_CALENDAR_CHANNEL[channel], calendarStatus]]
+            : [];
+        })),
+      },
+    };
+  });
+  const showContextualToast = (message: string, dark = false) => {
     setScheduleToastVisible(false);
-    setContextualToast((current) => ({ message, id: (current?.id ?? 0) + 1 }));
+    setContextualToast((current) => ({ message, dark, id: (current?.id ?? 0) + 1 }));
+  };
+  const setCalendarChannelStatus = (
+    targetVersion: PrototypeVersion,
+    card: CalendarCardStatusKey,
+    channel: CalendarChannel,
+    status: CalendarChannelStatus | null,
+  ) => {
+    setCalendarStatuses((current) => {
+      const nextCard = { ...current[targetVersion][card] };
+      if (status === null) delete nextCard[channel];
+      else nextCard[channel] = status;
+      return {
+        ...current,
+        [targetVersion]: {
+          ...current[targetVersion],
+          [card]: nextCard,
+        },
+      };
+    });
+  };
+  const setCalendarChannelStatuses = (
+    targetVersion: PrototypeVersion,
+    card: CalendarCardStatusKey,
+    channels: CalendarChannel[],
+    status: CalendarChannelStatus,
+  ) => {
+    setCalendarStatuses((current) => ({
+      ...current,
+      [targetVersion]: {
+        ...current[targetVersion],
+        [card]: {
+          ...current[targetVersion][card],
+          ...Object.fromEntries(channels.map((channel) => [channel, status])),
+        },
+      },
+    }));
+  };
+  const returnToV4ContextAfter = (
+    channel: ContextualChannel,
+    originDate: string,
+    deliveries: V4ChannelDeliveries,
+  ) => {
+    const availableChannels = CONTEXTUAL_CHANNELS
+      .map(({ id }) => id)
+      .filter((candidate) => (
+        !deliveries[candidate].deleted
+        && deliveries[candidate].date === originDate
+      ));
+    const nextChannel = nextAvailableChannel(channel, availableChannels, deliveries);
+    if (!nextChannel) {
+      setCombinedWorkflow(null);
+      setV4ReviewOrigin(null);
+      setActiveV4GroupDate(null);
+      return;
+    }
+    setActiveV4GroupDate(originDate);
+    setCombinedModalStartIndex(availableChannels.indexOf(nextChannel));
+    setSocialWorkflowChannel(nextChannel);
+    setCombinedWorkflow("modal");
+    setV4ReviewOrigin("saturday");
+  };
+  const performV4LifecycleAction = (
+    channel: ContextualChannel,
+    action: V4LifecycleAction,
+    returnToContext = false,
+  ) => {
+    if (channel === "google") {
+      setGoogleContextDemoState(
+        action === "schedule" ? "scheduled" : action === "send" ? "sent" : "suggested",
+      );
+    }
+    const originDate = activeV4GroupDate ?? v4ChannelDeliveries[channel].date;
+    const nextState: V4ChannelState = action === "schedule"
+      ? "scheduled"
+      : action === "send"
+        ? "sent"
+        : "unscheduled";
+    const nextDeliveries: V4ChannelDeliveries = {
+      ...v4ChannelDeliveries,
+      [channel]: {
+        ...v4ChannelDeliveries[channel],
+        lifecycle: nextState,
+        date: action === "send" ? V4_TODAY_DATE : v4ChannelDeliveries[channel].date,
+        statusOverride: null,
+      },
+    };
+    setV4ChannelDeliveries(nextDeliveries);
+    if (action === "schedule") showContextualToast("Your post is scheduled", true);
+    if (action === "send") {
+      showContextualToast(contextualSuccessMessage(channel, "post"), true);
+    }
+    if (returnToContext) returnToV4ContextAfter(channel, originDate, nextDeliveries);
+  };
+  const deleteV4Channel = (channel: ContextualChannel) => {
+    if (channel === "google") setGoogleContextDemoState("suggested");
+    const originDate = activeV4GroupDate ?? v4ChannelDeliveries[channel].date;
+    const nextDeliveries: V4ChannelDeliveries = {
+      ...v4ChannelDeliveries,
+      [channel]: {
+        ...v4ChannelDeliveries[channel],
+        lifecycle: "unscheduled",
+        deleted: true,
+        statusOverride: null,
+      },
+    };
+    setV4ChannelDeliveries(nextDeliveries);
+    setReviewDeleteChannel(null);
+    showContextualToast(contextualDeletionMessage(channel), true);
+    returnToV4ContextAfter(channel, originDate, nextDeliveries);
   };
   const cancelSuggestionGeneration = () => {
     if (suggestionTimerRef.current !== null) {
@@ -3319,12 +4404,14 @@ export default function App() {
     setV2Drafts(createInitialV2Drafts());
     setV3Drafts(createInitialV2Drafts());
     setV4Drafts(createInitialV4Drafts());
+    setV4FridayEditDrafts(null);
     setEnabledChannels({
       google: true,
       facebook: true,
       instagram: true,
     });
     setScheduledChannels({ v1: null, v2: null, v3: null, v4: null });
+    setCalendarStatuses(createInitialCalendarStatuses());
     setVersion(nextVersion);
     setScreen("calendar");
     setCalendarModalOpen(false);
@@ -3346,18 +4433,26 @@ export default function App() {
     setSuggestedCompletion(null);
     setSocialWorkflowChannel("facebook");
     setSocialEditDraft(null);
-    setApplyChanges(null);
     setV4EmailMessage(INITIAL_EMAIL_MESSAGE);
     setV4EmailSubject(INITIAL_EMAIL_SUBJECT);
     setV4WebsiteMessage(INITIAL_WEBSITE_MESSAGE);
     setV4WebsiteTitle(INITIAL_WEBSITE_TITLE);
-    setV4GoogleDeleted(false);
-    setDeleteToastVisible(false);
+    setV4ChannelDeliveries(createInitialV4ChannelDeliveries());
+    setGoogleContextDemoState("suggested");
+    setActiveV4ContextChannel(null);
+    setActiveV4GroupDate(null);
+    setScheduleEditorChannel(null);
+    setReviewDeleteChannel(null);
     setScheduleToastVisible(false);
     setContextualToast(null);
     setSaturdayCompletion({ v3: null, v4: null });
   };
   const toggleChannel = (channel: PreviewChannel) => {
+    if (enabledChannels[channel]) {
+      const calendarChannel = CALENDAR_CHANNEL_BY_PREVIEW[channel];
+      (["friday-social", "saturday-campaign", "suggested"] as CalendarCardStatusKey[])
+        .forEach((card) => setCalendarChannelStatus(version, card, calendarChannel, null));
+    }
     setEnabledChannels((current) => ({ ...current, [channel]: !current[channel] }));
   };
   const returnToSuggestedReview = () => {
@@ -3368,7 +4463,6 @@ export default function App() {
   };
   const returnFromSuggestedReview = () => {
     if (!suggestedReviewChannel) return;
-    setApplyChanges(null);
     setSuggestedEditor(null);
     setSuggestedGoogleDrafts(null);
     setSuggestedTextDraft(null);
@@ -3391,12 +4485,6 @@ export default function App() {
     const timeout = window.setTimeout(() => setScheduleToastVisible(false), 4000);
     return () => window.clearTimeout(timeout);
   }, [scheduleToastVisible]);
-
-  useEffect(() => {
-    if (!deleteToastVisible) return;
-    const timeout = window.setTimeout(() => setDeleteToastVisible(false), 4000);
-    return () => window.clearTimeout(timeout);
-  }, [deleteToastVisible]);
 
   useEffect(() => {
     if (!contextualToast) return;
@@ -3489,10 +4577,6 @@ export default function App() {
                     images: [...socialEditDraft.images],
                   },
                 }));
-                setApplyChanges({
-                  source: suggestedEditor,
-                  message: socialEditDraft.message,
-                });
                 returnToSuggestedReview();
               }}
             />
@@ -3531,10 +4615,8 @@ export default function App() {
                 websiteTitle={v4WebsiteTitle}
                 images={v4Drafts.all.images}
                 compactPreview
-                inactive={applyChanges !== null}
                 onBack={returnFromSuggestedReview}
                 onEdit={() => {
-                  setApplyChanges(null);
                   setSuggestedEditor(suggestedReviewChannel);
                   if (suggestedReviewChannel === "google") {
                     setSuggestedGoogleDrafts(cloneDrafts(v4Drafts));
@@ -3554,117 +4636,77 @@ export default function App() {
                   }
                 }}
               />
-              {applyChanges && (
-                <ApplyChangesDialog
-                  source={applyChanges.source}
-                  googleAvailable={!v4GoogleDeleted}
-                  onClose={() => setApplyChanges(null)}
-                  onApply={(channels) => {
-                    const socialChannels = channels.filter((
-                      channel,
-                    ): channel is PreviewChannel => (
-                      channel === "google" || channel === "facebook" || channel === "instagram"
-                    ));
-                    setV4Drafts((current) => {
-                      const next = { ...current };
-                      socialChannels.forEach((channel) => {
-                        next[channel] = { ...next[channel], message: applyChanges.message };
-                      });
-                      return next;
-                    });
-                    if (channels.includes("email")) setV4EmailMessage(applyChanges.message);
-                    if (channels.includes("website")) setV4WebsiteMessage(applyChanges.message);
-                    setApplyChanges(null);
-                  }}
-                />
-              )}
             </>
           ) : combinedWorkflow === "review" ? (
             <>
               <VersionFourChannelReview
                 channel={socialWorkflowChannel}
-                socialDraft={v4Drafts[socialWorkflowChannel]}
+                socialDraft={
+                  socialWorkflowChannel === "google"
+                  || socialWorkflowChannel === "facebook"
+                  || socialWorkflowChannel === "instagram"
+                    ? v4Drafts[socialWorkflowChannel]
+                    : undefined
+                }
                 emailMessage={v4EmailMessage}
                 emailSubject={v4EmailSubject}
                 websiteMessage={v4WebsiteMessage}
                 websiteTitle={v4WebsiteTitle}
                 images={v4Drafts.all.images}
-                inactive={applyChanges !== null}
+                inactive={reviewDeleteChannel !== null}
+                lifecycleEnabled={v4ReviewOrigin === "saturday"}
+                delivery={v4ChannelDeliveries[socialWorkflowChannel]}
+                onEditSchedule={() => setScheduleEditorChannel(socialWorkflowChannel)}
+                onDelete={() => setReviewDeleteChannel(socialWorkflowChannel)}
+                onSchedule={() => performV4LifecycleAction(
+                  socialWorkflowChannel,
+                  "schedule",
+                  true,
+                )}
+                onSendNow={() => performV4LifecycleAction(
+                  socialWorkflowChannel,
+                  "send",
+                  true,
+                )}
                 onBack={() => {
-                  setApplyChanges(null);
                   if (v4ReviewOrigin === "suggested-content") {
-                    setSuggestedPreviewIndex(socialWorkflowChannel === "facebook" ? 1 : 2);
+                    setSuggestedPreviewIndex(
+                      CONTEXTUAL_CHANNELS.findIndex(({ id }) => id === socialWorkflowChannel),
+                    );
                     setSuggestedDialogOpen(true);
                     setCombinedWorkflow(null);
                     return;
                   }
-                  setCombinedModalStartIndex(
-                    socialWorkflowChannel === "facebook"
-                      ? (v4GoogleDeleted ? 0 : 1)
-                      : (v4GoogleDeleted ? 1 : 2),
-                  );
+                  setCombinedModalStartIndex(scopedV4Channels.indexOf(socialWorkflowChannel));
                   setCombinedWorkflow("modal");
                 }}
                 onEdit={() => {
-                  setApplyChanges(null);
-                  setSocialEditDraft({
-                    ...v4Drafts[socialWorkflowChannel],
-                    images: [...v4Drafts[socialWorkflowChannel].images],
-                  });
-                  setCombinedWorkflow("edit");
+                  setSuggestedEditor(socialWorkflowChannel);
+                  if (socialWorkflowChannel === "google") {
+                    setSuggestedGoogleDrafts(cloneDrafts(v4Drafts));
+                  } else if (
+                    socialWorkflowChannel === "facebook"
+                    || socialWorkflowChannel === "instagram"
+                  ) {
+                    setSocialEditDraft({
+                      ...v4Drafts[socialWorkflowChannel],
+                      images: [...v4Drafts[socialWorkflowChannel].images],
+                    });
+                  } else {
+                    setSuggestedTextDraft({
+                      title: socialWorkflowChannel === "email" ? v4EmailSubject : v4WebsiteTitle,
+                      message: socialWorkflowChannel === "email" ? v4EmailMessage : v4WebsiteMessage,
+                    });
+                  }
                 }}
               />
-              {applyChanges && (
-                <ApplyChangesDialog
-                  source={applyChanges.source}
-                  googleAvailable={!v4GoogleDeleted}
-                  onClose={() => setApplyChanges(null)}
-                  onApply={(channels) => {
-                    const socialChannels = channels.filter((
-                      channel,
-                    ): channel is PreviewChannel => (
-                      channel === "google" || channel === "facebook" || channel === "instagram"
-                    ));
-                    setV4Drafts((current) => {
-                      const next = { ...current };
-                      socialChannels.forEach((channel) => {
-                        next[channel] = { ...next[channel], message: applyChanges.message };
-                      });
-                      return next;
-                    });
-                    if (channels.includes("email")) setV4EmailMessage(applyChanges.message);
-                    if (channels.includes("website")) setV4WebsiteMessage(applyChanges.message);
-                    setApplyChanges(null);
-                  }}
+              {reviewDeleteChannel && v4ReviewOrigin === "saturday" && (
+                <DeletionFeedbackDialog
+                  channel={reviewDeleteChannel}
+                  onCancel={() => setReviewDeleteChannel(null)}
+                  onConfirm={() => deleteV4Channel(reviewDeleteChannel)}
                 />
               )}
-            </>
-          ) : combinedWorkflow === "edit" && socialEditDraft ? (
-            <>
-              <VersionFourSocialEditor
-                channel={socialWorkflowChannel}
-                draft={socialEditDraft}
-                setDraft={setSocialEditDraft}
-                onCancel={() => {
-                  setSocialEditDraft(null);
-                  setCombinedWorkflow("review");
-                }}
-                onSave={() => {
-                  setV4Drafts((current) => ({
-                    ...current,
-                    [socialWorkflowChannel]: {
-                      ...socialEditDraft,
-                      images: [...socialEditDraft.images],
-                    },
-                  }));
-                  setApplyChanges({
-                    source: socialWorkflowChannel,
-                    message: socialEditDraft.message,
-                  });
-                  setSocialEditDraft(null);
-                  setCombinedWorkflow("review");
-                }}
-              />
             </>
           ) : screen === "calendar" ? (
             <>
@@ -3700,23 +4742,29 @@ export default function App() {
                   setV3ReviewOrigin(null);
                   setCalendarModalOpen(true);
                 }}
-                onOpenCombinedPost={() => {
+                onOpenCombinedPost={(campaignDate) => {
                   if (version === "v3") {
                     setV3ContextPreviewChannel("google");
                     setV3ReviewOrigin(null);
                     setV3CombinedModalOpen(true);
                   } else if (version === "v4") {
+                    if (!campaignDate) return;
+                    const groupChannels = availableV4Channels.filter(
+                      (channel) => v4ChannelDeliveries[channel].date === campaignDate,
+                    );
+                    if (groupChannels.length === 0) return;
+                    setActiveV4GroupDate(campaignDate);
                     setCombinedModalStartIndex(0);
+                    setSocialWorkflowChannel(groupChannels[0]);
                     setV4ReviewOrigin("saturday");
                     setCombinedWorkflow("modal");
                   }
                 }}
                 combinedInteractive={version === "v3" || version === "v4"}
-                combinedChannels={currentSaturdayCompletion
-                  ?? (version === "v4" && v4GoogleDeleted
-                    ? ["Facebook post", "Instagram post", "Email", "Website"]
-                    : undefined)}
+                combinedChannels={currentSaturdayCompletion ?? undefined}
                 generatedSuggestionCard={version === "v4" ? suggestedCompletion?.card : undefined}
+                channelStatuses={calendarStatuses[version]}
+                v4CampaignCards={version === "v4" ? v4CampaignCards : undefined}
               />
               {suggestedDialogOpen && version === "v4" && (
                 <SuggestedMarketingContentDialog
@@ -3736,11 +4784,16 @@ export default function App() {
                   }}
                   onEdit={(channel) => {
                     setSuggestedDialogOpen(false);
-                    setApplyChanges(null);
                     setSuggestedReviewChannel(channel);
                     setV4ReviewOrigin("suggested-content");
                   }}
                   onSchedule={(channel, final) => {
+                    setCalendarChannelStatus(
+                      "v4",
+                      "suggested",
+                      CONTEXTUAL_TO_CALENDAR_CHANNEL[channel],
+                      "scheduled",
+                    );
                     showContextualToast(contextualSuccessMessage(channel, "schedule"));
                     if (!final) {
                       setSuggestedPreviewIndex((current) => Math.min(4, current + 1));
@@ -3794,6 +4847,17 @@ export default function App() {
                     setScreen("review");
                   }}
                   onAction={(page, action, final) => {
+                    const affectedChannels = page === "social"
+                      ? PREVIEW_CHANNEL_ORDER
+                        .filter((channel) => enabledChannels[channel])
+                        .map((channel) => CALENDAR_CHANNEL_BY_PREVIEW[channel])
+                      : [page === "email" ? "Email" : "Website"] as CalendarChannel[];
+                    setCalendarChannelStatuses(
+                      "v3",
+                      "saturday-campaign",
+                      affectedChannels,
+                      action === "schedule" ? "scheduled" : "sent",
+                    );
                     showContextualToast(contextualSuccessMessage(page, action));
                     if (!final) return;
                     const completedChannels = PREVIEW_CHANNEL_ORDER
@@ -3811,53 +4875,40 @@ export default function App() {
               )}
               {combinedWorkflow === "modal" && version === "v4" && (
                 <VersionFourContextModal
+                  key={`${activeV4GroupDate}-${scopedV4Channels.join("-")}-${combinedModalStartIndex}`}
                   drafts={v4Drafts}
                   emailMessage={v4EmailMessage}
                   emailSubject={v4EmailSubject}
                   websiteMessage={v4WebsiteMessage}
                   websiteTitle={v4WebsiteTitle}
                   initialIndex={combinedModalStartIndex}
-                  googleAvailable={!v4GoogleDeleted}
+                  availableChannels={scopedV4Channels}
+                  channelDeliveries={v4ChannelDeliveries}
+                  googleDemoState={googleContextDemoState}
+                  onActiveChannelChange={setActiveV4ContextChannel}
                   onClose={() => {
+                    setActiveV4ContextChannel(null);
                     setCombinedModalStartIndex(0);
                     setV4ReviewOrigin(null);
+                    setActiveV4GroupDate(null);
                     setCombinedWorkflow(null);
                   }}
-                  onSocialEdit={(channel) => {
+                  onEdit={(channel) => {
+                    setCombinedModalStartIndex(scopedV4Channels.indexOf(channel));
                     setSocialWorkflowChannel(channel);
-                    setApplyChanges(null);
                     setV4ReviewOrigin("saturday");
                     setCombinedWorkflow("review");
                   }}
-                  onDeleteGoogle={() => {
-                    setV4GoogleDeleted(true);
-                    setCombinedModalStartIndex(0);
-                    setContextualToast(null);
-                    setDeleteToastVisible(true);
-                  }}
-                  onAction={(channel, action, final) => {
-                    showContextualToast(contextualSuccessMessage(channel, action));
-                    if (!final) return;
-                    setSaturdayCompletion((current) => ({
-                      ...current,
-                      v4: CONTEXTUAL_CHANNELS
-                        .filter(({ id }) => id !== "google" || !v4GoogleDeleted)
-                        .map(({ id }) => (
-                          id === "google"
-                            ? "Google post"
-                            : id === "facebook"
-                              ? "Facebook post"
-                              : id === "instagram"
-                                ? "Instagram post"
-                                : id === "email"
-                                  ? "Email"
-                                  : "Website"
-                        )),
-                    }));
-                    setCombinedModalStartIndex(0);
-                    setV4ReviewOrigin(null);
-                    setCombinedWorkflow(null);
-                  }}
+                  onDelete={deleteV4Channel}
+                  onLifecycleAction={performV4LifecycleAction}
+                />
+              )}
+              {combinedWorkflow === "modal"
+                && version === "v4"
+                && activeV4ContextChannel === "google" && (
+                <GooglePrototypeStatusControls
+                  state={googleContextDemoState}
+                  onChange={setGoogleContextDemoState}
                 />
               )}
             </>
@@ -3880,7 +4931,10 @@ export default function App() {
                   enabledChannels={enabledChannels}
                   carouselDrafts={version === "v1" ? undefined : multiChannelDrafts}
                   onToggleChannel={toggleChannel}
-                  onEdit={() => setScreen("edit")}
+                  onEdit={() => {
+                    if (version === "v4") setV4FridayEditDrafts(cloneDrafts(v4Drafts));
+                    setScreen("edit");
+                  }}
                   onBack={() => {
                     setScreen("calendar");
                     if (version === "v3" && v3ReviewOrigin === "saturday") {
@@ -3889,6 +4943,15 @@ export default function App() {
                     setV3ReviewOrigin(null);
                   }}
                   onSchedule={() => {
+                    const scheduledCalendarChannels = PREVIEW_CHANNEL_ORDER
+                      .filter((channel) => enabledChannels[channel])
+                      .map((channel) => CALENDAR_CHANNEL_BY_PREVIEW[channel]);
+                    setCalendarChannelStatuses(
+                      version,
+                      "friday-social",
+                      scheduledCalendarChannels,
+                      "scheduled",
+                    );
                     setScheduledChannels((current) => ({
                       ...current,
                       [version]: { ...enabledChannels },
@@ -3901,18 +4964,37 @@ export default function App() {
                 />
               ) : version === "v2" || version === "v3" || version === "v4" ? (
                 <VersionTwoEditScreen
-                  drafts={multiChannelDrafts}
+                  drafts={version === "v4" ? v4FridayEditDrafts ?? v4Drafts : multiChannelDrafts}
                   setDrafts={
                     version === "v2"
                       ? setV2Drafts
                       : version === "v3"
                         ? setV3Drafts
-                        : setV4Drafts
+                        : setV4FridayEditDrafts
                   }
                   enabledChannels={enabledChannels}
-                  onCancel={() => setScreen("review")}
-                  allTabLabel={version === "v4" ? "Your posts" : undefined}
+                  onCancel={() => {
+                    if (version === "v4") setV4FridayEditDrafts(null);
+                    setScreen("review");
+                  }}
+                  onSave={version === "v4"
+                    ? (savedTab) => {
+                        if (v4FridayEditDrafts && savedTab !== "all") {
+                          setV4Drafts((current) => ({
+                            ...current,
+                            [savedTab]: {
+                              ...v4FridayEditDrafts[savedTab],
+                              images: [...v4FridayEditDrafts[savedTab].images],
+                            },
+                          }));
+                        }
+                        setV4FridayEditDrafts(null);
+                        setScreen("review");
+                      }
+                    : undefined}
                   separateHashtags={version === "v4"}
+                  separateCta={version === "v4"}
+                  channelSpecificOnly={version === "v4"}
                 />
               ) : (
                 <main className="app-content">
@@ -3932,6 +5014,35 @@ export default function App() {
               )}
             </>
           )}
+          {scheduleEditorChannel && version === "v4" && (
+            <ScheduleDateDialog
+              key={scheduleEditorChannel}
+              channel={scheduleEditorChannel}
+              delivery={v4ChannelDeliveries[scheduleEditorChannel]}
+              onCancel={() => setScheduleEditorChannel(null)}
+              onSave={(date, time) => {
+                const channel = scheduleEditorChannel;
+                const nextDeliveries: V4ChannelDeliveries = {
+                  ...v4ChannelDeliveries,
+                  [channel]: {
+                    ...v4ChannelDeliveries[channel],
+                    date,
+                    time,
+                  },
+                };
+                const destinationChannels = CONTEXTUAL_CHANNELS
+                  .map(({ id }) => id)
+                  .filter((candidate) => (
+                    !nextDeliveries[candidate].deleted
+                    && nextDeliveries[candidate].date === date
+                  ));
+                setV4ChannelDeliveries(nextDeliveries);
+                setActiveV4GroupDate(date);
+                setCombinedModalStartIndex(destinationChannels.indexOf(channel));
+                setScheduleEditorChannel(null);
+              }}
+            />
+          )}
           {scheduleToastVisible && (
             <div className="schedule-success-toast" role="status" aria-live="polite">
               <CheckCircle2 size={22} />
@@ -3946,8 +5057,13 @@ export default function App() {
             </div>
           )}
           {contextualToast && (
-            <div className="schedule-success-toast" role="status" aria-live="polite" key={contextualToast.id}>
-              <CheckCircle2 size={22} />
+            <div
+              className={contextualToast.dark ? "google-delete-toast" : "schedule-success-toast"}
+              role="status"
+              aria-live="polite"
+              key={contextualToast.id}
+            >
+              {contextualToast.dark ? <Check size={22} /> : <CheckCircle2 size={22} />}
               <span>{contextualToast.message}</span>
               <button
                 type="button"
@@ -3955,15 +5071,6 @@ export default function App() {
                 onClick={() => setContextualToast(null)}
               >
                 <X size={18} />
-              </button>
-            </div>
-          )}
-          {deleteToastVisible && (
-            <div className="google-delete-toast" role="status" aria-live="polite">
-              <Check size={22} />
-              <span>Google post is deleted</span>
-              <button type="button" aria-label="Dismiss notification" onClick={() => setDeleteToastVisible(false)}>
-                <X size={20} />
               </button>
             </div>
           )}
