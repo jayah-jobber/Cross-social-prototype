@@ -1,6 +1,6 @@
-# Cross Social Prototype
+# Cross Social Prototype — Version 4
 
-Interactive React prototype for the Version 4 social-post creation workflow.
+Interactive React prototype for the horizontal Version 4 social-post creation workflow.
 
 ## Run locally
 
@@ -9,5 +9,5 @@ npm install
 npm run dev
 ```
 
-The prototype is locked to Version 4. Shared and Google messages are hashtag-free, while
-Facebook and Instagram provide independently editable hashtag fields with live previews.
+This branch is locked to Version 4 by default. Set `VITE_PROTOTYPE_VERSION=version_5`
+only when explicitly testing the shared Version 5 implementation.

@@ -14,13 +14,8 @@ const calendarDay = (name) => page.locator(".calendar-day").filter({
 const campaignCard = (day) => calendarDay(day).locator(".combined-target-card");
 
 async function selectVersionFour() {
-  const versionOne = page.getByRole("button", { name: "Version 1" });
-  if (await versionOne.count()) {
-    await versionOne.click();
-    await page.getByRole("button", { name: "Version 4" }).click();
-  } else {
-    await page.reload({ waitUntil: "networkidle" });
-  }
+  await page.getByRole("button", { name: "Version 1" }).click();
+  await page.getByRole("button", { name: "Version 4" }).click();
 }
 
 async function openSaturday() {
@@ -57,8 +52,7 @@ async function cardChannels(day) {
 
 try {
   await page.goto(baseUrl, { waitUntil: "networkidle" });
-  const versionFour = page.getByRole("button", { name: "Version 4" });
-  if (await versionFour.count()) await versionFour.click();
+  await page.getByRole("button", { name: "Version 4" }).click();
 
   // V4 alone uses the selected Nov 2–8 week and starts with one Nov 7 campaign card.
   assert.equal(await calendarDay("Sunday, Nov 1").count(), 0);
@@ -255,15 +249,10 @@ try {
   await page.getByText("Google post is deleted", { exact: true }).waitFor();
 
   // Reset restores five Nov 7 channels; V1 keeps its original static week.
-  const versionOne = page.getByRole("button", { name: "Version 1" });
-  if (await versionOne.count()) {
-    await versionOne.click();
-    assert.equal(await calendarDay("Sunday, Nov 1").count(), 1);
-    assert.equal(await calendarDay("Sunday, Nov 8").count(), 0);
-    await page.getByRole("button", { name: "Version 4" }).click();
-  } else {
-    await page.reload({ waitUntil: "networkidle" });
-  }
+  await page.getByRole("button", { name: "Version 1" }).click();
+  assert.equal(await calendarDay("Sunday, Nov 1").count(), 1);
+  assert.equal(await calendarDay("Sunday, Nov 8").count(), 0);
+  await page.getByRole("button", { name: "Version 4" }).click();
   assert.equal(await campaignCard("Friday, Nov 6").count(), 0);
   assert.equal((await cardChannels("Saturday, Nov 7")).length, 5);
   await openSaturday();

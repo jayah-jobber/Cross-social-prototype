@@ -99,8 +99,19 @@ const INITIAL_HASHTAGS = "#HamiltonLandscaping #OutdoorLiving #HomeUpgrade";
 const INITIAL_SOCIAL_CTA = "📞 416-624-3188\n💬 mycompany@gmail.com";
 const INITIAL_EXTERNAL_LINK = "http://yourwebsite.com";
 
-type PrototypeVersion = "v1" | "v2" | "v3" | "v4";
-const LOCKED_VERSION: PrototypeVersion | null = "v4";
+type PrototypeVersion = "v1" | "v2" | "v3" | "v4" | "v5";
+type DaisyPrototypeVersion = Extract<PrototypeVersion, "v4" | "v5">;
+type LockedPrototypeVersion = "version_4" | "version_5";
+const LOCKED_VERSION_MAP: Record<LockedPrototypeVersion, DaisyPrototypeVersion> = {
+  version_4: "v4",
+  version_5: "v5",
+};
+const configuredLockedVersion = (
+  import.meta.env.VITE_PROTOTYPE_VERSION ?? "version_4"
+) as LockedPrototypeVersion;
+const LOCKED_PROTOTYPE_VERSION = configuredLockedVersion
+  ? LOCKED_VERSION_MAP[configuredLockedVersion]
+  : undefined;
 type V2Tab = "all" | "google" | "facebook" | "instagram";
 type PreviewChannel = Exclude<V2Tab, "all">;
 type GoogleButtonAction = "learn-more" | "book" | "call-now";
@@ -786,6 +797,7 @@ const createInitialCalendarStatuses = (): CalendarStatusMap => ({
   v2: {},
   v3: {},
   v4: {},
+  v5: {},
 });
 
 const CONTEXTUAL_TO_CALENDAR_CHANNEL: Record<ContextualChannel, CalendarChannel> = {
@@ -1502,48 +1514,162 @@ function WebsitePagePreview({
   );
 }
 
-function SuggestedMarketingContentDialog({
-  prompt,
-  drafts,
-  emailMessage,
-  emailSubject,
-  websiteMessage,
-  websiteTitle,
-  activeIndex,
-  onPromptChange,
-  onActiveIndexChange,
-  onClose,
-  onEdit,
-  onSchedule,
-}: {
-  prompt: string;
+type ContextModalContentProps = {
   drafts: V2Drafts;
   emailMessage: string;
   emailSubject: string;
   websiteMessage: string;
   websiteTitle: string;
+};
+
+function ContextualPreviewContent({
+  channel,
+  drafts,
+  emailMessage,
+  emailSubject,
+  websiteMessage,
+  websiteTitle,
+}: ContextModalContentProps & { channel: ContextualChannel }) {
+  if (channel === "email") {
+    return (
+      <EmailCampaignPreview
+        images={drafts.all.images}
+        message={emailMessage}
+        subject={emailSubject}
+      />
+    );
+  }
+  if (channel === "website") {
+    return (
+      <WebsitePagePreview
+        images={drafts.all.images}
+        message={websiteMessage}
+        title={websiteTitle}
+      />
+    );
+  }
+  return (
+    <PlatformPreviewCard
+      channel={channel}
+      message={drafts[channel].message}
+      cta={drafts[channel].cta}
+      hashtags={drafts[channel].hashtags}
+      images={drafts[channel].images}
+      externalLink={drafts[channel].externalLink}
+      googleLinkDestination={drafts[channel].googleLinkDestination}
+      googleButtonEnabled={drafts[channel].googleButtonEnabled}
+      googleButtonAction={drafts[channel].googleButtonAction}
+    />
+  );
+}
+
+type ContextPresentationState = GoogleContextDemoState | V4ChannelState;
+
+function contextPresentation(
+  channel: ContextualChannel,
+  delivery: V4ChannelDelivery,
+  googleDemoState: GoogleContextDemoState,
+): {
+  state: ContextPresentationState;
+  status: { label: string; tone: "scheduled" | "sent" | "missed" | "failed" } | null;
+  originalScheduleDate: boolean;
+} {
+  const state: ContextPresentationState = channel === "google"
+    ? googleDemoState
+    : delivery.statusOverride ?? delivery.lifecycle;
+  const status = state === "suggested" || state === "unscheduled"
+    ? null
+    : {
+        label: state === "error"
+          ? "Failed"
+          : state[0].toUpperCase() + state.slice(1),
+        tone: state === "error" ? "failed" : state,
+      } as const;
+  return {
+    state,
+    status,
+    originalScheduleDate: state === "missed" || state === "error",
+  };
+}
+
+type SuggestedDialogVariant = "horizontal" | "vertical";
+type SuggestedDialogAction = "schedule" | "post";
+
+type SuggestedMarketingContentDialogProps = ContextModalContentProps & {
+  variant: SuggestedDialogVariant;
+  prompt: string;
   activeIndex: number;
+  channelDeliveries: V4ChannelDeliveries;
   onPromptChange: (value: string) => void;
   onActiveIndexChange: (index: number) => void;
   onClose: () => void;
   onEdit: (channel: ContextualChannel) => void;
-  onSchedule: (channel: ContextualChannel, final: boolean) => void;
-}) {
+  onAction: (
+    channel: ContextualChannel,
+    action: SuggestedDialogAction,
+    final: boolean,
+  ) => void;
+};
+
+function useSuggestedDialogController(props: SuggestedMarketingContentDialogProps) {
+  const {
+    activeIndex,
+    channelDeliveries,
+    drafts,
+    emailMessage,
+    emailSubject,
+    websiteMessage,
+    websiteTitle,
+    onActiveIndexChange,
+    onClose,
+    onEdit,
+    onAction,
+  } = props;
+  const [splitMenuOpen, setSplitMenuOpen] = useState(false);
+  const splitMenuRef = useRef<HTMLDivElement>(null);
+  const splitToggleRef = useRef<HTMLButtonElement>(null);
+  const splitOptionRef = useRef<HTMLButtonElement>(null);
   const active = CONTEXTUAL_CHANNELS[activeIndex];
   const atStart = activeIndex === 0;
   const atEnd = activeIndex === CONTEXTUAL_CHANNELS.length - 1;
+  const delivery = channelDeliveries[active.id];
+  const destination = SUGGESTED_DESTINATIONS[active.id];
   const channelLabel = active.id === "email"
     ? "Email campaign"
     : active.id === "website"
       ? "Website page"
       : `${active.label} post`;
-  const destinationDetails = SUGGESTED_DESTINATIONS[active.id];
-  const visualOnlyAction = (event: React.MouseEvent<HTMLButtonElement>) => event.preventDefault();
-  const goPrevious = () => onActiveIndexChange(Math.max(0, activeIndex - 1));
-  const goNext = () => onActiveIndexChange(Math.min(CONTEXTUAL_CHANNELS.length - 1, activeIndex + 1));
+  const preview = (
+    <ContextualPreviewContent
+      channel={active.id}
+      drafts={drafts}
+      emailMessage={emailMessage}
+      emailSubject={emailSubject}
+      websiteMessage={websiteMessage}
+      websiteTitle={websiteTitle}
+    />
+  );
+  const goPrevious = () => {
+    setSplitMenuOpen(false);
+    onActiveIndexChange(Math.max(0, activeIndex - 1));
+  };
+  const goNext = () => {
+    setSplitMenuOpen(false);
+    onActiveIndexChange(Math.min(CONTEXTUAL_CHANNELS.length - 1, activeIndex + 1));
+  };
+  const act = (action: SuggestedDialogAction) => {
+    setSplitMenuOpen(false);
+    onAction(active.id, action, atEnd);
+  };
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && splitMenuOpen) {
+        event.stopImmediatePropagation();
+        setSplitMenuOpen(false);
+        splitToggleRef.current?.focus();
+        return;
+      }
       if (event.key === "Escape") {
         event.stopImmediatePropagation();
         onClose();
@@ -1555,129 +1681,284 @@ function SuggestedMarketingContentDialog({
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [activeIndex, onClose]);
+  }, [activeIndex, onClose, splitMenuOpen]);
+
+  useEffect(() => {
+    if (!splitMenuOpen) return;
+    splitOptionRef.current?.focus();
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      if (!splitMenuRef.current?.contains(event.target as Node)) setSplitMenuOpen(false);
+    };
+    document.addEventListener("mousedown", closeOnOutsideClick);
+    return () => document.removeEventListener("mousedown", closeOnOutsideClick);
+  }, [splitMenuOpen]);
+
+  return {
+    active,
+    activeIndex,
+    atStart,
+    atEnd,
+    channelLabel,
+    delivery,
+    destination,
+    preview,
+    splitMenuOpen,
+    splitMenuRef,
+    splitToggleRef,
+    splitOptionRef,
+    setSplitMenuOpen,
+    goPrevious,
+    goNext,
+    edit: () => onEdit(active.id),
+    schedule: () => act("schedule"),
+    post: () => act("post"),
+  };
+}
+
+type SuggestedDialogModel = ReturnType<typeof useSuggestedDialogController>;
+
+function SuggestedPromptSection({
+  title,
+  titleId,
+  prompt,
+  onPromptChange,
+  onClose,
+}: {
+  title: string;
+  titleId: string;
+  prompt: string;
+  onPromptChange: (value: string) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="suggested-prompt-section">
+      <header className="suggested-content-header">
+        <h1 id={titleId}>{title}</h1>
+        <button type="button" aria-label="Close suggested marketing content" onClick={onClose}>
+          <X size={26} aria-hidden="true" />
+        </button>
+      </header>
+      <form
+        className="suggested-prompt-form"
+        onSubmit={(event) => {
+          event.preventDefault();
+          const nextPrompt = prompt.trim();
+          if (nextPrompt) onPromptChange(nextPrompt);
+        }}
+      >
+        <input
+          value={prompt}
+          aria-label="Edit marketing content prompt"
+          onChange={(event) => onPromptChange(event.target.value)}
+          autoFocus
+        />
+        <button type="submit" aria-label="Regenerate suggestions" disabled={!prompt.trim()}>
+          <Send size={18} aria-hidden="true" />
+        </button>
+      </form>
+      <p className="suggested-prompt-helper">
+        Edit your prompt and regenerate to get a fresh set of suggestions.
+      </p>
+    </div>
+  );
+}
+
+function SuggestedCarouselControls({
+  model,
+  className,
+}: {
+  model: SuggestedDialogModel;
+  className: string;
+}) {
+  return (
+    <nav className={className} aria-label="Suggested content channels">
+      <span aria-live="polite">
+        {model.activeIndex + 1} of {CONTEXTUAL_CHANNELS.length}
+      </span>
+      <button
+        type="button"
+        onClick={model.goPrevious}
+        disabled={model.atStart}
+        aria-label="Previous channel"
+      >
+        <ChevronLeft size={20} aria-hidden="true" />
+      </button>
+      <button
+        type="button"
+        onClick={model.goNext}
+        disabled={model.atEnd}
+        aria-label="Next channel"
+      >
+        <ChevronRight size={20} aria-hidden="true" />
+      </button>
+    </nav>
+  );
+}
+
+function SuggestedDialogActions({
+  model,
+  className,
+}: {
+  model: SuggestedDialogModel;
+  className: string;
+}) {
+  const visualOnlyAction = (event: React.MouseEvent<HTMLButtonElement>) => event.preventDefault();
+
+  return (
+    <footer className={`${className} suggested-content-footer`}>
+      <button type="button" className="delete-post" aria-disabled="true" onClick={visualOnlyAction}>
+        Delete
+      </button>
+      <div>
+        <button type="button" className="secondary-button" onClick={model.edit}>
+          Edit
+        </button>
+        <div className="v4-split-action" ref={model.splitMenuRef}>
+          {model.splitMenuOpen && (
+            <div className="v4-split-menu" role="menu" aria-label="Publishing options">
+              <button
+                ref={model.splitOptionRef}
+                type="button"
+                role="menuitem"
+                onClick={model.post}
+              >
+                Post now and view next
+              </button>
+            </div>
+          )}
+          <span className="v4-split-button v4-schedule-next-button">
+            <button type="button" onClick={model.schedule}>Schedule and view next</button>
+            <button
+              ref={model.splitToggleRef}
+              type="button"
+              aria-label="Show publishing options"
+              aria-haspopup="menu"
+              aria-expanded={model.splitMenuOpen}
+              onClick={() => model.setSplitMenuOpen((open) => !open)}
+            >
+              <ChevronDown size={20} aria-hidden="true" />
+            </button>
+          </span>
+        </div>
+      </div>
+    </footer>
+  );
+}
+
+function SuggestedHorizontalLayout({ model }: { model: SuggestedDialogModel }) {
+  return (
+    <section
+      className="suggested-preview-section suggested-horizontal-composition"
+      aria-label={`${model.channelLabel} preview`}
+    >
+      <header className="v4-context-navigation">
+        <h2>REVIEW MULTIPLE CHANNELS</h2>
+        <SuggestedCarouselControls model={model} className="v4-context-navigation-controls" />
+      </header>
+      <div className="v4-context-body">
+        <section className="v4-context-details">
+          <div>
+            <h1>Seasonal property cleanup in Hamilton</h1>
+            <section className="v4-about-copy">
+              <div className="v4-about-heading"><h2>{model.active.about}</h2></div>
+              <p>
+                Showcase this Hamilton property’s seasonal clean up and fresh mulch to highlight
+                the work completed, demonstrate the visible results, and help local homeowners
+                understand when to book a similar landscaping service.
+              </p>
+            </section>
+            <dl className="v4-context-facts">
+              <div>
+                <dt>Schedule date</dt>
+                <dd>{formatV4DeliveryDateTime(model.delivery)}</dd>
+              </div>
+              <div><dt>{model.destination.label}</dt><dd>{model.destination.value}</dd></div>
+            </dl>
+          </div>
+          <SuggestedDialogActions model={model} className="v4-context-footer" />
+        </section>
+        <section className="v4-context-preview" aria-label={`${model.active.label} content preview`}>
+          <header><Sparkles size={20} aria-hidden="true" /><strong>{model.active.label} preview</strong></header>
+          <div className="v4-context-preview-scroll">{model.preview}</div>
+        </section>
+      </div>
+    </section>
+  );
+}
+
+function SuggestedVerticalLayout({ model }: { model: SuggestedDialogModel }) {
+  return (
+    <>
+      <section
+        className="suggested-preview-section v5-context-content"
+        aria-label={`${model.channelLabel} preview`}
+      >
+        <div className="v5-context-metadata">
+          <div className="v5-preview-top-row">
+            <div className="v5-preview-channel">
+              <span className="v5-preview-eyebrow">PREVIEW</span>
+              <ContextualChannelIcon channel={model.active.id} />
+              <strong>{model.active.label}</strong>
+            </div>
+            <SuggestedCarouselControls model={model} className="v5-context-navigation" />
+          </div>
+          <hr />
+          <div className="suggested-v5-campaign-copy">
+            <h2>Seasonal property cleanup in Hamilton</h2>
+            <h3>{model.active.about}</h3>
+            <p>
+              Showcase this Hamilton property’s seasonal clean up and fresh mulch to highlight
+              the work completed, demonstrate the visible results, and help local homeowners
+              understand when to book a similar landscaping service.
+            </p>
+          </div>
+          <dl className="v5-context-facts">
+            <div>
+              <dt>Schedule date:</dt>
+              <dd>{formatV4DeliveryDateTime(model.delivery)}</dd>
+            </div>
+            <div><dt>{model.destination.label}</dt><dd>{model.destination.value}</dd></div>
+          </dl>
+        </div>
+        <div className="v5-context-preview-scroll" data-testid="suggested-v5-preview-scroll-region">
+          <div className="v5-context-preview-surface">{model.preview}</div>
+        </div>
+      </section>
+      <SuggestedDialogActions model={model} className="v5-context-footer" />
+    </>
+  );
+}
+
+function SuggestedMarketingContentDialog(props: SuggestedMarketingContentDialogProps) {
+  const model = useSuggestedDialogController(props);
+  const isHorizontal = props.variant === "horizontal";
+  const title = isHorizontal ? "Suggested Marketing Content" : "Start from your own idea";
+  const titleId = `suggested-content-title-${props.variant}`;
 
   return (
     <div
-      className="calendar-modal-overlay suggested-content-overlay"
+      className={`calendar-modal-overlay suggested-content-overlay suggested-${props.variant}-overlay`}
       role="presentation"
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
+        if (event.target === event.currentTarget) props.onClose();
       }}
     >
       <section
-        className="suggested-content-dialog"
+        className={`suggested-content-dialog suggested-${props.variant}-dialog`}
         role="dialog"
         aria-modal="true"
-        aria-labelledby="suggested-content-title"
+        aria-labelledby={titleId}
       >
-        <header className="suggested-content-header">
-          <h1 id="suggested-content-title">Suggested Marketing Content</h1>
-          <button type="button" aria-label="Close suggested marketing content" onClick={onClose}>
-            <X size={26} aria-hidden="true" />
-          </button>
-        </header>
-
-        <form
-          className="suggested-prompt-form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            const nextPrompt = prompt.trim();
-            if (nextPrompt) onPromptChange(nextPrompt);
-          }}
-        >
-          <input
-            value={prompt}
-            aria-label="Edit marketing content prompt"
-            onChange={(event) => onPromptChange(event.target.value)}
-            autoFocus
-          />
-          <button
-            type="submit"
-            aria-label="Regenerate suggestions"
-            disabled={!prompt.trim()}
-          >
-            <Send size={18} aria-hidden="true" />
-          </button>
-        </form>
-        <p className="suggested-prompt-helper">
-          Edit your prompt and regenerate to get a fresh set of suggestions.
-        </p>
-
-        <section className="suggested-preview-section" aria-label={`${channelLabel} preview`}>
-          <header className="suggested-preview-toolbar">
-            <div>
-              <span className="suggested-preview-eyebrow">PREVIEW</span>
-              <span className="suggested-channel-badge">
-                <ContextualChannelIcon channel={active.id} />
-                {channelLabel}
-              </span>
-            </div>
-            <nav aria-label="Suggested content channels">
-              <span aria-live="polite">{activeIndex + 1} of {CONTEXTUAL_CHANNELS.length}</span>
-              <button type="button" onClick={goPrevious} disabled={atStart} aria-label="Previous channel">
-                <ChevronLeft size={20} aria-hidden="true" />
-              </button>
-              <button type="button" onClick={goNext} disabled={atEnd} aria-label="Next channel">
-                <ChevronRight size={20} aria-hidden="true" />
-              </button>
-            </nav>
-          </header>
-          <div className="suggested-preview-facts">
-            <p><strong>Schedule date:</strong> Jan 7th, 2026 9:00am</p>
-            <p><strong>{destinationDetails.label}</strong> {destinationDetails.value}</p>
-          </div>
-          <hr className="suggested-preview-divider" />
-          <div className="suggested-preview-scroll">
-            {active.id === "email" ? (
-              <EmailCampaignPreview
-                images={drafts.all.images}
-                message={emailMessage}
-                subject={emailSubject}
-              />
-            ) : active.id === "website" ? (
-              <WebsitePagePreview
-                images={drafts.all.images}
-                message={websiteMessage}
-                title={websiteTitle}
-              />
-            ) : (
-              <PlatformPreviewCard
-                channel={active.id}
-                message={drafts[active.id].message}
-                cta={drafts[active.id].cta}
-                hashtags={drafts[active.id].hashtags}
-                images={drafts[active.id].images}
-                externalLink={drafts[active.id].externalLink}
-                googleLinkDestination={drafts[active.id].googleLinkDestination}
-                googleButtonEnabled={drafts[active.id].googleButtonEnabled}
-                googleButtonAction={drafts[active.id].googleButtonAction}
-              />
-            )}
-          </div>
-        </section>
-
-        <footer className="suggested-content-footer">
-          <button type="button" className="delete-post" aria-disabled="true" onClick={visualOnlyAction}>
-            Delete
-          </button>
-          <div>
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={() => onEdit(active.id)}
-            >
-              Edit
-            </button>
-            <button
-              type="button"
-              className="primary-button"
-              onClick={() => onSchedule(active.id, atEnd)}
-            >
-              Schedule and next
-            </button>
-          </div>
-        </footer>
+        <SuggestedPromptSection
+          title={title}
+          titleId={titleId}
+          prompt={props.prompt}
+          onPromptChange={props.onPromptChange}
+          onClose={props.onClose}
+        />
+        {isHorizontal
+          ? <SuggestedHorizontalLayout model={model} />
+          : <SuggestedVerticalLayout model={model} />}
       </section>
     </div>
   );
@@ -2367,31 +2648,14 @@ function VersionFourContextModal({
           <section className="v4-context-preview" aria-label={`${active.label} content preview`}>
             <header><Sparkles size={20} /><strong>{active.label} preview</strong></header>
             <div className="v4-context-preview-scroll">
-              {active.id === "email" ? (
-                <EmailCampaignPreview
-                  images={drafts.all.images}
-                  message={emailMessage}
-                  subject={emailSubject}
-                />
-              ) : active.id === "website" ? (
-                <WebsitePagePreview
-                  images={drafts.all.images}
-                  message={websiteMessage}
-                  title={websiteTitle}
-                />
-              ) : (
-                <PlatformPreviewCard
-                  channel={active.id}
-                  message={drafts[active.id].message}
-                  cta={drafts[active.id].cta}
-                  hashtags={drafts[active.id].hashtags}
-                  images={drafts[active.id].images}
-                  externalLink={drafts[active.id].externalLink}
-                  googleLinkDestination={drafts[active.id].googleLinkDestination}
-                  googleButtonEnabled={drafts[active.id].googleButtonEnabled}
-                  googleButtonAction={drafts[active.id].googleButtonAction}
-                />
-              )}
+              <ContextualPreviewContent
+                channel={active.id}
+                drafts={drafts}
+                emailMessage={emailMessage}
+                emailSubject={emailSubject}
+                websiteMessage={websiteMessage}
+                websiteTitle={websiteTitle}
+              />
             </div>
           </section>
         </div>
@@ -2455,6 +2719,316 @@ function GooglePrototypeStatusControls({
         ))}
       </div>
     </fieldset>
+  );
+}
+
+function VersionFiveContextModal({
+  drafts,
+  emailMessage,
+  emailSubject,
+  websiteMessage,
+  websiteTitle,
+  initialIndex = 0,
+  availableChannels,
+  channelDeliveries,
+  onClose,
+  onEdit,
+  onDelete,
+  onLifecycleAction,
+  googleDemoState,
+  onActiveChannelChange,
+}: ContextModalContentProps & {
+  initialIndex?: number;
+  availableChannels: ContextualChannel[];
+  channelDeliveries: V4ChannelDeliveries;
+  onClose: () => void;
+  onEdit: (channel: ContextualChannel) => void;
+  onDelete: (channel: ContextualChannel) => void;
+  onLifecycleAction: (
+    channel: ContextualChannel,
+    action: V4LifecycleAction,
+    advance?: boolean,
+  ) => void;
+  googleDemoState: GoogleContextDemoState;
+  onActiveChannelChange: (channel: ContextualChannel | null) => void;
+}) {
+  const [activeIndex, setActiveIndex] = useState(initialIndex);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [splitMenuOpen, setSplitMenuOpen] = useState(false);
+  const splitMenuRef = useRef<HTMLDivElement>(null);
+  const splitToggleRef = useRef<HTMLButtonElement>(null);
+  const splitOptionRef = useRef<HTMLButtonElement>(null);
+  const channels = CONTEXTUAL_CHANNELS.filter(({ id }) => availableChannels.includes(id));
+  const safeIndex = Math.min(activeIndex, channels.length - 1);
+  const active = channels[safeIndex];
+  const activeDelivery = channelDeliveries[active.id];
+  const presentation = contextPresentation(active.id, activeDelivery, googleDemoState);
+  const isGoogleDemo = active.id === "google";
+  const atStart = safeIndex === 0;
+  const atEnd = safeIndex === channels.length - 1;
+
+  const goPrevious = () => {
+    setSplitMenuOpen(false);
+    setActiveIndex((current) => Math.max(0, current - 1));
+  };
+  const goNext = () => {
+    setSplitMenuOpen(false);
+    setActiveIndex((current) => Math.min(channels.length - 1, current + 1));
+  };
+  const scheduleCurrent = () => {
+    setSplitMenuOpen(false);
+    if (!atEnd) setActiveIndex((current) => current + 1);
+    onLifecycleAction(active.id, "schedule", true);
+  };
+  const sendCurrentNow = () => {
+    setSplitMenuOpen(false);
+    if (!atEnd) setActiveIndex((current) => current + 1);
+    onLifecycleAction(active.id, "send", true);
+  };
+  const editCurrent = () => {
+    setSplitMenuOpen(false);
+    onEdit(active.id);
+  };
+
+  useEffect(() => {
+    onActiveChannelChange(active.id);
+    return () => onActiveChannelChange(null);
+  }, [active.id, onActiveChannelChange]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && deleteDialogOpen) {
+        event.stopImmediatePropagation();
+        setDeleteDialogOpen(false);
+        return;
+      }
+      if (event.key === "Escape" && splitMenuOpen) {
+        event.stopImmediatePropagation();
+        setSplitMenuOpen(false);
+        splitToggleRef.current?.focus();
+        return;
+      }
+      if (event.key === "Escape") onClose();
+      if (deleteDialogOpen) return;
+      if (event.key === "ArrowLeft") goPrevious();
+      if (event.key === "ArrowRight") goNext();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [deleteDialogOpen, onClose, splitMenuOpen]);
+
+  useEffect(() => {
+    if (!splitMenuOpen) return;
+    splitOptionRef.current?.focus();
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      if (!splitMenuRef.current?.contains(event.target as Node)) setSplitMenuOpen(false);
+    };
+    document.addEventListener("mousedown", closeOnOutsideClick);
+    return () => document.removeEventListener("mousedown", closeOnOutsideClick);
+  }, [splitMenuOpen]);
+
+  return (
+    <div className="calendar-modal-overlay v4-context-overlay v5-context-overlay" role="presentation">
+      <section
+        className={`v5-context-modal${deleteDialogOpen ? " delete-dialog-open" : ""}`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="v5-context-title"
+      >
+        <header className="v5-context-header" inert={deleteDialogOpen ? true : undefined}>
+          <div>
+            <h1 id="v5-context-title">Seasonal property cleanup in Hamilton</h1>
+            <p>
+              Showcase this Hamilton property’s seasonal clean up and fresh mulch to highlight
+              the work completed, demonstrate the visible results, and help local homeowners
+              understand when to book a similar landscaping service.
+            </p>
+          </div>
+          <button type="button" aria-label="Close" onClick={onClose}>
+            <X size={26} />
+          </button>
+        </header>
+
+        <section className="v5-context-content" inert={deleteDialogOpen ? true : undefined}>
+          <div className="v5-context-metadata">
+            <div className="v5-preview-top-row">
+              <div className="v5-preview-channel">
+                <span className="v5-preview-eyebrow">PREVIEW</span>
+                <ContextualChannelIcon channel={active.id} />
+                <strong>{active.label}</strong>
+                {presentation.status && (
+                  <span className={`v4-context-status status-${presentation.status.tone}`}>
+                    <span
+                      className={`channel-status-dot status-${
+                        presentation.status.tone === "failed" ? "error" : presentation.status.tone
+                      }`}
+                      aria-hidden="true"
+                    />
+                    {presentation.status.label}
+                  </span>
+                )}
+              </div>
+              <nav className="v5-context-navigation" aria-label="Channel preview">
+                <span aria-live="polite">{safeIndex + 1} of {channels.length}</span>
+                <button type="button" onClick={goPrevious} disabled={atStart} aria-label="Previous channel">
+                  <ChevronLeft size={20} aria-hidden="true" />
+                </button>
+                <button type="button" onClick={goNext} disabled={atEnd} aria-label="Next channel">
+                  <ChevronRight size={20} aria-hidden="true" />
+                </button>
+              </nav>
+            </div>
+            <dl className="v5-context-facts">
+              <div>
+                <dt>{presentation.originalScheduleDate ? "Original schedule date:" : "Schedule date:"}</dt>
+                <dd className={presentation.originalScheduleDate ? "v4-warning-fact" : undefined}>
+                  {presentation.originalScheduleDate && <TriangleAlert size={16} aria-hidden="true" />}
+                  {formatV4DeliveryDateTime(activeDelivery)}
+                </dd>
+              </div>
+              <div><dt>{active.destinationLabel}:</dt><dd>{active.destination}</dd></div>
+            </dl>
+            {presentation.state === "error" && (
+              <div className="v4-context-error-banner" role="alert">
+                <TriangleAlert size={18} aria-hidden="true" />
+                <span>Posting failed due to a connection issue.</span>
+              </div>
+            )}
+            <hr />
+          </div>
+          <div className="v5-context-preview-scroll" data-testid="v5-preview-scroll-region">
+            <div className="v5-context-preview-surface">
+              <ContextualPreviewContent
+                channel={active.id}
+                drafts={drafts}
+                emailMessage={emailMessage}
+                emailSubject={emailSubject}
+                websiteMessage={websiteMessage}
+                websiteTitle={websiteTitle}
+              />
+            </div>
+          </div>
+        </section>
+
+        <footer className="v5-context-footer" inert={deleteDialogOpen ? true : undefined}>
+          {isGoogleDemo && presentation.state === "sent" ? (
+            <button type="button" className="v4-duplicate-campaign">Duplicate Campaign</button>
+          ) : (
+            <button
+              type="button"
+              className="delete-post"
+              onClick={() => {
+                setSplitMenuOpen(false);
+                setDeleteDialogOpen(true);
+              }}
+            >
+              {presentation.state === "scheduled" || presentation.state === "sent"
+                ? "Delete Post"
+                : "Delete"}
+            </button>
+          )}
+          <div>
+            {isGoogleDemo && presentation.state === "sent" ? (
+              <button type="button" className="primary-button v4-view-performance">
+                View Performance
+                <ExternalLink size={17} aria-hidden="true" />
+              </button>
+            ) : presentation.state === "missed" || presentation.state === "error" ? (
+              <>
+                <button type="button" className="secondary-button" onClick={editCurrent}>Edit</button>
+                <button type="button" className="primary-button v4-send-now" onClick={sendCurrentNow}>
+                  {presentation.state === "missed" ? "Send Now" : "Post Now"}
+                </button>
+              </>
+            ) : presentation.state === "unscheduled" || presentation.state === "suggested" ? (
+              <>
+                <button type="button" className="secondary-button" onClick={editCurrent}>Edit</button>
+                <div className="v4-split-action" ref={splitMenuRef}>
+                  {splitMenuOpen && (
+                    <div className="v4-split-menu" role="menu" aria-label="Publishing options">
+                      <button
+                        ref={splitOptionRef}
+                        type="button"
+                        role="menuitem"
+                        onClick={sendCurrentNow}
+                      >
+                        Post now and view next
+                      </button>
+                    </div>
+                  )}
+                  <span className="v4-split-button v4-schedule-next-button">
+                    <button type="button" onClick={scheduleCurrent}>Schedule and view next</button>
+                    <button
+                      ref={splitToggleRef}
+                      type="button"
+                      aria-label="Show publishing options"
+                      aria-haspopup="menu"
+                      aria-expanded={splitMenuOpen}
+                      onClick={() => setSplitMenuOpen((open) => !open)}
+                    >
+                      <ChevronDown size={20} />
+                    </button>
+                  </span>
+                </div>
+              </>
+            ) : presentation.state === "scheduled" ? (
+              <div className="v4-split-action" ref={splitMenuRef}>
+                {splitMenuOpen && (
+                  <div className="v4-split-menu" role="menu" aria-label="Scheduled post options">
+                    <button
+                      ref={splitOptionRef}
+                      type="button"
+                      role="menuitem"
+                      onClick={sendCurrentNow}
+                    >
+                      Send now
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setSplitMenuOpen(false);
+                        onLifecycleAction(active.id, "cancel");
+                      }}
+                    >
+                      Cancel schedule
+                    </button>
+                  </div>
+                )}
+                <span className="v4-split-button">
+                  <button type="button" onClick={editCurrent}>Edit</button>
+                  <button
+                    ref={splitToggleRef}
+                    type="button"
+                    aria-label="Show scheduled post options"
+                    aria-haspopup="menu"
+                    aria-expanded={splitMenuOpen}
+                    onClick={() => setSplitMenuOpen((open) => !open)}
+                  >
+                    <ChevronDown size={20} />
+                  </button>
+                </span>
+              </div>
+            ) : (
+              <button type="button" className="primary-button v4-sent-edit-button" onClick={editCurrent}>
+                Edit
+              </button>
+            )}
+          </div>
+        </footer>
+
+        {deleteDialogOpen && (
+          <DeletionFeedbackDialog
+            channel={active.id}
+            onCancel={() => setDeleteDialogOpen(false)}
+            onConfirm={() => {
+              setDeleteDialogOpen(false);
+              onDelete(active.id);
+            }}
+          />
+        )}
+      </section>
+    </div>
   );
 }
 
@@ -4139,14 +4713,59 @@ function SuggestedTextEditor({
   );
 }
 
+type DaisyVersionState = {
+  drafts: V2Drafts;
+  fridayEditDrafts: V2Drafts | null;
+  emailMessage: string;
+  emailSubject: string;
+  websiteMessage: string;
+  websiteTitle: string;
+  channelDeliveries: V4ChannelDeliveries;
+  googleDemoState: GoogleContextDemoState;
+  suggestedCompletion: SuggestedCompletion | null;
+};
+
+const createInitialDaisyVersionState = (): DaisyVersionState => ({
+  drafts: createInitialV4Drafts(),
+  fridayEditDrafts: null,
+  emailMessage: INITIAL_EMAIL_MESSAGE,
+  emailSubject: INITIAL_EMAIL_SUBJECT,
+  websiteMessage: INITIAL_WEBSITE_MESSAGE,
+  websiteTitle: INITIAL_WEBSITE_TITLE,
+  channelDeliveries: createInitialV4ChannelDeliveries(),
+  googleDemoState: "suggested",
+  suggestedCompletion: null,
+});
+
+const createInitialDaisyVersionStates = (): Record<DaisyPrototypeVersion, DaisyVersionState> => ({
+  v4: createInitialDaisyVersionState(),
+  v5: createInitialDaisyVersionState(),
+});
+
 export default function App() {
   const [message, setMessage] = useState(INITIAL_V1_MESSAGE);
   const [images, setImages] = useState(INITIAL_IMAGES);
-  const [version, setVersion] = useState<PrototypeVersion>(LOCKED_VERSION ?? "v1");
+  const [version, setVersion] = useState<PrototypeVersion>(LOCKED_PROTOTYPE_VERSION ?? "v1");
   const [v2Drafts, setV2Drafts] = useState<V2Drafts>(createInitialV2Drafts);
   const [v3Drafts, setV3Drafts] = useState<V2Drafts>(createInitialV2Drafts);
-  const [v4Drafts, setV4Drafts] = useState<V2Drafts>(createInitialV4Drafts);
-  const [v4FridayEditDrafts, setV4FridayEditDrafts] = useState<V2Drafts | null>(null);
+  const [daisyVersionStates, setDaisyVersionStates] = useState(createInitialDaisyVersionStates);
+  const activeDaisyVersion: DaisyPrototypeVersion = version === "v5" ? "v5" : "v4";
+  const activeDaisyState = daisyVersionStates[activeDaisyVersion];
+  const updateActiveDaisyState = (update: Partial<DaisyVersionState>) => {
+    setDaisyVersionStates((current) => ({
+      ...current,
+      [activeDaisyVersion]: { ...current[activeDaisyVersion], ...update },
+    }));
+  };
+  const v4Drafts = activeDaisyState.drafts;
+  const setV4Drafts = (next: V2Drafts | ((current: V2Drafts) => V2Drafts)) => {
+    const current = daisyVersionStates[activeDaisyVersion].drafts;
+    updateActiveDaisyState({ drafts: typeof next === "function" ? next(current) : next });
+  };
+  const v4FridayEditDrafts = activeDaisyState.fridayEditDrafts;
+  const setV4FridayEditDrafts = (next: V2Drafts | null) => {
+    updateActiveDaisyState({ fridayEditDrafts: next });
+  };
   const [enabledChannels, setEnabledChannels] = useState<EnabledChannels>({
     google: true,
     facebook: true,
@@ -4157,6 +4776,7 @@ export default function App() {
     v2: null,
     v3: null,
     v4: null,
+    v5: null,
   });
   const [calendarStatuses, setCalendarStatuses] = useState<CalendarStatusMap>(
     createInitialCalendarStatuses,
@@ -4179,18 +4799,28 @@ export default function App() {
   const [suggestedEditor, setSuggestedEditor] = useState<ContextualChannel | null>(null);
   const [suggestedGoogleDrafts, setSuggestedGoogleDrafts] = useState<V2Drafts | null>(null);
   const [suggestedTextDraft, setSuggestedTextDraft] = useState<SuggestedTextDraft | null>(null);
-  const [suggestedCompletion, setSuggestedCompletion] = useState<SuggestedCompletion | null>(null);
+  const suggestedCompletion = activeDaisyState.suggestedCompletion;
+  const setSuggestedCompletion = (next: SuggestedCompletion | null) => {
+    updateActiveDaisyState({ suggestedCompletion: next });
+  };
   const [socialWorkflowChannel, setSocialWorkflowChannel] = useState<ContextualChannel>("facebook");
   const [socialEditDraft, setSocialEditDraft] = useState<ChannelDraft | null>(null);
-  const [v4EmailMessage, setV4EmailMessage] = useState(INITIAL_EMAIL_MESSAGE);
-  const [v4EmailSubject, setV4EmailSubject] = useState(INITIAL_EMAIL_SUBJECT);
-  const [v4WebsiteMessage, setV4WebsiteMessage] = useState(INITIAL_WEBSITE_MESSAGE);
-  const [v4WebsiteTitle, setV4WebsiteTitle] = useState(INITIAL_WEBSITE_TITLE);
-  const [v4ChannelDeliveries, setV4ChannelDeliveries] = useState<V4ChannelDeliveries>(
-    createInitialV4ChannelDeliveries,
-  );
-  const [googleContextDemoState, setGoogleContextDemoState] =
-    useState<GoogleContextDemoState>("suggested");
+  const v4EmailMessage = activeDaisyState.emailMessage;
+  const setV4EmailMessage = (emailMessage: string) => updateActiveDaisyState({ emailMessage });
+  const v4EmailSubject = activeDaisyState.emailSubject;
+  const setV4EmailSubject = (emailSubject: string) => updateActiveDaisyState({ emailSubject });
+  const v4WebsiteMessage = activeDaisyState.websiteMessage;
+  const setV4WebsiteMessage = (websiteMessage: string) => updateActiveDaisyState({ websiteMessage });
+  const v4WebsiteTitle = activeDaisyState.websiteTitle;
+  const setV4WebsiteTitle = (websiteTitle: string) => updateActiveDaisyState({ websiteTitle });
+  const v4ChannelDeliveries = activeDaisyState.channelDeliveries;
+  const setV4ChannelDeliveries = (channelDeliveries: V4ChannelDeliveries) => {
+    updateActiveDaisyState({ channelDeliveries });
+  };
+  const googleContextDemoState = activeDaisyState.googleDemoState;
+  const setGoogleContextDemoState = (googleDemoState: GoogleContextDemoState) => {
+    updateActiveDaisyState({ googleDemoState });
+  };
   const [activeV4ContextChannel, setActiveV4ContextChannel] =
     useState<ContextualChannel | null>(null);
   const [activeV4GroupDate, setActiveV4GroupDate] = useState<string | null>(null);
@@ -4199,12 +4829,13 @@ export default function App() {
   const [scheduleToastVisible, setScheduleToastVisible] = useState(false);
   const [contextualToast, setContextualToast] = useState<ContextualToast | null>(null);
   const [saturdayCompletion, setSaturdayCompletion] = useState<
-    Record<"v3" | "v4", CalendarChannel[] | null>
-  >({ v3: null, v4: null });
+    Record<"v3" | "v4" | "v5", CalendarChannel[] | null>
+  >({ v3: null, v4: null, v5: null });
   const [scale, setScale] = useState(1);
   const frameHeight = 1024;
   const totalHeight = frameHeight + 60;
-  const v4SidebarFree = version === "v4" && (
+  const isDaisyVersion = version === "v4" || version === "v5";
+  const v4SidebarFree = isDaisyVersion && (
     suggestedEditor !== null
     || suggestedReviewChannel !== null
     ||
@@ -4396,21 +5027,23 @@ export default function App() {
     setV4Generating(false);
   };
   const switchVersion = (nextVersion: PrototypeVersion) => {
-    if (nextVersion === version) return;
+    if (
+      nextVersion === version
+      || (LOCKED_PROTOTYPE_VERSION && nextVersion !== LOCKED_PROTOTYPE_VERSION)
+    ) return;
 
     cancelSuggestionGeneration();
     setMessage(INITIAL_V1_MESSAGE);
     setImages([...INITIAL_IMAGES]);
     setV2Drafts(createInitialV2Drafts());
     setV3Drafts(createInitialV2Drafts());
-    setV4Drafts(createInitialV4Drafts());
-    setV4FridayEditDrafts(null);
+    setDaisyVersionStates(createInitialDaisyVersionStates());
     setEnabledChannels({
       google: true,
       facebook: true,
       instagram: true,
     });
-    setScheduledChannels({ v1: null, v2: null, v3: null, v4: null });
+    setScheduledChannels({ v1: null, v2: null, v3: null, v4: null, v5: null });
     setCalendarStatuses(createInitialCalendarStatuses());
     setVersion(nextVersion);
     setScreen("calendar");
@@ -4430,22 +5063,15 @@ export default function App() {
     setSuggestedEditor(null);
     setSuggestedGoogleDrafts(null);
     setSuggestedTextDraft(null);
-    setSuggestedCompletion(null);
     setSocialWorkflowChannel("facebook");
     setSocialEditDraft(null);
-    setV4EmailMessage(INITIAL_EMAIL_MESSAGE);
-    setV4EmailSubject(INITIAL_EMAIL_SUBJECT);
-    setV4WebsiteMessage(INITIAL_WEBSITE_MESSAGE);
-    setV4WebsiteTitle(INITIAL_WEBSITE_TITLE);
-    setV4ChannelDeliveries(createInitialV4ChannelDeliveries());
-    setGoogleContextDemoState("suggested");
     setActiveV4ContextChannel(null);
     setActiveV4GroupDate(null);
     setScheduleEditorChannel(null);
     setReviewDeleteChannel(null);
     setScheduleToastVisible(false);
     setContextualToast(null);
-    setSaturdayCompletion({ v3: null, v4: null });
+    setSaturdayCompletion({ v3: null, v4: null, v5: null });
   };
   const toggleChannel = (channel: PreviewChannel) => {
     if (enabledChannels[channel]) {
@@ -4504,6 +5130,13 @@ export default function App() {
     return () => window.removeEventListener("resize", fitPrototypeToViewport);
   }, [totalHeight]);
 
+  const DaisyContextModal = version === "v5"
+    ? VersionFiveContextModal
+    : VersionFourContextModal;
+  const versionLockedOut = (candidate: PrototypeVersion) => (
+    Boolean(LOCKED_PROTOTYPE_VERSION && candidate !== LOCKED_PROTOTYPE_VERSION)
+  );
+
   return (
     <div className="viewport-stage">
       <div
@@ -4516,12 +5149,15 @@ export default function App() {
               ? "Daisy chain social, email and website"
               : version === "v4"
                 ? "Daisy chain all 5 channels"
-                : "A/B test prototype"}
+                : version === "v5"
+                  ? "Daisy chain all 5 channels — vertical modal"
+                  : "A/B test prototype"}
           </span>
-          {!LOCKED_VERSION && <div className="version-switcher" aria-label="Prototype version">
+          <div className="version-switcher" aria-label="Prototype version">
             <button
               className={version === "v1" ? "selected" : ""}
               type="button"
+              disabled={versionLockedOut("v1")}
               onClick={() => switchVersion("v1")}
             >
               Version 1
@@ -4529,6 +5165,7 @@ export default function App() {
             <button
               className={version === "v2" ? "selected" : ""}
               type="button"
+              disabled={versionLockedOut("v2")}
               onClick={() => switchVersion("v2")}
             >
               Version 2
@@ -4536,6 +5173,7 @@ export default function App() {
             <button
               className={version === "v3" ? "selected" : ""}
               type="button"
+              disabled={versionLockedOut("v3")}
               onClick={() => switchVersion("v3")}
             >
               Version 3
@@ -4543,11 +5181,20 @@ export default function App() {
             <button
               className={version === "v4" ? "selected" : ""}
               type="button"
+              disabled={versionLockedOut("v4")}
               onClick={() => switchVersion("v4")}
             >
               Version 4
             </button>
-          </div>}
+            <button
+              className={version === "v5" ? "selected" : ""}
+              type="button"
+              disabled={versionLockedOut("v5")}
+              onClick={() => switchVersion("v5")}
+            >
+              Version 5
+            </button>
+          </div>
         </div>
         <div
           className={`prototype-frame${v4SidebarFree ? " sidebar-free" : ""}`}
@@ -4719,10 +5366,10 @@ export default function App() {
                 targetChannels={PREVIEW_CHANNEL_ORDER
                   .filter((channel) => scheduledChannels[version]?.[channel])
                   .map((channel) => CALENDAR_CHANNEL_BY_PREVIEW[channel])}
-                v4Prompt={version === "v4" ? calendarPrompt : undefined}
-                v4Generating={version === "v4" && v4Generating}
-                onV4PromptChange={version === "v4" ? setCalendarPrompt : undefined}
-                onV4PromptSubmit={version === "v4"
+                v4Prompt={isDaisyVersion ? calendarPrompt : undefined}
+                v4Generating={isDaisyVersion && v4Generating}
+                onV4PromptChange={isDaisyVersion ? setCalendarPrompt : undefined}
+                onV4PromptSubmit={isDaisyVersion
                   ? () => {
                       const prompt = calendarPrompt.trim();
                       if (!prompt || v4Generating || suggestionTimerRef.current !== null) return;
@@ -4747,7 +5394,7 @@ export default function App() {
                     setV3ContextPreviewChannel("google");
                     setV3ReviewOrigin(null);
                     setV3CombinedModalOpen(true);
-                  } else if (version === "v4") {
+                  } else if (isDaisyVersion) {
                     if (!campaignDate) return;
                     const groupChannels = availableV4Channels.filter(
                       (channel) => v4ChannelDeliveries[channel].date === campaignDate,
@@ -4760,14 +5407,15 @@ export default function App() {
                     setCombinedWorkflow("modal");
                   }
                 }}
-                combinedInteractive={version === "v3" || version === "v4"}
+                combinedInteractive={version === "v3" || isDaisyVersion}
                 combinedChannels={currentSaturdayCompletion ?? undefined}
-                generatedSuggestionCard={version === "v4" ? suggestedCompletion?.card : undefined}
+                generatedSuggestionCard={isDaisyVersion ? suggestedCompletion?.card : undefined}
                 channelStatuses={calendarStatuses[version]}
-                v4CampaignCards={version === "v4" ? v4CampaignCards : undefined}
+                v4CampaignCards={isDaisyVersion ? v4CampaignCards : undefined}
               />
-              {suggestedDialogOpen && version === "v4" && (
+              {suggestedDialogOpen && isDaisyVersion && (
                 <SuggestedMarketingContentDialog
+                  variant={version === "v5" ? "vertical" : "horizontal"}
                   prompt={suggestedPrompt}
                   drafts={v4Drafts}
                   emailMessage={v4EmailMessage}
@@ -4775,6 +5423,7 @@ export default function App() {
                   websiteMessage={v4WebsiteMessage}
                   websiteTitle={v4WebsiteTitle}
                   activeIndex={suggestedPreviewIndex}
+                  channelDeliveries={v4ChannelDeliveries}
                   onPromptChange={setSuggestedPrompt}
                   onActiveIndexChange={setSuggestedPreviewIndex}
                   onClose={() => {
@@ -4787,14 +5436,17 @@ export default function App() {
                     setSuggestedReviewChannel(channel);
                     setV4ReviewOrigin("suggested-content");
                   }}
-                  onSchedule={(channel, final) => {
+                  onAction={(channel, action, final) => {
                     setCalendarChannelStatus(
-                      "v4",
+                      activeDaisyVersion,
                       "suggested",
                       CONTEXTUAL_TO_CALENDAR_CHANNEL[channel],
-                      "scheduled",
+                      action === "schedule" ? "scheduled" : "sent",
                     );
-                    showContextualToast(contextualSuccessMessage(channel, "schedule"));
+                    showContextualToast(contextualSuccessMessage(
+                      channel,
+                      action === "schedule" ? "schedule" : "post",
+                    ));
                     if (!final) {
                       setSuggestedPreviewIndex((current) => Math.min(4, current + 1));
                       return;
@@ -4873,9 +5525,9 @@ export default function App() {
                   }}
                 />
               )}
-              {combinedWorkflow === "modal" && version === "v4" && (
-                <VersionFourContextModal
-                  key={`${activeV4GroupDate}-${scopedV4Channels.join("-")}-${combinedModalStartIndex}`}
+              {combinedWorkflow === "modal" && isDaisyVersion && (
+                <DaisyContextModal
+                  key={`${version}-${activeV4GroupDate}-${scopedV4Channels.join("-")}-${combinedModalStartIndex}`}
                   drafts={v4Drafts}
                   emailMessage={v4EmailMessage}
                   emailSubject={v4EmailSubject}
@@ -4904,7 +5556,7 @@ export default function App() {
                 />
               )}
               {combinedWorkflow === "modal"
-                && version === "v4"
+                && isDaisyVersion
                 && activeV4ContextChannel === "google" && (
                 <GooglePrototypeStatusControls
                   state={googleContextDemoState}
@@ -4914,8 +5566,8 @@ export default function App() {
             </>
           ) : (
             <>
-              {version !== "v4" && <SideNavigation />}
-              {version !== "v4" && <TopBar />}
+              {!isDaisyVersion && <SideNavigation />}
+              {!isDaisyVersion && <TopBar />}
               {screen === "review" ? (
                 <ReviewScreen
                   message={
@@ -4932,7 +5584,7 @@ export default function App() {
                   carouselDrafts={version === "v1" ? undefined : multiChannelDrafts}
                   onToggleChannel={toggleChannel}
                   onEdit={() => {
-                    if (version === "v4") setV4FridayEditDrafts(cloneDrafts(v4Drafts));
+                    if (isDaisyVersion) setV4FridayEditDrafts(cloneDrafts(v4Drafts));
                     setScreen("edit");
                   }}
                   onBack={() => {
@@ -4962,9 +5614,9 @@ export default function App() {
                     setScheduleToastVisible(true);
                   }}
                 />
-              ) : version === "v2" || version === "v3" || version === "v4" ? (
+              ) : version === "v2" || version === "v3" || isDaisyVersion ? (
                 <VersionTwoEditScreen
-                  drafts={version === "v4" ? v4FridayEditDrafts ?? v4Drafts : multiChannelDrafts}
+                  drafts={isDaisyVersion ? v4FridayEditDrafts ?? v4Drafts : multiChannelDrafts}
                   setDrafts={
                     version === "v2"
                       ? setV2Drafts
@@ -4974,10 +5626,10 @@ export default function App() {
                   }
                   enabledChannels={enabledChannels}
                   onCancel={() => {
-                    if (version === "v4") setV4FridayEditDrafts(null);
+                    if (isDaisyVersion) setV4FridayEditDrafts(null);
                     setScreen("review");
                   }}
-                  onSave={version === "v4"
+                  onSave={isDaisyVersion
                     ? (savedTab) => {
                         if (v4FridayEditDrafts && savedTab !== "all") {
                           setV4Drafts((current) => ({
@@ -4992,9 +5644,9 @@ export default function App() {
                         setScreen("review");
                       }
                     : undefined}
-                  separateHashtags={version === "v4"}
-                  separateCta={version === "v4"}
-                  channelSpecificOnly={version === "v4"}
+                  separateHashtags={isDaisyVersion}
+                  separateCta={isDaisyVersion}
+                  channelSpecificOnly={isDaisyVersion}
                 />
               ) : (
                 <main className="app-content">
@@ -5014,7 +5666,7 @@ export default function App() {
               )}
             </>
           )}
-          {scheduleEditorChannel && version === "v4" && (
+          {scheduleEditorChannel && isDaisyVersion && (
             <ScheduleDateDialog
               key={scheduleEditorChannel}
               channel={scheduleEditorChannel}

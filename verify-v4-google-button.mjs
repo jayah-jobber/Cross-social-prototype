@@ -33,8 +33,7 @@ async function openSuggestedGoogleEditor() {
 
 try {
   await page.goto(baseUrl, { waitUntil: "networkidle" });
-  const versionFour = page.getByRole("button", { name: "Version 4" });
-  if (await versionFour.count()) await versionFour.click();
+  await page.getByRole("button", { name: "Version 4" }).click();
   await openSuggestedGoogleEditor();
 
   // Figma default state and exact menu contents/order.
@@ -177,24 +176,22 @@ try {
   assert.equal(await buttonUrl().inputValue(), "https://example.com/book");
 
   // Versions 1–3 retain their existing editors and do not receive the V4 control.
-  if (await page.getByRole("button", { name: "Version 1", exact: true }).count()) {
-    for (const version of ["Version 1", "Version 2", "Version 3"]) {
-      await page.getByRole("button", { name: version, exact: true }).click();
-      await page.locator(".target-card:not(.combined-target-card)").click();
-      await page.locator(".calendar-modal-actions").getByRole("button", { name: "Edit" }).click();
-      await page.locator(".review-field").first().getByRole("button", { name: "Edit" }).click();
-      if (version === "Version 1") {
-        await page.getByRole("heading", { name: "Edit Social Posts", exact: true }).waitFor();
-        assert.equal(await page.locator(".v4-google-button").count(), 0);
-      } else {
-        await page.getByRole("tab", { name: "Google", exact: true }).click();
-        await page.locator(".v2-google-button:not(.v4-google-button)").waitFor();
-        assert.equal(await page.locator(".v4-google-button").count(), 0);
-        assert.equal(
-          await page.locator(".v2-google-button:not(.v4-google-button) .select-row").first().textContent(),
-          "TextLearn more",
-        );
-      }
+  for (const version of ["Version 1", "Version 2", "Version 3"]) {
+    await page.getByRole("button", { name: version, exact: true }).click();
+    await page.locator(".target-card:not(.combined-target-card)").click();
+    await page.locator(".calendar-modal-actions").getByRole("button", { name: "Edit" }).click();
+    await page.locator(".review-field").first().getByRole("button", { name: "Edit" }).click();
+    if (version === "Version 1") {
+      await page.getByRole("heading", { name: "Edit Social Posts", exact: true }).waitFor();
+      assert.equal(await page.locator(".v4-google-button").count(), 0);
+    } else {
+      await page.getByRole("tab", { name: "Google", exact: true }).click();
+      await page.locator(".v2-google-button:not(.v4-google-button)").waitFor();
+      assert.equal(await page.locator(".v4-google-button").count(), 0);
+      assert.equal(
+        await page.locator(".v2-google-button:not(.v4-google-button) .select-row").first().textContent(),
+        "TextLearn more",
+      );
     }
   }
 

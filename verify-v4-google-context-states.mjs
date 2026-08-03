@@ -41,8 +41,7 @@ async function selectState(label) {
 
 try {
   await page.goto(baseUrl, { waitUntil: "networkidle" });
-  const versionFour = page.getByRole("button", { name: "Version 4" });
-  if (await versionFour.count()) await versionFour.click();
+  await page.getByRole("button", { name: "Version 4" }).click();
   await saturdayCard().click();
   await modal().waitFor();
 
@@ -114,13 +113,8 @@ try {
   await saturdayCard().click();
   await modal().getByText("Failed", { exact: true }).waitFor();
 
-  const versionOne = page.getByRole("button", { name: "Version 1" });
-  if (await versionOne.count()) {
-    await versionOne.click();
-    await page.getByRole("button", { name: "Version 4" }).click();
-  } else {
-    await page.reload({ waitUntil: "networkidle" });
-  }
+  await page.getByRole("button", { name: "Version 1" }).click();
+  await page.getByRole("button", { name: "Version 4" }).click();
   await saturdayCard().click();
   assert.equal(
     await controls().getByRole("button", { name: "Suggested", exact: true }).getAttribute("aria-pressed"),
