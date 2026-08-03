@@ -1,6 +1,6 @@
-# Cross Social Prototype
+# Cross Social Prototype — Version 5
 
-Interactive React prototype for comparing all five social-post creation workflows.
+Interactive React prototype for the vertical Version 5 social-post creation workflow.
 
 ## Run locally
 
@@ -9,5 +9,5 @@ npm install
 npm run dev
 ```
 
-Use the version switcher above the prototype to compare all five flows. Version 4 uses
-the horizontal contextual modal, while Version 5 uses the vertical contextual modal.
+This branch is locked to Version 5 by default. Set `VITE_PROTOTYPE_VERSION=version_4`
+only when explicitly testing the shared Version 4 implementation.

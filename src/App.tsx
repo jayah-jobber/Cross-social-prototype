@@ -106,9 +106,9 @@ const LOCKED_VERSION_MAP: Record<LockedPrototypeVersion, DaisyPrototypeVersion> 
   version_4: "v4",
   version_5: "v5",
 };
-const configuredLockedVersion = import.meta.env.VITE_PROTOTYPE_VERSION as
-  | LockedPrototypeVersion
-  | undefined;
+const configuredLockedVersion = (
+  import.meta.env.VITE_PROTOTYPE_VERSION ?? "version_5"
+) as LockedPrototypeVersion;
 const LOCKED_PROTOTYPE_VERSION = configuredLockedVersion
   ? LOCKED_VERSION_MAP[configuredLockedVersion]
   : undefined;
