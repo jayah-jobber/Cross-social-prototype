@@ -20,6 +20,13 @@ async function selectVersionFour() {
 
 async function openSaturday() {
   await campaignCard("Saturday, Nov 7").click();
+  await page.locator(".v4-summary-modal").getByRole("button", { name: "Start Review" }).click();
+  await modal().waitFor();
+}
+
+async function openCampaignReview(day) {
+  await campaignCard(day).click();
+  await page.locator(".v4-summary-modal").getByRole("button", { name: "Start Review" }).click();
   await modal().waitFor();
 }
 
@@ -122,7 +129,7 @@ try {
   assert.equal((await cardChannels("Saturday, Nov 7")).length, 4);
 
   // Moving back aggregates with the existing same-topic Nov 7 channels.
-  await campaignCard("Thursday, Nov 5").click();
+  await openCampaignReview("Thursday, Nov 5");
   assert.equal(
     await modal().locator(".v4-context-facts").getByRole("button", { name: "Edit" }).count(),
     0,
@@ -154,10 +161,10 @@ try {
   assert.equal((await cardChannels("Saturday, Nov 7")).length, 4);
 
   // Date-specific cards open scoped carousels.
-  await campaignCard("Friday, Nov 6").click();
+  await openCampaignReview("Friday, Nov 6");
   await expectProgress("1 of 1");
   await modal().getByRole("button", { name: "Close", exact: true }).click();
-  await campaignCard("Saturday, Nov 7").click();
+  await openCampaignReview("Saturday, Nov 7");
   await expectProgress("1 of 4");
 
   // Multiple Post now actions aggregate on one Nov 6 Sent card.

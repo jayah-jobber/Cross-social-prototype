@@ -14,6 +14,12 @@ const saturdayCard = () => page.locator(".calendar-day").filter({
   has: page.getByRole("heading", { name: "Saturday, Nov 7", exact: true }),
 }).locator(".combined-target-card");
 
+async function openSaturdayReview() {
+  await saturdayCard().click();
+  await page.locator(".v4-summary-modal").getByRole("button", { name: "Start Review" }).click();
+  await modal().waitFor();
+}
+
 async function expectFacts(dateLabel) {
   const facts = modal().locator(".v4-context-facts");
   await facts.getByText(dateLabel, { exact: true }).waitFor();
@@ -42,8 +48,7 @@ async function selectState(label) {
 try {
   await page.goto(baseUrl, { waitUntil: "networkidle" });
   await page.getByRole("button", { name: "Version 4" }).click();
-  await saturdayCard().click();
-  await modal().waitFor();
+  await openSaturdayReview();
 
   assert.deepEqual(
     await controls().getByRole("button").allTextContents(),
@@ -114,12 +119,12 @@ try {
   await modal().getByRole("button", { name: "Close", exact: true }).click();
   assert.equal(await controls().count(), 0, "Controls must hide while the modal is closed");
   assert.equal(await saturdayCard().locator(".status-error").count(), 1);
-  await saturdayCard().click();
+  await openSaturdayReview();
   await modal().getByText("Failed", { exact: true }).waitFor();
 
   await page.getByRole("button", { name: "Version 1" }).click();
   await page.getByRole("button", { name: "Version 4" }).click();
-  await saturdayCard().click();
+  await openSaturdayReview();
   assert.equal(
     await controls().getByRole("button", { name: "Suggested", exact: true }).getAttribute("aria-pressed"),
     "true",

@@ -37,6 +37,9 @@ async function resetTo(version) {
 async function openCampaign(version) {
   await resetTo(version);
   await saturdayCard().click();
+  if (version === "Version 4") {
+    await page.locator(".v4-summary-modal").getByRole("button", { name: "Start Review" }).click();
+  }
   const modal = version === "Version 4" ? v4Modal() : v5Modal();
   await modal.waitFor();
   return modal;

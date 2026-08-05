@@ -112,6 +112,7 @@ try {
   await modal().getByRole("button", { name: "Close", exact: true }).click();
   await select("Version 4");
   await saturdayCard().click();
+  await page.locator(".v4-summary-modal").getByRole("button", { name: "Start Review" }).click();
   assert.equal(await page.locator(".v4-five-channel-modal").count(), 1);
   assert.equal(await page.locator(".v5-context-modal").count(), 0);
   assert.equal(await page.locator(".v4-five-channel-modal .v4-context-navigation-controls").count(), 0);

@@ -216,6 +216,7 @@ try {
   if (await versionFourButton.count()) await versionFourButton.click();
   await page.getByLabel("Add to your marketing calendar").fill("Five channel QA prompt");
   await page.getByRole("button", { name: "Generate suggested marketing content" }).click();
+  await page.locator(".v4-summary-modal").getByRole("button", { name: "Start Review" }).click();
   await expectHeading("Suggested Marketing Content");
 
   for (const [index, channel] of channels.entries()) {
@@ -224,6 +225,7 @@ try {
 
   await page.getByLabel("Close suggested marketing content").click();
   await page.locator(".combined-target-card").click();
+  await page.locator(".v4-summary-modal").getByRole("button", { name: "Start Review" }).click();
   const modalStepper = page.locator(".channel-progress-stepper--modal-v4");
   await modalStepper.getByRole("button", { name: /^Facebook,/ }).click();
   await page.locator(".v4-context-footer").getByRole("button", { name: "Edit" }).click();

@@ -24,6 +24,7 @@ async function expectGoogleEditor() {
 async function openSuggestedGoogleEditor() {
   await page.getByLabel("Add to your marketing calendar").fill("Google button QA");
   await page.getByRole("button", { name: "Generate suggested marketing content" }).click();
+  await page.locator(".v4-summary-modal").getByRole("button", { name: "Start Review" }).click();
   await page.getByRole("heading", { name: "Suggested Marketing Content", exact: true }).waitFor();
   await page.locator(".suggested-content-footer").getByRole("button", { name: "Edit" }).click();
   await page.getByRole("heading", { name: "Review Google Post", exact: true }).waitFor();
@@ -158,6 +159,7 @@ try {
   // The committed draft also reaches Saturday contextual and Friday preview/editor origins.
   await page.getByLabel("Close suggested marketing content").click();
   await page.locator(".combined-target-card").click();
+  await page.locator(".v4-summary-modal").getByRole("button", { name: "Start Review" }).click();
   await page.locator(".v4-context-preview").getByRole("button", { name: "Book", exact: true }).waitFor();
   assert.ok(!(await page.locator(".v4-context-preview").textContent()).includes("https://example.com/book"));
   await page.getByRole("button", { name: "Close", exact: true }).click();

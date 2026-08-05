@@ -15,6 +15,10 @@ async function openSuggested(prompt) {
   await page.getByLabel("Add to your marketing calendar").fill(prompt);
   await page.getByRole("button", { name: "Generate suggested marketing content" }).click();
   await page.getByRole("dialog").waitFor();
+  const summary = page.locator(".v4-summary-modal");
+  if (await summary.count()) {
+    await summary.getByRole("button", { name: "Start Review" }).click();
+  }
 }
 
 async function verifyCarousel(dialog, previewSurface) {

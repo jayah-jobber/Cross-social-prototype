@@ -1517,6 +1517,23 @@ type ChannelProgressStatus =
   | Extract<CalendarChannelStatus, "missed" | "error">
   | "suggested";
 
+type VersionFourSummaryStatus = "suggested" | "scheduled" | "sent" | "missed" | "error";
+
+const V4_SUMMARY_STATUS_PRESENTATION: Record<
+  VersionFourSummaryStatus,
+  { label: string; tone: "informative" | "success" | "warning" | "critical" }
+> = {
+  suggested: { label: "Suggested", tone: "informative" },
+  scheduled: { label: "Scheduled", tone: "success" },
+  sent: { label: "Sent", tone: "success" },
+  missed: { label: "Missed", tone: "warning" },
+  error: { label: "Error", tone: "critical" },
+};
+
+function versionFourSummaryStatus(status: ChannelProgressStatus): VersionFourSummaryStatus {
+  return status === "unscheduled" ? "suggested" : status;
+}
+
 function contextualProgressStatus(
   channel: ContextualChannel,
   deliveries: V4ChannelDeliveries,
@@ -1524,6 +1541,125 @@ function contextualProgressStatus(
 ): ChannelProgressStatus {
   if (channel === "google" && googleDemoState !== "suggested") return googleDemoState;
   return deliveries[channel].statusOverride ?? deliveries[channel].lifecycle;
+}
+
+function VersionFourSummaryModal({
+  title,
+  summary,
+  images,
+  channels,
+  statuses,
+  iconStyle = "jobber",
+  onStartReview,
+  onClose,
+}: {
+  title: string;
+  summary: string;
+  images: GalleryImage[];
+  channels: ContextualChannel[];
+  statuses: Partial<Record<ContextualChannel, ChannelProgressStatus>>;
+  iconStyle?: SocialIconStyle;
+  onStartReview: () => void;
+  onClose: () => void;
+}) {
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const orderedChannels = CONTEXTUAL_CHANNELS.filter(({ id }) => channels.includes(id));
+  const collageImages = images.length > 0
+    ? Array.from({ length: 3 }, (_, index) => images[index % images.length])
+    : [];
+
+  useEffect(() => {
+    closeButtonRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [onClose]);
+
+  return (
+    <div
+      className="calendar-modal-overlay v4-context-overlay v4-summary-overlay"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <section
+        className="v4-context-modal v4-summary-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="v4-summary-title"
+      >
+        <header className="v4-summary-header">
+          <button
+            ref={closeButtonRef}
+            type="button"
+            aria-label="Close summary"
+            onClick={onClose}
+          >
+            <X size={24} aria-hidden="true" />
+          </button>
+        </header>
+        <div className="v4-summary-body">
+          <section className="v4-summary-details">
+            <div className="v4-summary-copy">
+              <h1 id="v4-summary-title">{title}</h1>
+              <div>
+                <h2>Post to multiple channels for highest impact</h2>
+                <p>{summary}</p>
+              </div>
+              <hr />
+              <ul className="v4-summary-status-list" aria-label="Channel statuses">
+                {orderedChannels.map(({ id, label }) => {
+                  const status = versionFourSummaryStatus(statuses[id] ?? "suggested");
+                  const presentation = V4_SUMMARY_STATUS_PRESENTATION[status];
+                  return (
+                    <li key={id} data-channel={id}>
+                      <span className="v4-summary-channel">
+                        <StepperChannelIcon channel={id} iconStyle={iconStyle} />
+                        <span>{label}</span>
+                      </span>
+                      <span
+                        className={`v4-summary-status v4-summary-status--${presentation.tone}`}
+                        data-status={status}
+                      >
+                        <span aria-hidden="true" />
+                        {presentation.label}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+            <button
+              type="button"
+              className="primary-button v4-summary-start"
+              onClick={onStartReview}
+            >
+              Start Review
+            </button>
+          </section>
+          <section className="v4-summary-collage" aria-label="Campaign image collage">
+            {[0, 1, 2].map((index) => {
+              const image = collageImages[index];
+              return image ? (
+                <img src={image.src} alt={image.alt} key={`${image.id}-${index}`} />
+              ) : (
+                <div className="v4-summary-image-placeholder" key={index}>
+                  <Image size={32} aria-hidden="true" />
+                  <span className="sr-only">No campaign image available</span>
+                </div>
+              );
+            })}
+          </section>
+        </div>
+      </section>
+    </div>
+  );
 }
 
 function ChannelProgressStepper({
@@ -4986,6 +5122,8 @@ export default function App() {
   const [combinedWorkflow, setCombinedWorkflow] = useState<"modal" | "review" | "edit" | null>(null);
   const [combinedModalStartIndex, setCombinedModalStartIndex] = useState(0);
   const [v4ReviewOrigin, setV4ReviewOrigin] = useState<"saturday" | "suggested-content" | null>(null);
+  const [v4CardSummaryOpen, setV4CardSummaryOpen] = useState(false);
+  const [v4SuggestedSummaryOpen, setV4SuggestedSummaryOpen] = useState(false);
   const [calendarPrompt, setCalendarPrompt] = useState("");
   const [suggestedPrompt, setSuggestedPrompt] = useState("");
   const [suggestedDialogOpen, setSuggestedDialogOpen] = useState(false);
@@ -5117,6 +5255,9 @@ export default function App() {
       },
     };
   });
+  const activeV4CampaignTitle = v4CampaignCards.find(
+    ({ date }) => date === activeV4GroupDate,
+  )?.item.title ?? "Seasonal property cleanup in Hamilton";
   const showContextualToast = (message: string, dark = false) => {
     setScheduleToastVisible(false);
     setContextualToast((current) => ({ message, dark, id: (current?.id ?? 0) + 1 }));
@@ -5299,6 +5440,8 @@ export default function App() {
     setCombinedWorkflow(null);
     setCombinedModalStartIndex(0);
     setV4ReviewOrigin(null);
+    setV4CardSummaryOpen(false);
+    setV4SuggestedSummaryOpen(false);
     setCalendarPrompt("");
     setSuggestedPrompt("");
     setSuggestedDialogOpen(false);
@@ -5634,7 +5777,11 @@ export default function App() {
                         setCalendarPrompt("");
                         setSuggestedPreviewIndex(0);
                         setV4ReviewOrigin(null);
+                      if (version === "v4") {
+                        setV4SuggestedSummaryOpen(true);
+                      } else {
                         setSuggestedDialogOpen(true);
+                      }
                       }, 1200);
                     }
                   : undefined}
@@ -5658,7 +5805,12 @@ export default function App() {
                     setCombinedModalStartIndex(0);
                     setSocialWorkflowChannel(groupChannels[0]);
                     setV4ReviewOrigin("saturday");
-                    setCombinedWorkflow("modal");
+                    if (version === "v4") {
+                      setCombinedWorkflow(null);
+                      setV4CardSummaryOpen(true);
+                    } else {
+                      setCombinedWorkflow("modal");
+                    }
                   }
                 }}
                 combinedInteractive={version === "v3" || isDaisyVersion}
@@ -5667,6 +5819,46 @@ export default function App() {
                 channelStatuses={calendarStatuses[version]}
                 v4CampaignCards={isDaisyVersion ? v4CampaignCards : undefined}
               />
+              {v4CardSummaryOpen && version === "v4" && (
+                <VersionFourSummaryModal
+                  title={activeV4CampaignTitle}
+                  summary="Showcase this Hamilton property’s seasonal clean up and fresh mulch to demonstrate the results, build local trust, and help homeowners know when to book similar work."
+                  images={v4Drafts.all.images}
+                  channels={scopedV4Channels}
+                  statuses={v4ProgressStatuses}
+                  iconStyle={v4SocialIconStyle}
+                  onStartReview={() => {
+                    setV4CardSummaryOpen(false);
+                    setCombinedWorkflow("modal");
+                  }}
+                  onClose={() => {
+                    setV4CardSummaryOpen(false);
+                    setV4ReviewOrigin(null);
+                    setActiveV4GroupDate(null);
+                    setV4ReviewScopedChannels(null);
+                    setCombinedModalStartIndex(0);
+                  }}
+                />
+              )}
+              {v4SuggestedSummaryOpen && version === "v4" && (
+                <VersionFourSummaryModal
+                  title={suggestionCardTitle(suggestedPrompt)}
+                  summary={`Review the channel recommendations generated for “${suggestedPrompt}”. Each version is tailored to help this campaign reach customers where they are most likely to engage.`}
+                  images={v4Drafts.all.images}
+                  channels={availableV4Channels}
+                  statuses={suggestedProgressStatuses}
+                  iconStyle={v4SocialIconStyle}
+                  onStartReview={() => {
+                    setV4SuggestedSummaryOpen(false);
+                    setSuggestedDialogOpen(true);
+                  }}
+                  onClose={() => {
+                    setV4SuggestedSummaryOpen(false);
+                    setSuggestedPreviewIndex(0);
+                    setV4ReviewOrigin(null);
+                  }}
+                />
+              )}
               {suggestedDialogOpen && isDaisyVersion && (
                 <SuggestedMarketingContentDialog
                   variant={version === "v5" ? "vertical" : "horizontal"}
@@ -5985,7 +6177,8 @@ export default function App() {
             </div>
           )}
         </div>
-        {version === "v4" && combinedWorkflow === "modal" && (
+        {version === "v4"
+          && (combinedWorkflow === "modal" || v4CardSummaryOpen || v4SuggestedSummaryOpen) && (
           <SocialIconStyleControls
             value={v4SocialIconStyle}
             onChange={setV4SocialIconStyle}
