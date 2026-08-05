@@ -1333,6 +1333,7 @@ const CONTEXTUAL_CHANNELS: Array<{
   id: ContextualChannel;
   label: string;
   about: string;
+  rationale: string;
   destinationLabel: string;
   destination: string;
 }> = [
@@ -1340,6 +1341,7 @@ const CONTEXTUAL_CHANNELS: Array<{
     id: "google",
     label: "Google",
     about: "About this Google post",
+    rationale: "Help nearby homeowners discover your work when they search for landscaping services in Hamilton. A recent project builds local trust and gives customers a clear reason to contact you.",
     destinationLabel: "Post to",
     destination: "Google Business Profile · Beegreen Landscaping",
   },
@@ -1347,6 +1349,7 @@ const CONTEXTUAL_CHANNELS: Array<{
     id: "facebook",
     label: "Facebook",
     about: "About this Facebook post",
+    rationale: "Show the transformation to your local community, encourage reactions and shares, and keep your business top of mind when homeowners need seasonal clean up and mulching.",
     destinationLabel: "Post to",
     destination: "Facebook · Beegreen Landscaping",
   },
@@ -1354,6 +1357,7 @@ const CONTEXTUAL_CHANNELS: Array<{
     id: "instagram",
     label: "Instagram",
     about: "About this Instagram post",
+    rationale: "Lead with the visual transformation to showcase your craftsmanship, reach people looking for landscaping inspiration, and build recognition for your work in Hamilton.",
     destinationLabel: "Post to",
     destination: "Instagram · @beegreenlandscaping",
   },
@@ -1361,6 +1365,7 @@ const CONTEXTUAL_CHANNELS: Array<{
     id: "email",
     label: "Email",
     about: "About this email campaign",
+    rationale: "Give past customers and leads a timely seasonal reminder, demonstrate the results you deliver, and make it easy to book a similar clean up and mulching service.",
     destinationLabel: "Recipients",
     destination: "Customers and leads in Hamilton",
   },
@@ -1368,6 +1373,7 @@ const CONTEXTUAL_CHANNELS: Array<{
     id: "website",
     label: "Website",
     about: "About this website page",
+    rationale: "Turn this project into lasting proof of your expertise. It helps visitors evaluate your work, supports local search visibility, and gives homeowners confidence to request a similar service.",
     destinationLabel: "Publish to",
     destination: "Beegreen Landscaping website",
   },
@@ -1436,6 +1442,106 @@ function ContextualChannelIcon({ channel }: { channel: ContextualChannel }) {
   if (channel === "instagram") return <strong className="brand-instagram">◎</strong>;
   if (channel === "email") return <Mail size={18} />;
   return <WebsiteChannelIcon width={18} height={18} />;
+}
+
+const STEPPER_SOCIAL_ICON_SRC: Record<PreviewChannel, string> = {
+  google: "/assets/google-channel-icon.svg",
+  facebook: "/assets/facebook-channel-icon.png",
+  instagram: "/assets/instagram-channel-icon.png",
+};
+
+function StepperChannelIcon({ channel }: { channel: ContextualChannel }) {
+  if (channel === "email") {
+    return (
+      <span className="channel-progress-icon">
+        <Mail size={24} aria-hidden="true" />
+      </span>
+    );
+  }
+
+  if (channel === "website") {
+    return (
+      <span className="channel-progress-icon">
+        <WebsiteChannelIcon width={24} height={22} />
+      </span>
+    );
+  }
+
+  return (
+    <span className="channel-progress-icon">
+      <img
+        src={STEPPER_SOCIAL_ICON_SRC[channel]}
+        width={24}
+        height={24}
+        alt=""
+        aria-hidden="true"
+      />
+    </span>
+  );
+}
+
+type ChannelProgressStatus =
+  | V4ChannelState
+  | Extract<CalendarChannelStatus, "missed" | "error">
+  | "suggested";
+
+function contextualProgressStatus(
+  channel: ContextualChannel,
+  deliveries: V4ChannelDeliveries,
+  googleDemoState: GoogleContextDemoState,
+): ChannelProgressStatus {
+  if (channel === "google" && googleDemoState !== "suggested") return googleDemoState;
+  return deliveries[channel].statusOverride ?? deliveries[channel].lifecycle;
+}
+
+function ChannelProgressStepper({
+  channels,
+  activeChannel,
+  statuses,
+  onSelect,
+  className = "",
+}: {
+  channels: ContextualChannel[];
+  activeChannel: ContextualChannel;
+  statuses: Partial<Record<ContextualChannel, ChannelProgressStatus>>;
+  onSelect: (channel: ContextualChannel) => void;
+  className?: string;
+}) {
+  const orderedChannels = CONTEXTUAL_CHANNELS
+    .map(({ id }) => id)
+    .filter((channel) => channels.includes(channel));
+
+  return (
+    <nav
+      className={`channel-progress-stepper ${className}`.trim()}
+      aria-label="Channel delivery progress"
+    >
+      <ol
+        style={{ "--channel-count": orderedChannels.length } as React.CSSProperties}
+      >
+        {orderedChannels.map((channel) => {
+          const config = CONTEXTUAL_CHANNELS.find(({ id }) => id === channel)!;
+          const status = statuses[channel] ?? "unscheduled";
+          const completed = status === "scheduled" || status === "sent";
+          const active = channel === activeChannel;
+          return (
+            <li key={channel}>
+              <button
+                type="button"
+                className={`${active ? "active " : ""}${completed ? "completed" : ""}`.trim()}
+                aria-label={`${config.label}, ${status}`}
+                aria-current={active ? "step" : undefined}
+                title={`${config.label} · ${status}`}
+                onClick={() => onSelect(channel)}
+              >
+                <StepperChannelIcon channel={channel} />
+              </button>
+            </li>
+          );
+        })}
+      </ol>
+    </nav>
+  );
 }
 
 function EmailCampaignPreview({
@@ -1861,11 +1967,7 @@ function SuggestedHorizontalLayout({ model }: { model: SuggestedDialogModel }) {
             <h1>Seasonal property cleanup in Hamilton</h1>
             <section className="v4-about-copy">
               <div className="v4-about-heading"><h2>{model.active.about}</h2></div>
-              <p>
-                Showcase this Hamilton property’s seasonal clean up and fresh mulch to highlight
-                the work completed, demonstrate the visible results, and help local homeowners
-                understand when to book a similar landscaping service.
-              </p>
+              <p>{model.active.rationale}</p>
             </section>
             <dl className="v4-context-facts">
               <div>
@@ -1906,11 +2008,7 @@ function SuggestedVerticalLayout({ model }: { model: SuggestedDialogModel }) {
           <div className="suggested-v5-campaign-copy">
             <h2>Seasonal property cleanup in Hamilton</h2>
             <h3>{model.active.about}</h3>
-            <p>
-              Showcase this Hamilton property’s seasonal clean up and fresh mulch to highlight
-              the work completed, demonstrate the visible results, and help local homeowners
-              understand when to book a similar landscaping service.
-            </p>
+            <p>{model.active.rationale}</p>
           </div>
           <dl className="v5-context-facts">
             <div>
@@ -2363,7 +2461,8 @@ function VersionFourContextModal({
   const splitToggleRef = useRef<HTMLButtonElement>(null);
   const splitOptionRef = useRef<HTMLButtonElement>(null);
   const channels = CONTEXTUAL_CHANNELS.filter(({ id }) => availableChannels.includes(id));
-  const active = channels[Math.min(activeIndex, channels.length - 1)];
+  const safeIndex = Math.min(activeIndex, channels.length - 1);
+  const active = channels[safeIndex];
   const activeDelivery = channelDeliveries[active.id];
   const activeState = activeDelivery.lifecycle;
   const isGoogleDemo = active.id === "google";
@@ -2378,10 +2477,21 @@ function VersionFourContextModal({
   const presentationState = isGoogleDemo
     ? googleDemoState
     : activeState;
+  const previewTitle = active.id === "email"
+    ? "Email Campaign Preview"
+    : active.id === "website"
+      ? "Website Page Preview"
+      : `${active.label} Post Preview`;
   const hasOriginalScheduleDate = isGoogleDemo
     && (googleDemoState === "missed" || googleDemoState === "error");
-  const atStart = activeIndex === 0;
-  const atEnd = activeIndex === channels.length - 1;
+  const progressStatuses = Object.fromEntries(channels.map(({ id }) => [
+    id,
+    contextualProgressStatus(id, channelDeliveries, googleDemoState),
+  ])) as Partial<Record<ContextualChannel, ChannelProgressStatus>>;
+  const selectChannel = (channel: ContextualChannel) => {
+    setSplitMenuOpen(false);
+    setActiveIndex(channels.findIndex(({ id }) => id === channel));
+  };
   const goPrevious = () => {
     setSplitMenuOpen(false);
     setActiveIndex((current) => Math.max(0, current - 1));
@@ -2451,31 +2561,27 @@ function VersionFourContextModal({
         aria-modal="true"
         aria-labelledby="v4-context-navigation-title"
       >
-        <nav
-          className="v4-context-navigation"
-          aria-label="Channel preview"
+        <header
+          className="context-progress-header v4-context-navigation"
           inert={deleteDialogOpen ? true : undefined}
         >
           <h2 id="v4-context-navigation-title">Review multiple channels</h2>
-          <div className="v4-context-navigation-controls">
-            <button type="button" onClick={goPrevious} disabled={atStart} aria-label="Previous channel">
-              <ChevronLeft size={22} aria-hidden="true" />
-            </button>
-            <span aria-live="polite">{activeIndex + 1} of {channels.length}</span>
-            <button type="button" onClick={goNext} disabled={atEnd} aria-label="Next channel">
-              <ChevronRight size={22} aria-hidden="true" />
-            </button>
-          </div>
-        </nav>
-        <button
-          className="calendar-modal-close"
-          type="button"
-          aria-label="Close"
-          onClick={onClose}
-          inert={deleteDialogOpen ? true : undefined}
-        >
-          <X size={28} />
-        </button>
+          <ChannelProgressStepper
+            channels={channels.map(({ id }) => id)}
+            activeChannel={active.id}
+            statuses={progressStatuses}
+            onSelect={selectChannel}
+            className="channel-progress-stepper--modal-v4"
+          />
+          <button
+            className="context-progress-close"
+            type="button"
+            aria-label="Close"
+            onClick={onClose}
+          >
+            <X size={24} aria-hidden="true" />
+          </button>
+        </header>
 
         <div className="v4-context-body" inert={deleteDialogOpen ? true : undefined}>
           <section className="v4-context-details">
@@ -2501,11 +2607,7 @@ function VersionFourContextModal({
                     </span>
                   )}
                 </div>
-                <p>
-                  Showcase this Hamilton property’s seasonal clean up and fresh mulch to highlight
-                  the work completed, demonstrate the visible results, and help local homeowners
-                  understand when to book a similar landscaping service.
-                </p>
+                <p>{active.rationale}</p>
               </section>
               <dl className="v4-context-facts">
                 <div>
@@ -2646,7 +2748,10 @@ function VersionFourContextModal({
           </section>
 
           <section className="v4-context-preview" aria-label={`${active.label} content preview`}>
-            <header><Sparkles size={20} /><strong>{active.label} preview</strong></header>
+            <header>
+              <StepperChannelIcon channel={active.id} />
+              <strong>{previewTitle}</strong>
+            </header>
             <div className="v4-context-preview-scroll">
               <ContextualPreviewContent
                 channel={active.id}
@@ -2764,8 +2869,15 @@ function VersionFiveContextModal({
   const activeDelivery = channelDeliveries[active.id];
   const presentation = contextPresentation(active.id, activeDelivery, googleDemoState);
   const isGoogleDemo = active.id === "google";
-  const atStart = safeIndex === 0;
   const atEnd = safeIndex === channels.length - 1;
+  const progressStatuses = Object.fromEntries(channels.map(({ id }) => [
+    id,
+    contextualProgressStatus(id, channelDeliveries, googleDemoState),
+  ])) as Partial<Record<ContextualChannel, ChannelProgressStatus>>;
+  const selectChannel = (channel: ContextualChannel) => {
+    setSplitMenuOpen(false);
+    setActiveIndex(channels.findIndex(({ id }) => id === channel));
+  };
 
   const goPrevious = () => {
     setSplitMenuOpen(false);
@@ -2835,21 +2947,28 @@ function VersionFiveContextModal({
         aria-modal="true"
         aria-labelledby="v5-context-title"
       >
-        <header className="v5-context-header" inert={deleteDialogOpen ? true : undefined}>
-          <div>
-            <h1 id="v5-context-title">Seasonal property cleanup in Hamilton</h1>
-            <p>
-              Showcase this Hamilton property’s seasonal clean up and fresh mulch to highlight
-              the work completed, demonstrate the visible results, and help local homeowners
-              understand when to book a similar landscaping service.
-            </p>
-          </div>
-          <button type="button" aria-label="Close" onClick={onClose}>
-            <X size={26} />
+        <header
+          className="context-progress-header v5-context-header"
+          inert={deleteDialogOpen ? true : undefined}
+        >
+          <span>Review multiple channels</span>
+          <ChannelProgressStepper
+            channels={channels.map(({ id }) => id)}
+            activeChannel={active.id}
+            statuses={progressStatuses}
+            onSelect={selectChannel}
+            className="channel-progress-stepper--modal-v5"
+          />
+          <button className="context-progress-close" type="button" aria-label="Close" onClick={onClose}>
+            <X size={24} aria-hidden="true" />
           </button>
         </header>
 
         <section className="v5-context-content" inert={deleteDialogOpen ? true : undefined}>
+          <div className="v5-context-campaign-intro">
+            <h1 id="v5-context-title">Seasonal property cleanup in Hamilton</h1>
+            <p>{active.rationale}</p>
+          </div>
           <div className="v5-context-metadata">
             <div className="v5-preview-top-row">
               <div className="v5-preview-channel">
@@ -2868,15 +2987,6 @@ function VersionFiveContextModal({
                   </span>
                 )}
               </div>
-              <nav className="v5-context-navigation" aria-label="Channel preview">
-                <span aria-live="polite">{safeIndex + 1} of {channels.length}</span>
-                <button type="button" onClick={goPrevious} disabled={atStart} aria-label="Previous channel">
-                  <ChevronLeft size={20} aria-hidden="true" />
-                </button>
-                <button type="button" onClick={goNext} disabled={atEnd} aria-label="Next channel">
-                  <ChevronRight size={20} aria-hidden="true" />
-                </button>
-              </nav>
             </div>
             <dl className="v5-context-facts">
               <div>
@@ -3136,6 +3246,9 @@ function VersionFourChannelReview({
   onSendNow,
   onEditSchedule,
   delivery,
+  availableChannels,
+  progressStatuses,
+  onChannelChange,
   lifecycleEnabled = false,
   compactPreview = false,
   inactive = false,
@@ -3154,6 +3267,9 @@ function VersionFourChannelReview({
   onSendNow?: () => void;
   onEditSchedule?: () => void;
   delivery?: V4ChannelDelivery;
+  availableChannels: ContextualChannel[];
+  progressStatuses: Partial<Record<ContextualChannel, ChannelProgressStatus>>;
+  onChannelChange: (channel: ContextualChannel) => void;
   lifecycleEnabled?: boolean;
   compactPreview?: boolean;
   inactive?: boolean;
@@ -3232,6 +3348,16 @@ function VersionFourChannelReview({
       inert={inactive ? true : undefined}
     >
       <section className="review-panel">
+        <header className="review-navigation-header">
+          <span>Review multiple channels</span>
+          <ChannelProgressStepper
+            channels={availableChannels}
+            activeChannel={channel}
+            statuses={progressStatuses}
+            onSelect={onChannelChange}
+            className="channel-progress-stepper--review"
+          />
+        </header>
         <div className="review-scroll">
           <h1 id="v4-channel-review-title">{reviewTitle}</h1>
           <div className="about-content-row">
@@ -3304,7 +3430,7 @@ function VersionFourChannelReview({
               )}
               <span className="v4-split-button">
                 <button type="button" onClick={onSchedule}>
-                  Schedule {delivery ? formatV4DeliveryDate(delivery.date).replace(", 2026", "") : "Nov 7"}
+                  Schedule and view next
                 </button>
                 <button
                   ref={splitToggleRef}
@@ -3320,7 +3446,7 @@ function VersionFourChannelReview({
             </div>
           ) : (
             <button className="schedule-split" type="button" aria-disabled="true" onClick={visualOnly}>
-              <span>Schedule Nov 7</span><ChevronDown size={20} />
+              <span>Schedule and view next</span><ChevronDown size={20} />
             </button>
           )}
         </footer>
@@ -3450,7 +3576,7 @@ function VersionFourSocialEditor({
 }
 
 const GOOGLE_BUTTON_OPTIONS: Array<{ value: GoogleButtonAction; label: string }> = [
-  { value: "learn-more", label: "Learn more" },
+  { value: "learn-more", label: "Learn More" },
   { value: "book", label: "Book" },
   { value: "call-now", label: "Call now" },
 ];
@@ -3463,7 +3589,7 @@ const GOOGLE_LINK_OPTIONS: Array<{ value: GoogleLinkDestination; label: string; 
 ];
 
 function googleButtonLabel(action: GoogleButtonAction | undefined) {
-  return GOOGLE_BUTTON_OPTIONS.find((option) => option.value === action)?.label ?? "Learn more";
+  return GOOGLE_BUTTON_OPTIONS.find((option) => option.value === action)?.label ?? "Learn More";
 }
 
 function googleLinkLabel(destination: GoogleLinkDestination | undefined) {
@@ -4134,7 +4260,6 @@ function PlatformPreviewCard({
               ) : (
                 <button type="button">{googleButtonLabel(googleAction)}</button>
               )}
-              {usesExternalLink && externalLink && <span>{externalLink}</span>}
             </div>
           )}
         </div>
@@ -4824,6 +4949,8 @@ export default function App() {
   const [activeV4ContextChannel, setActiveV4ContextChannel] =
     useState<ContextualChannel | null>(null);
   const [activeV4GroupDate, setActiveV4GroupDate] = useState<string | null>(null);
+  const [v4ReviewScopedChannels, setV4ReviewScopedChannels] =
+    useState<ContextualChannel[] | null>(null);
   const [scheduleEditorChannel, setScheduleEditorChannel] = useState<ContextualChannel | null>(null);
   const [reviewDeleteChannel, setReviewDeleteChannel] = useState<ContextualChannel | null>(null);
   const [scheduleToastVisible, setScheduleToastVisible] = useState(false);
@@ -4866,6 +4993,17 @@ export default function App() {
   const scopedV4Channels = activeV4GroupDate
     ? availableV4Channels.filter((channel) => v4ChannelDeliveries[channel].date === activeV4GroupDate)
     : availableV4Channels;
+  const reviewScopedV4Channels = (v4ReviewScopedChannels ?? scopedV4Channels)
+    .filter((channel) => !v4ChannelDeliveries[channel].deleted);
+  const v4ProgressStatuses = Object.fromEntries(CONTEXTUAL_CHANNELS.map(({ id }) => [
+    id,
+    contextualProgressStatus(id, v4ChannelDeliveries, googleContextDemoState),
+  ])) as Partial<Record<ContextualChannel, ChannelProgressStatus>>;
+  const suggestedProgressStatuses = Object.fromEntries(CONTEXTUAL_CHANNELS.map(({ id }) => [
+    id,
+    calendarStatuses[activeDaisyVersion].suggested?.[CONTEXTUAL_TO_CALENDAR_CHANNEL[id]]
+      ?? "suggested",
+  ])) as Partial<Record<ContextualChannel, ChannelProgressStatus>>;
   const v4CampaignCards: V4CampaignCalendarCard[] = Array.from(
     new Set(availableV4Channels.map((channel) => v4ChannelDeliveries[channel].date)),
   ).sort().map((date) => {
@@ -5001,6 +5139,39 @@ export default function App() {
       showContextualToast(contextualSuccessMessage(channel, "post"), true);
     }
     if (returnToContext) returnToV4ContextAfter(channel, originDate, nextDeliveries);
+    return nextDeliveries;
+  };
+  const performReviewDeliveryAction = (
+    channel: ContextualChannel,
+    action: Extract<V4LifecycleAction, "schedule" | "send">,
+  ) => {
+    if (version === "v5") {
+      performV4LifecycleAction(channel, action, true);
+      return;
+    }
+
+    const nextDeliveries = performV4LifecycleAction(channel, action);
+    const actedIndex = CONTEXTUAL_CHANNELS.findIndex(({ id }) => id === channel);
+    const reviewScope = v4ReviewScopedChannels ?? scopedV4Channels;
+    const nextChannel = CONTEXTUAL_CHANNELS
+      .slice(actedIndex + 1)
+      .map(({ id }) => id)
+      .find((candidate) => (
+        reviewScope.includes(candidate)
+        && !nextDeliveries[candidate].deleted
+      ));
+
+    if (nextChannel) {
+      setSocialWorkflowChannel(nextChannel);
+      setCombinedWorkflow("review");
+      return;
+    }
+
+    setCombinedWorkflow(null);
+    setV4ReviewOrigin(null);
+    setActiveV4GroupDate(null);
+    setV4ReviewScopedChannels(null);
+    setCombinedModalStartIndex(0);
   };
   const deleteV4Channel = (channel: ContextualChannel) => {
     if (channel === "google") setGoogleContextDemoState("suggested");
@@ -5016,6 +5187,7 @@ export default function App() {
     };
     setV4ChannelDeliveries(nextDeliveries);
     setReviewDeleteChannel(null);
+    setV4ReviewScopedChannels(null);
     showContextualToast(contextualDeletionMessage(channel), true);
     returnToV4ContextAfter(channel, originDate, nextDeliveries);
   };
@@ -5067,6 +5239,7 @@ export default function App() {
     setSocialEditDraft(null);
     setActiveV4ContextChannel(null);
     setActiveV4GroupDate(null);
+    setV4ReviewScopedChannels(null);
     setScheduleEditorChannel(null);
     setReviewDeleteChannel(null);
     setScheduleToastVisible(false);
@@ -5262,6 +5435,9 @@ export default function App() {
                 websiteTitle={v4WebsiteTitle}
                 images={v4Drafts.all.images}
                 compactPreview
+                availableChannels={CONTEXTUAL_CHANNELS.map(({ id }) => id)}
+                progressStatuses={suggestedProgressStatuses}
+                onChannelChange={setSuggestedReviewChannel}
                 onBack={returnFromSuggestedReview}
                 onEdit={() => {
                   setSuggestedEditor(suggestedReviewChannel);
@@ -5303,17 +5479,18 @@ export default function App() {
                 inactive={reviewDeleteChannel !== null}
                 lifecycleEnabled={v4ReviewOrigin === "saturday"}
                 delivery={v4ChannelDeliveries[socialWorkflowChannel]}
+                availableChannels={reviewScopedV4Channels}
+                progressStatuses={v4ProgressStatuses}
+                onChannelChange={setSocialWorkflowChannel}
                 onEditSchedule={() => setScheduleEditorChannel(socialWorkflowChannel)}
                 onDelete={() => setReviewDeleteChannel(socialWorkflowChannel)}
-                onSchedule={() => performV4LifecycleAction(
+                onSchedule={() => performReviewDeliveryAction(
                   socialWorkflowChannel,
                   "schedule",
-                  true,
                 )}
-                onSendNow={() => performV4LifecycleAction(
+                onSendNow={() => performReviewDeliveryAction(
                   socialWorkflowChannel,
                   "send",
-                  true,
                 )}
                 onBack={() => {
                   if (v4ReviewOrigin === "suggested-content") {
@@ -5325,6 +5502,7 @@ export default function App() {
                     return;
                   }
                   setCombinedModalStartIndex(scopedV4Channels.indexOf(socialWorkflowChannel));
+                  setV4ReviewScopedChannels(null);
                   setCombinedWorkflow("modal");
                 }}
                 onEdit={() => {
@@ -5401,6 +5579,7 @@ export default function App() {
                     );
                     if (groupChannels.length === 0) return;
                     setActiveV4GroupDate(campaignDate);
+                    setV4ReviewScopedChannels(null);
                     setCombinedModalStartIndex(0);
                     setSocialWorkflowChannel(groupChannels[0]);
                     setV4ReviewOrigin("saturday");
@@ -5543,10 +5722,12 @@ export default function App() {
                     setCombinedModalStartIndex(0);
                     setV4ReviewOrigin(null);
                     setActiveV4GroupDate(null);
+                    setV4ReviewScopedChannels(null);
                     setCombinedWorkflow(null);
                   }}
                   onEdit={(channel) => {
                     setCombinedModalStartIndex(scopedV4Channels.indexOf(channel));
+                    setV4ReviewScopedChannels(scopedV4Channels);
                     setSocialWorkflowChannel(channel);
                     setV4ReviewOrigin("saturday");
                     setCombinedWorkflow("review");
@@ -5690,6 +5871,7 @@ export default function App() {
                   ));
                 setV4ChannelDeliveries(nextDeliveries);
                 setActiveV4GroupDate(date);
+                setV4ReviewScopedChannels(destinationChannels);
                 setCombinedModalStartIndex(destinationChannels.indexOf(channel));
                 setScheduleEditorChannel(null);
               }}

@@ -30,7 +30,9 @@ try {
     await modal().getByRole("heading", { name: "Seasonal property cleanup in Hamilton" }).count(),
     1,
   );
-  assert.equal(await modal().getByText("1 of 5", { exact: true }).count(), 1);
+  const modalStepper = modal().locator(".channel-progress-stepper--modal-v5");
+  assert.equal(await modalStepper.getByRole("button").count(), 5);
+  assert.equal(await modal().locator(".v4-context-navigation-controls, .v5-context-navigation").count(), 0);
   assert.equal(await modal().locator(".v5-context-facts").getByRole("button", { name: "Edit" }).count(), 0);
 
   const overflow = await page.evaluate(() => ({
@@ -46,18 +48,13 @@ try {
   assert.ok(footerPosition.y + footerPosition.height <= modalPosition.y + modalPosition.height + 1);
 
   const channelNames = ["Google", "Facebook", "Instagram", "Email", "Website"];
-  for (const [index, channel] of channelNames.entries()) {
+  for (const channel of channelNames) {
+    await modalStepper.getByRole("button", { name: new RegExp(`^${channel},`) }).click();
     await modal().locator(".v5-preview-channel").getByText(channel, { exact: true }).waitFor();
-    assert.equal(await modal().getByText(`${index + 1} of 5`, { exact: true }).count(), 1);
     assert.equal(await modal().locator(".v5-context-preview-surface > *").count(), 1);
-    if (index < channelNames.length - 1) {
-      await modal().getByRole("button", { name: "Next channel" }).click();
-    }
   }
 
-  for (let index = 0; index < 4; index += 1) {
-    await modal().getByRole("button", { name: "Previous channel" }).click();
-  }
+  await modalStepper.getByRole("button", { name: /^Google,/ }).click();
 
   const controls = page.getByRole("group", { name: "Google contextual modal demo status" });
   for (const state of ["Suggested", "Scheduled", "Sent", "Missed", "Error"]) {
@@ -86,10 +83,12 @@ try {
   await googleButton.getByLabel("Button URL").fill("https://example.com/v5-book");
   await page.locator(".editor-footer").getByRole("button", { name: "Save Edit" }).click();
   await page.locator(".review-footer").getByRole("button", { name: "Back" }).click();
-  await modal().locator(".v5-context-preview-surface").getByRole("link", { name: "Book" }).waitFor();
-  assert.ok((await modal().textContent()).includes("https://example.com/v5-book"));
+  const bookLink = modal().locator(".v5-context-preview-surface").getByRole("link", { name: "Book" });
+  await bookLink.waitFor();
+  assert.equal(await bookLink.getAttribute("href"), "https://example.com/v5-book");
+  assert.equal((await modal().textContent()).includes("https://example.com/v5-book"), false);
 
-  await modal().getByRole("button", { name: "Next channel" }).click();
+  await modalStepper.getByRole("button", { name: /^Facebook,/ }).click();
   await footer().getByRole("button", { name: "Edit", exact: true }).click();
   await page.getByRole("heading", { name: "Review Facebook Post" }).waitFor();
   await page.locator(".review-field").first().getByRole("button", { name: "Edit" }).click();
@@ -101,7 +100,7 @@ try {
   await modal().locator(".channel-post-copy").getByText("#v5-only-hashtag", { exact: true }).waitFor();
 
   await footer().getByRole("button", { name: "Schedule and view next", exact: true }).click();
-  await modal().getByRole("button", { name: "Previous channel" }).click();
+  await modalStepper.getByRole("button", { name: "Facebook, scheduled" }).click();
   assert.equal(
     (await modal().locator(".v5-preview-channel .v4-context-status").textContent())?.trim(),
     "Scheduled",
@@ -115,8 +114,10 @@ try {
   await saturdayCard().click();
   assert.equal(await page.locator(".v4-five-channel-modal").count(), 1);
   assert.equal(await page.locator(".v5-context-modal").count(), 0);
-  assert.equal((await page.locator(".v4-context-navigation-controls span").textContent())?.trim(), "1 of 5");
-  await page.locator(".v4-five-channel-modal").getByRole("button", { name: "Next channel" }).click();
+  assert.equal(await page.locator(".v4-five-channel-modal .v4-context-navigation-controls").count(), 0);
+  await page.locator(".channel-progress-stepper--modal-v4")
+    .getByRole("button", { name: /^Facebook,/ })
+    .click();
   assert.equal(
     (await page.locator(".v4-context-preview").textContent()).includes("v5-only-contact"),
     false,
@@ -126,8 +127,15 @@ try {
   await page.locator(".v4-five-channel-modal").getByRole("button", { name: "Close" }).click();
   await select("Version 5");
   await saturdayCard().click();
-  assert.equal((await modal().getByText("1 of 5", { exact: true }).count()), 1);
-  await modal().getByRole("button", { name: "Next channel" }).click();
+  assert.equal(
+    await modal().locator(".channel-progress-stepper--modal-v5")
+      .getByRole("button", { name: /^Google,/ })
+      .getAttribute("aria-current"),
+    "step",
+  );
+  await modal().locator(".channel-progress-stepper--modal-v5")
+    .getByRole("button", { name: /^Facebook,/ })
+    .click();
   assert.equal(
     (await modal().locator(".v5-context-preview-surface").textContent()).includes("v5-only-contact"),
     false,

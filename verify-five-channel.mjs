@@ -183,7 +183,10 @@ async function verifyChannel(channel, index) {
   await expectHeading(channel.review);
   assert.ok((await page.locator(".review-field").first().textContent()).includes(saveMarker));
   if (channel.id === "google") {
-    assert.ok((await page.locator(".v4-facebook-preview").textContent()).includes(`https://example.com/${saveMarker}`));
+    const preview = page.locator(".v4-facebook-preview");
+    const learnMoreLink = preview.getByRole("link", { name: "Learn More" });
+    assert.equal(await learnMoreLink.getAttribute("href"), `https://example.com/${saveMarker}`);
+    assert.equal((await preview.textContent()).includes(`https://example.com/${saveMarker}`), false);
   }
 
   await reviewBack().click();
@@ -221,7 +224,8 @@ try {
 
   await page.getByLabel("Close suggested marketing content").click();
   await page.locator(".combined-target-card").click();
-  await page.getByRole("button", { name: "Next channel" }).click();
+  const modalStepper = page.locator(".channel-progress-stepper--modal-v4");
+  await modalStepper.getByRole("button", { name: /^Facebook,/ }).click();
   await page.locator(".v4-context-footer").getByRole("button", { name: "Edit" }).click();
   await expectHeading("Review Facebook Post");
   await contentEdit().click();
@@ -236,8 +240,12 @@ try {
   );
   await reviewBack().click();
   await page.getByRole("dialog").waitFor();
-  await page.getByText("2 of 5", { exact: true }).waitFor();
-  await page.getByRole("button", { name: "Next channel" }).click();
+  assert.equal(
+    await modalStepper.getByRole("button", { name: /^Facebook,/ }).getAttribute("aria-current"),
+    "step",
+  );
+  assert.equal(await page.locator(".v4-context-navigation-controls").count(), 0);
+  await modalStepper.getByRole("button", { name: /^Instagram,/ }).click();
   assert.equal(
     (await page.locator(".v4-context-preview").textContent()).includes("saturday-facebook-saved"),
     false,
@@ -256,7 +264,7 @@ try {
     0,
   );
   await reviewBack().click();
-  await page.getByRole("button", { name: "Previous channel" }).click();
+  await modalStepper.getByRole("button", { name: /^Facebook,/ }).click();
   const saturdayFacebookPreview = await page.locator(".v4-context-preview").textContent();
   assert.ok(saturdayFacebookPreview.includes("saturday-facebook-saved"));
   assert.equal(

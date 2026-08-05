@@ -45,7 +45,7 @@ try {
   const menu = buttonSection().getByRole("menu", { name: "Button text options" });
   assert.deepEqual(
     await menu.getByRole("menuitemradio").allTextContents(),
-    ["Learn more", "Book", "Call now"],
+    ["Learn More", "Book", "Call now"],
   );
   assert.equal(await menu.getByRole("menuitemradio").first().evaluate((item) => item === document.activeElement), true);
   await page.keyboard.press("ArrowDown");
@@ -137,7 +137,7 @@ try {
   await page.getByRole("heading", { name: "Review Google Post", exact: true }).waitFor();
   await page.locator(".review-field").first().getByRole("button", { name: "Edit" }).click();
   await expectGoogleEditor();
-  assert.equal(await buttonText().textContent(), "TextLearn more");
+  assert.equal(await buttonText().textContent(), "TextLearn More");
   assert.equal(await buttonUrl().inputValue(), "http://yourwebsite.com");
   assert.match(await linkDestination().getAttribute("aria-label"), /External link$/);
 

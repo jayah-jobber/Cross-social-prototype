@@ -24,10 +24,22 @@ async function openSaturday() {
 }
 
 async function expectProgress(value) {
+  const [expectedIndex, expectedCount] = value.split(" of ").map(Number);
+  const buttons = modal().locator(".channel-progress-stepper--modal-v4").getByRole("button");
+  assert.equal(await buttons.count(), expectedCount);
   assert.equal(
-    (await modal().locator(".v4-context-navigation-controls span").textContent())?.trim(),
-    value,
+    await buttons.evaluateAll((items) => (
+      items.findIndex((button) => button.getAttribute("aria-current") === "step") + 1
+    )),
+    expectedIndex,
   );
+  assert.equal(await modal().locator(".v4-context-navigation-controls").count(), 0);
+}
+
+async function selectModalChannel(channel) {
+  await modal().locator(".channel-progress-stepper--modal-v4")
+    .getByRole("button", { name: new RegExp(`^${channel},`) })
+    .click();
 }
 
 async function deleteCurrentFromModal(buttonName = "Delete Post") {
@@ -128,8 +140,7 @@ try {
 
   // Contextual Post now moves Instagram to Nov 6 and keeps the remaining scope coherent.
   await openSaturday();
-  await modal().getByRole("button", { name: "Next channel" }).click();
-  await modal().getByRole("button", { name: "Next channel" }).click();
+  await selectModalChannel("Instagram");
   await postCurrentNow();
   await page.getByText("Your Instagram post has been successfully posted.", { exact: true }).waitFor();
   await expectProgress("3 of 4");
@@ -150,7 +161,7 @@ try {
   await expectProgress("1 of 4");
 
   // Multiple Post now actions aggregate on one Nov 6 Sent card.
-  await modal().getByRole("button", { name: "Next channel" }).click();
+  await selectModalChannel("Facebook");
   await postCurrentNow();
   await page.getByText("Your Facebook post has been successfully posted.", { exact: true }).waitFor();
   await modal().getByRole("button", { name: "Close", exact: true }).click();
@@ -188,7 +199,7 @@ try {
   await openSaturday();
   await modalFooter().getByRole("button", { name: "Schedule and view next", exact: true }).click();
   await page.getByText("Your post is scheduled", { exact: true }).waitFor();
-  await modal().getByRole("button", { name: "Previous channel" }).click();
+  await selectModalChannel("Google");
   await modalFooter().getByRole("button", { name: "Show scheduled post options" }).click();
   await modal().getByRole("menuitem", { name: "Send now", exact: true }).click();
   await page.getByText("Your Google post has been successfully posted.", { exact: true }).waitFor();
@@ -198,7 +209,7 @@ try {
   // Saturday review uses its current date and has scheduling/posting parity.
   await selectVersionFour();
   await openSaturday();
-  await modal().getByRole("button", { name: "Next channel" }).click();
+  await selectModalChannel("Facebook");
   await modalFooter().getByRole("button", { name: "Edit", exact: true }).click();
   await page.getByRole("heading", { name: "Review Facebook Post" }).waitFor();
   assert.equal(
@@ -210,20 +221,26 @@ try {
   await scheduleDialog.getByRole("button", { name: "Save Edits" }).click();
   await reviewSchedule.getByText("Nov 8, 2026 9:00 AM", { exact: true }).waitFor();
   assert.equal(
-    await reviewFooter().getByRole("button", { name: "Schedule Nov 8", exact: true }).count(),
+    await reviewFooter().getByRole("button", { name: "Schedule and view next", exact: true }).count(),
     1,
   );
-  await reviewFooter().getByRole("button", { name: "Schedule Nov 8" }).click();
+  await reviewFooter().getByRole("button", { name: "Schedule and view next", exact: true }).click();
   await page.getByText("Your post is scheduled", { exact: true }).waitFor();
   assert.equal(await modal().count(), 0);
   assert.equal(await campaignCard("Sunday, Nov 8").locator(".status-scheduled").count(), 1);
 
   await selectVersionFour();
   await openSaturday();
-  await modal().getByRole("button", { name: "Next channel" }).click();
+  await selectModalChannel("Facebook");
   await modalFooter().getByRole("button", { name: "Edit", exact: true }).click();
   await reviewFooter().getByRole("button", { name: "Show publishing options" }).click();
   await page.getByRole("menuitem", { name: "Post now", exact: true }).click();
+  await page.getByRole("heading", { name: "Review Instagram Post" }).waitFor();
+  assert.equal(
+    await page.getByRole("button", { name: "Facebook, sent" }).getAttribute("class"),
+    "completed",
+  );
+  await reviewFooter().getByRole("button", { name: "Back" }).click();
   await expectProgress("2 of 4");
   await page.getByText("Your Facebook post has been successfully posted.", { exact: true }).waitFor();
   await modal().getByRole("button", { name: "Close", exact: true }).click();

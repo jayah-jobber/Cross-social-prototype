@@ -21,17 +21,17 @@ async function expectFacts(dateLabel) {
 }
 
 async function selectState(label) {
-  const progressBefore = (await modal().locator(
-    ".v4-context-navigation-controls span",
-  ).textContent())?.trim();
+  const stepper = modal().locator(".channel-progress-stepper--modal-v4");
+  const activeBefore = await stepper.locator("[aria-current='step']").getAttribute("aria-label");
   const cardCountBefore = await saturdayCard().count();
   await controls().getByRole("button", { name: label, exact: true }).click();
   assert.equal(await modal().count(), 1, `${label} must keep the modal open`);
   assert.equal(
-    (await modal().locator(".v4-context-navigation-controls span").textContent())?.trim(),
-    progressBefore,
-    `${label} must keep the carousel index`,
+    (await stepper.locator("[aria-current='step']").getAttribute("aria-label"))?.split(",")[0],
+    activeBefore?.split(",")[0],
+    `${label} must keep the active channel`,
   );
+  assert.equal(await modal().locator(".v4-context-navigation-controls").count(), 0);
   assert.equal(await saturdayCard().count(), cardCountBefore, `${label} must not move the card`);
   assert.equal(
     await controls().getByRole("button", { name: label, exact: true }).getAttribute("aria-pressed"),
@@ -98,9 +98,13 @@ try {
   await footer().getByRole("button", { name: "Edit", exact: true }).waitFor();
   await footer().getByRole("button", { name: "Post Now", exact: true }).waitFor();
 
-  await modal().getByRole("button", { name: "Next channel" }).click();
+  await modal().locator(".channel-progress-stepper--modal-v4")
+    .getByRole("button", { name: /^Facebook,/ })
+    .click();
   assert.equal(await controls().count(), 0, "Controls must hide on Facebook");
-  await modal().getByRole("button", { name: "Previous channel" }).click();
+  await modal().locator(".channel-progress-stepper--modal-v4")
+    .getByRole("button", { name: /^Google,/ })
+    .click();
   await controls().getByRole("button", { name: "Error", exact: true }).waitFor();
   assert.equal(
     await controls().getByRole("button", { name: "Error", exact: true }).getAttribute("aria-pressed"),
