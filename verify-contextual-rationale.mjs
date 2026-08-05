@@ -14,27 +14,27 @@ const channels = [
   {
     label: "Google",
     heading: "About this Google post",
-    rationale: "Help nearby homeowners discover your work when they search for landscaping services in Hamilton. A recent project builds local trust and gives customers a clear reason to contact you.",
+    rationale: "Keep your Google presence active and help nearby homeowners find you in local search. Showcasing a real Hamilton project builds trust and gives potential leads confidence to contact you.",
   },
   {
     label: "Facebook",
     heading: "About this Facebook post",
-    rationale: "Show the transformation to your local community, encourage reactions and shares, and keep your business top of mind when homeowners need seasonal clean up and mulching.",
+    rationale: "Build trust by sharing real work with your local community. Facebook expands your reach through reactions and shares, helping more nearby homeowners discover your business and become potential leads.",
   },
   {
     label: "Instagram",
     heading: "About this Instagram post",
-    rationale: "Lead with the visual transformation to showcase your craftsmanship, reach people looking for landscaping inspiration, and build recognition for your work in Hamilton.",
+    rationale: "Build trust with a visual showcase of real work. Instagram helps your transformation reach a broader local audience, attract homeowners looking for inspiration, and turn that interest into potential leads.",
   },
   {
     label: "Email",
     heading: "About this email campaign",
-    rationale: "Give past customers and leads a timely seasonal reminder, demonstrate the results you deliver, and make it easy to book a similar clean up and mulching service.",
+    rationale: "Support relationships with existing customers and past leads by sharing timely, relevant work. This project reminds them what you offer and encourages repeat or seasonal bookings.",
   },
   {
     label: "Website",
     heading: "About this website page",
-    rationale: "Turn this project into lasting proof of your expertise. It helps visitors evaluate your work, supports local search visibility, and gives homeowners confidence to request a similar service.",
+    rationale: "Keep your website current and help your business appear in local search with a detailed project update. Showing real work builds trust and helps visitors choose your service.",
   },
 ];
 

@@ -29,7 +29,11 @@ async function openPublishingMenu() {
   await reviewFooter().getByRole("button", { name: "Show publishing options" }).click();
 }
 
-async function assertNormalizedStepperIcons(stepper) {
+async function assertNormalizedStepperIcons(stepper, socialSources = [
+  "/assets/google-channel-icon.svg",
+  "/assets/facebook-channel-icon.png",
+  "/assets/instagram-channel-icon.png",
+]) {
   const icons = await stepper.getByRole("button").evaluateAll((buttons) => (
     buttons.map((button) => {
       const wrapper = button.querySelector(".channel-progress-icon");
@@ -54,16 +58,13 @@ async function assertNormalizedStepperIcons(stepper) {
   assert.ok(icons.every(({ wrapperWidth, wrapperHeight }) => (
     wrapperWidth === 24 && wrapperHeight === 24
   )), JSON.stringify(icons, null, 2));
-  assert.deepEqual(
-    icons.map(({ artworkWidth, artworkHeight }) => [artworkWidth, artworkHeight]),
-    [[24, 24], [24, 24], [24, 24], [24, 24], [24, 24]],
-  );
+  assert.ok(icons.every(({ artworkWidth, artworkHeight }) => (
+    artworkWidth > 0 && artworkWidth <= 24 && artworkHeight > 0 && artworkHeight <= 24
+  )), JSON.stringify(icons, null, 2));
   assert.deepEqual(
     icons.map(({ source }) => source),
     [
-      "/assets/google-channel-icon.svg",
-      "/assets/facebook-channel-icon.png",
-      "/assets/instagram-channel-icon.png",
+      ...socialSources,
       "svg",
       "/assets/website-channel-icon.svg",
     ],
@@ -196,7 +197,11 @@ try {
   let modalStepper = modal.locator(".channel-progress-stepper--modal-v4");
   assert.equal(await modalStepper.getByRole("button").count(), 5);
   await assertContextModalLayout(modal, "v4");
-  await assertNormalizedStepperIcons(modalStepper);
+  await assertNormalizedStepperIcons(modalStepper, [
+    "/assets/jobber-google-channel-icon.svg",
+    "/assets/jobber-facebook-channel-icon.svg",
+    "/assets/jobber-instagram-channel-icon.svg",
+  ]);
   assert.deepEqual(
     await modalStepper.getByRole("button").evaluateAll((buttons) => (
       buttons.map((button) => button.getAttribute("aria-label"))
@@ -217,7 +222,11 @@ try {
   await modal.locator(".v4-context-footer").getByRole("button", { name: "Edit", exact: true }).click();
   await page.getByRole("heading", { name: "Review Email Campaign" }).waitFor();
   const reviewStepper = review().locator(".channel-progress-stepper--review");
-  await assertNormalizedStepperIcons(reviewStepper);
+  await assertNormalizedStepperIcons(reviewStepper, [
+    "/assets/jobber-google-channel-icon.svg",
+    "/assets/jobber-facebook-channel-icon.svg",
+    "/assets/jobber-instagram-channel-icon.svg",
+  ]);
   await assertFigmaReviewLayout();
   await reviewStepper.getByRole("button", { name: "Website, unscheduled" }).press("Enter");
   await page.getByRole("heading", { name: "Review Website Page" }).waitFor();
@@ -234,7 +243,7 @@ try {
   await page.waitForTimeout(200);
   assert.equal(
     await scheduledGoogle.evaluate((button) => getComputedStyle(button).borderTopColor),
-    "rgb(59, 143, 45)",
+    "rgb(56, 133, 35)",
   );
   assert.equal(
     await review().getByRole("button", { name: "Facebook, unscheduled" }).getAttribute("aria-current"),

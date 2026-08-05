@@ -708,21 +708,21 @@ button {
 }
 
 .channel-progress-stepper button.completed {
-  border-color: #3b8f2d;
+  border-color: #388523;
 }
 
 .channel-progress-stepper button.active {
-  border-color: #073747;
-  box-shadow:
-    0 0 0 3px #e0e5e6,
-    0 1px 2px rgb(3 43 58 / 8%);
+  border-color: #032b3a;
+  color: white;
+  background: #032b3a;
+  box-shadow: none;
 }
 
 .channel-progress-stepper button.active.completed {
-  border-color: #3b8f2d;
-  box-shadow:
-    0 0 0 3px #fff,
-    0 0 0 6px #073747;
+  border-color: #388523;
+  color: white;
+  background: #032b3a;
+  box-shadow: none;
 }
 
 .channel-progress-stepper button:focus-visible {
@@ -747,6 +747,33 @@ button {
   height: 24px;
   flex: none;
   object-fit: contain;
+}
+
+.channel-preview-title-icon {
+  display: grid;
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  place-items: center;
+  line-height: 0;
+}
+
+.channel-preview-title-icon > img,
+.channel-preview-title-icon > svg {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  object-fit: contain;
+}
+
+.channel-progress-stepper button.active
+  .channel-progress-icon[data-icon-style="jobber"]
+  > .jobber-social-icon,
+.channel-progress-stepper button.active
+  .channel-progress-icon[data-channel="website"]
+  > img {
+  filter: brightness(0) invert(1);
 }
 
 .channel-progress-stepper--modal-v4,
@@ -940,6 +967,10 @@ button {
   padding: 0 16px;
   border-bottom: 1px solid #e2e5e5;
   font-size: 16px;
+}
+
+.v4-context-preview > header > strong {
+  line-height: 1.25;
 }
 
 .v4-context-preview > .v3-social-preview-tabs {
@@ -2262,6 +2293,72 @@ button {
   width: 8px;
   height: 8px;
   flex-basis: 8px;
+}
+
+.prototype-icon-style-controls {
+  position: absolute;
+  z-index: 110;
+  right: 16px;
+  bottom: 14px;
+  padding: 8px 10px 10px;
+  border: 1px dashed #72888f;
+  border-radius: 8px;
+  margin: 0;
+  background: #eef2f3;
+  box-shadow: 0 4px 14px rgb(3 43 58 / 18%);
+}
+
+.prototype-icon-style-controls legend {
+  padding: 0 6px;
+  color: #3d5962;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+
+.prototype-icon-style-controls > div {
+  display: flex;
+  gap: 3px;
+  padding: 3px;
+  border-radius: 7px;
+  background: #dce5e7;
+}
+
+.prototype-icon-style-controls label {
+  position: relative;
+  margin: 0;
+  cursor: pointer;
+}
+
+.prototype-icon-style-controls input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.prototype-icon-style-controls label span {
+  display: grid;
+  min-width: 72px;
+  height: 30px;
+  place-items: center;
+  padding: 0 10px;
+  border-radius: 5px;
+  color: #405a63;
+  background: transparent;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.prototype-icon-style-controls input:checked + span {
+  color: var(--ink);
+  background: white;
+  box-shadow: 0 1px 3px rgb(3 43 58 / 15%);
+}
+
+.prototype-icon-style-controls input:focus-visible + span {
+  outline: 2px solid #1565c0;
+  outline-offset: 2px;
 }
 
 .prototype-neutral-dot {

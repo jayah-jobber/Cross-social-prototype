@@ -114,6 +114,7 @@ const LOCKED_PROTOTYPE_VERSION = configuredLockedVersion
   : undefined;
 type V2Tab = "all" | "google" | "facebook" | "instagram";
 type PreviewChannel = Exclude<V2Tab, "all">;
+type SocialIconStyle = "jobber" | "brand";
 type GoogleButtonAction = "learn-more" | "book" | "call-now";
 type GoogleLinkDestination = "external" | "booking" | "default-form" | "other-form";
 type EnabledChannels = Record<PreviewChannel, boolean>;
@@ -1341,7 +1342,7 @@ const CONTEXTUAL_CHANNELS: Array<{
     id: "google",
     label: "Google",
     about: "About this Google post",
-    rationale: "Help nearby homeowners discover your work when they search for landscaping services in Hamilton. A recent project builds local trust and gives customers a clear reason to contact you.",
+    rationale: "Keep your Google presence active and help nearby homeowners find you in local search. Showcasing a real Hamilton project builds trust and gives potential leads confidence to contact you.",
     destinationLabel: "Post to",
     destination: "Google Business Profile · Beegreen Landscaping",
   },
@@ -1349,7 +1350,7 @@ const CONTEXTUAL_CHANNELS: Array<{
     id: "facebook",
     label: "Facebook",
     about: "About this Facebook post",
-    rationale: "Show the transformation to your local community, encourage reactions and shares, and keep your business top of mind when homeowners need seasonal clean up and mulching.",
+    rationale: "Build trust by sharing real work with your local community. Facebook expands your reach through reactions and shares, helping more nearby homeowners discover your business and become potential leads.",
     destinationLabel: "Post to",
     destination: "Facebook · Beegreen Landscaping",
   },
@@ -1357,7 +1358,7 @@ const CONTEXTUAL_CHANNELS: Array<{
     id: "instagram",
     label: "Instagram",
     about: "About this Instagram post",
-    rationale: "Lead with the visual transformation to showcase your craftsmanship, reach people looking for landscaping inspiration, and build recognition for your work in Hamilton.",
+    rationale: "Build trust with a visual showcase of real work. Instagram helps your transformation reach a broader local audience, attract homeowners looking for inspiration, and turn that interest into potential leads.",
     destinationLabel: "Post to",
     destination: "Instagram · @beegreenlandscaping",
   },
@@ -1365,7 +1366,7 @@ const CONTEXTUAL_CHANNELS: Array<{
     id: "email",
     label: "Email",
     about: "About this email campaign",
-    rationale: "Give past customers and leads a timely seasonal reminder, demonstrate the results you deliver, and make it easy to book a similar clean up and mulching service.",
+    rationale: "Support relationships with existing customers and past leads by sharing timely, relevant work. This project reminds them what you offer and encourages repeat or seasonal bookings.",
     destinationLabel: "Recipients",
     destination: "Customers and leads in Hamilton",
   },
@@ -1373,7 +1374,7 @@ const CONTEXTUAL_CHANNELS: Array<{
     id: "website",
     label: "Website",
     about: "About this website page",
-    rationale: "Turn this project into lasting proof of your expertise. It helps visitors evaluate your work, supports local search visibility, and gives homeowners confidence to request a similar service.",
+    rationale: "Keep your website current and help your business appear in local search with a detailed project update. Showing real work builds trust and helps visitors choose your service.",
     destinationLabel: "Publish to",
     destination: "Beegreen Landscaping website",
   },
@@ -1444,16 +1445,38 @@ function ContextualChannelIcon({ channel }: { channel: ContextualChannel }) {
   return <WebsiteChannelIcon width={18} height={18} />;
 }
 
-const STEPPER_SOCIAL_ICON_SRC: Record<PreviewChannel, string> = {
+const BRAND_SOCIAL_ICON_SRC: Record<PreviewChannel, string> = {
   google: "/assets/google-channel-icon.svg",
   facebook: "/assets/facebook-channel-icon.png",
   instagram: "/assets/instagram-channel-icon.png",
 };
 
-function StepperChannelIcon({ channel }: { channel: ContextualChannel }) {
+const JOBBER_SOCIAL_ICON_SRC: Record<PreviewChannel, string> = {
+  google: "/assets/jobber-google-channel-icon.svg",
+  facebook: "/assets/jobber-facebook-channel-icon.svg",
+  instagram: "/assets/jobber-instagram-channel-icon.svg",
+};
+
+function StepperChannelIcon({
+  channel,
+  iconStyle = "brand",
+  previewTitle = false,
+}: {
+  channel: ContextualChannel;
+  iconStyle?: SocialIconStyle;
+  previewTitle?: boolean;
+}) {
+  const wrapperClassName = previewTitle
+    ? "channel-progress-icon channel-preview-title-icon"
+    : "channel-progress-icon";
+
   if (channel === "email") {
     return (
-      <span className="channel-progress-icon">
+      <span
+        className={wrapperClassName}
+        data-channel={channel}
+        data-icon-style={iconStyle}
+      >
         <Mail size={24} aria-hidden="true" />
       </span>
     );
@@ -1461,16 +1484,25 @@ function StepperChannelIcon({ channel }: { channel: ContextualChannel }) {
 
   if (channel === "website") {
     return (
-      <span className="channel-progress-icon">
-        <WebsiteChannelIcon width={24} height={22} />
+      <span
+        className={wrapperClassName}
+        data-channel={channel}
+        data-icon-style={iconStyle}
+      >
+        <WebsiteChannelIcon width={24} height={24} />
       </span>
     );
   }
 
   return (
-    <span className="channel-progress-icon">
+    <span
+      className={wrapperClassName}
+      data-channel={channel}
+      data-icon-style={iconStyle}
+    >
       <img
-        src={STEPPER_SOCIAL_ICON_SRC[channel]}
+        className={iconStyle === "jobber" ? "jobber-social-icon" : "brand-social-icon"}
+        src={(iconStyle === "jobber" ? JOBBER_SOCIAL_ICON_SRC : BRAND_SOCIAL_ICON_SRC)[channel]}
         width={24}
         height={24}
         alt=""
@@ -1500,12 +1532,14 @@ function ChannelProgressStepper({
   statuses,
   onSelect,
   className = "",
+  iconStyle = "brand",
 }: {
   channels: ContextualChannel[];
   activeChannel: ContextualChannel;
   statuses: Partial<Record<ContextualChannel, ChannelProgressStatus>>;
   onSelect: (channel: ContextualChannel) => void;
   className?: string;
+  iconStyle?: SocialIconStyle;
 }) {
   const orderedChannels = CONTEXTUAL_CHANNELS
     .map(({ id }) => id)
@@ -1534,7 +1568,7 @@ function ChannelProgressStepper({
                 title={`${config.label} · ${status}`}
                 onClick={() => onSelect(channel)}
               >
-                <StepperChannelIcon channel={channel} />
+                <StepperChannelIcon channel={channel} iconStyle={iconStyle} />
               </button>
             </li>
           );
@@ -2434,6 +2468,7 @@ function VersionFourContextModal({
   onLifecycleAction,
   googleDemoState,
   onActiveChannelChange,
+  iconStyle = "jobber",
 }: {
   drafts: V2Drafts;
   emailMessage: string;
@@ -2453,6 +2488,7 @@ function VersionFourContextModal({
   ) => void;
   googleDemoState: GoogleContextDemoState;
   onActiveChannelChange: (channel: ContextualChannel | null) => void;
+  iconStyle?: SocialIconStyle;
 }) {
   const [activeIndex, setActiveIndex] = useState(initialIndex);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -2572,6 +2608,7 @@ function VersionFourContextModal({
             statuses={progressStatuses}
             onSelect={selectChannel}
             className="channel-progress-stepper--modal-v4"
+            iconStyle={iconStyle}
           />
           <button
             className="context-progress-close"
@@ -2749,7 +2786,7 @@ function VersionFourContextModal({
 
           <section className="v4-context-preview" aria-label={`${active.label} content preview`}>
             <header>
-              <StepperChannelIcon channel={active.id} />
+              <StepperChannelIcon channel={active.id} iconStyle={iconStyle} previewTitle />
               <strong>{previewTitle}</strong>
             </header>
             <div className="v4-context-preview-scroll">
@@ -2827,6 +2864,37 @@ function GooglePrototypeStatusControls({
   );
 }
 
+function SocialIconStyleControls({
+  value,
+  onChange,
+}: {
+  value: SocialIconStyle;
+  onChange: (style: SocialIconStyle) => void;
+}) {
+  return (
+    <fieldset className="prototype-icon-style-controls">
+      <legend>Social icon style</legend>
+      <div>
+        {([
+          ["jobber", "Jobber"],
+          ["brand", "Brand color"],
+        ] as const).map(([style, label]) => (
+          <label key={style}>
+            <input
+              type="radio"
+              name="v4-social-icon-style"
+              value={style}
+              checked={value === style}
+              onChange={() => onChange(style)}
+            />
+            <span>{label}</span>
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
 function VersionFiveContextModal({
   drafts,
   emailMessage,
@@ -2856,6 +2924,7 @@ function VersionFiveContextModal({
   ) => void;
   googleDemoState: GoogleContextDemoState;
   onActiveChannelChange: (channel: ContextualChannel | null) => void;
+  iconStyle?: SocialIconStyle;
 }) {
   const [activeIndex, setActiveIndex] = useState(initialIndex);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -3252,6 +3321,7 @@ function VersionFourChannelReview({
   lifecycleEnabled = false,
   compactPreview = false,
   inactive = false,
+  iconStyle = "brand",
 }: {
   channel: ContextualChannel;
   socialDraft?: ChannelDraft;
@@ -3273,6 +3343,7 @@ function VersionFourChannelReview({
   lifecycleEnabled?: boolean;
   compactPreview?: boolean;
   inactive?: boolean;
+  iconStyle?: SocialIconStyle;
 }) {
   const [splitMenuOpen, setSplitMenuOpen] = useState(false);
   const splitMenuRef = useRef<HTMLDivElement>(null);
@@ -3356,6 +3427,7 @@ function VersionFourChannelReview({
             statuses={progressStatuses}
             onSelect={onChannelChange}
             className="channel-progress-stepper--review"
+            iconStyle={iconStyle}
           />
         </header>
         <div className="review-scroll">
@@ -4948,6 +5020,7 @@ export default function App() {
   };
   const [activeV4ContextChannel, setActiveV4ContextChannel] =
     useState<ContextualChannel | null>(null);
+  const [v4SocialIconStyle, setV4SocialIconStyle] = useState<SocialIconStyle>("jobber");
   const [activeV4GroupDate, setActiveV4GroupDate] = useState<string | null>(null);
   const [v4ReviewScopedChannels, setV4ReviewScopedChannels] =
     useState<ContextualChannel[] | null>(null);
@@ -5238,6 +5311,7 @@ export default function App() {
     setSocialWorkflowChannel("facebook");
     setSocialEditDraft(null);
     setActiveV4ContextChannel(null);
+    setV4SocialIconStyle("jobber");
     setActiveV4GroupDate(null);
     setV4ReviewScopedChannels(null);
     setScheduleEditorChannel(null);
@@ -5482,6 +5556,7 @@ export default function App() {
                 availableChannels={reviewScopedV4Channels}
                 progressStatuses={v4ProgressStatuses}
                 onChannelChange={setSocialWorkflowChannel}
+                iconStyle={version === "v4" ? v4SocialIconStyle : "brand"}
                 onEditSchedule={() => setScheduleEditorChannel(socialWorkflowChannel)}
                 onDelete={() => setReviewDeleteChannel(socialWorkflowChannel)}
                 onSchedule={() => performReviewDeliveryAction(
@@ -5716,6 +5791,7 @@ export default function App() {
                   availableChannels={scopedV4Channels}
                   channelDeliveries={v4ChannelDeliveries}
                   googleDemoState={googleContextDemoState}
+                  iconStyle={version === "v4" ? v4SocialIconStyle : "brand"}
                   onActiveChannelChange={setActiveV4ContextChannel}
                   onClose={() => {
                     setActiveV4ContextChannel(null);
@@ -5909,6 +5985,12 @@ export default function App() {
             </div>
           )}
         </div>
+        {version === "v4" && combinedWorkflow === "modal" && (
+          <SocialIconStyleControls
+            value={v4SocialIconStyle}
+            onChange={setV4SocialIconStyle}
+          />
+        )}
       </div>
     </div>
   );
