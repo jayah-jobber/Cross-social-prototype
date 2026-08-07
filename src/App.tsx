@@ -45,6 +45,7 @@ import {
   Heart,
   Home,
   Image,
+  Info,
   Link2,
   Mail,
   Megaphone,
@@ -92,6 +93,31 @@ const INITIAL_IMAGES: GalleryImage[] = [
   { id: "garden-one", src: "/assets/gallery-1.png", alt: "Ornamental grass" },
 ];
 
+const GENERATED_V4_PROMOTION_ARTWORK: GalleryImage = {
+  id: "v4-15-percent-promotion",
+  src: "/assets/v4-15-percent-promotion.png",
+  alt: "Marketing channels surrounding the Jobber logo",
+};
+const GENERATED_V4_BODY = `🎄 Christmas Special: Save 15% on Winter Landscaping Services
+
+Give your landscape the care it deserves this winter with 15% off our winter landscaping services.
+
+Our winter services include:
+• Winter property cleanups
+• Garden bed protection
+• Leaf and debris removal
+• Seasonal landscape maintenance
+
+Book before Christmas to take advantage of this limited-time offer and keep your property looking its best through the winter months.
+
+📞 Contact us today for a free quote and reserve your spot before our schedule fills up.`;
+const GENERATED_V4_HASHTAGS = "#ChristmasSpecial #WinterLandscaping #LandscapeMaintenance #HolidaySavings";
+const GENERATED_V4_GOOGLE_MESSAGE = GENERATED_V4_BODY;
+const GENERATED_V4_FACEBOOK_MESSAGE = GENERATED_V4_BODY;
+const GENERATED_V4_INSTAGRAM_MESSAGE = GENERATED_V4_BODY;
+const GENERATED_V4_EMAIL_MESSAGE = GENERATED_V4_BODY;
+const GENERATED_V4_EMAIL_SUBJECT = "Save 15% on your next landscaping project";
+
 const INITIAL_V2_MESSAGE = `${INITIAL_MESSAGE}
 
 #HamiltonLandscaping #OutdoorLiving #HomeUpgrade`;
@@ -106,9 +132,9 @@ const LOCKED_VERSION_MAP: Record<LockedPrototypeVersion, DaisyPrototypeVersion> 
   version_4: "v4",
   version_5: "v5",
 };
-const configuredLockedVersion = (
-  import.meta.env.VITE_PROTOTYPE_VERSION ?? "version_4"
-) as LockedPrototypeVersion;
+const configuredLockedVersion = import.meta.env.VITE_PROTOTYPE_VERSION as
+  | LockedPrototypeVersion
+  | undefined;
 const LOCKED_PROTOTYPE_VERSION = configuredLockedVersion
   ? LOCKED_VERSION_MAP[configuredLockedVersion]
   : undefined;
@@ -124,7 +150,7 @@ type ContextualToast = { message: string; id: number; dark?: boolean };
 type SuggestedTextDraft = { title: string; message: string };
 type SuggestedCompletion = {
   card: CalendarItem;
-  destinations: Record<ContextualChannel, { label: string; value: string }>;
+  destinations: Partial<Record<ContextualChannel, { label: string; value: string }>>;
 };
 
 type ChannelDraft = {
@@ -173,6 +199,35 @@ const createInitialV4Drafts = (): V2Drafts => ({
     images: [...INITIAL_IMAGES],
     cta: INITIAL_SOCIAL_CTA,
     hashtags: INITIAL_HASHTAGS,
+  },
+});
+
+const createGeneratedV4Drafts = (): V2Drafts => ({
+  all: {
+    message: GENERATED_V4_GOOGLE_MESSAGE,
+    images: [],
+    hashtags: "",
+  },
+  google: {
+    message: GENERATED_V4_GOOGLE_MESSAGE,
+    images: [],
+    hashtags: "",
+    externalLink: INITIAL_EXTERNAL_LINK,
+    googleButtonEnabled: true,
+    googleButtonAction: "book",
+    googleLinkDestination: "booking",
+  },
+  facebook: {
+    message: GENERATED_V4_FACEBOOK_MESSAGE,
+    images: [],
+    cta: "",
+    hashtags: GENERATED_V4_HASHTAGS,
+  },
+  instagram: {
+    message: GENERATED_V4_INSTAGRAM_MESSAGE,
+    images: [],
+    cta: "",
+    hashtags: GENERATED_V4_HASHTAGS,
   },
 });
 
@@ -566,6 +621,7 @@ type CalendarItem = {
   target?: boolean;
   combinedTarget?: boolean;
   generatedSuggestion?: boolean;
+  generatedDelivery?: boolean;
   showDate?: boolean;
   campaignDate?: string;
   channelStatuses?: Partial<Record<CalendarChannel, CalendarChannelStatus>>;
@@ -917,7 +973,7 @@ function MarketingCalendarCard({
         {item.automated && <span><Sparkles size={13} /> Automated campaign</span>}
         <span><FileText size={13} /> {status}</span>
       </span>
-      {(status === "Sent" || status === "Published") && (
+      {!item.generatedDelivery && (status === "Sent" || status === "Published") && (
         <CheckCircle2 className="card-success" size={15} fill="#388523" color="white" />
       )}
     </>
@@ -945,6 +1001,7 @@ function MarketingCalendarCard({
       item.tone ?? "",
       updated ? "updated-card" : "",
       item.generatedSuggestion ? "generated-suggestion-card" : "",
+      item.generatedDelivery ? "generated-delivery-card" : "",
     ].filter(Boolean).join(" ")}>
       {content}
     </div>
@@ -1099,7 +1156,9 @@ function CalendarScreen({
         <div className="calendar-grid">
           {columns.map((column) => (
             <section
-              className={`calendar-day${generatedSuggestionCard && column.day === "Friday, Nov 6"
+              className={`calendar-day${column.groups.some((group) => (
+                group.items.some((item) => item.generatedSuggestion)
+              ))
                 ? " with-generated-suggestion"
                 : ""}`}
               key={column.day}
@@ -1109,7 +1168,8 @@ function CalendarScreen({
                 <div className="calendar-group" key={group.label}>
                   {!group.label.startsWith("Needs review")
                     && !group.label.startsWith("Posted")
-                    && !group.label.startsWith("Sent") && (
+                    && !group.label.startsWith("Sent")
+                    && !group.items.some((item) => item.generatedDelivery) && (
                     <h3>{group.label}</h3>
                   )}
                   {group.items.map((item, index) => (
@@ -1288,6 +1348,12 @@ const V4_INITIAL_TIME = "09:00";
 const V4_TIMEZONE = "America/Toronto" as const;
 const V4_WEEK_MIN = "2026-11-02";
 const V4_WEEK_MAX = "2026-11-08";
+const GENERATED_V4_CHANNELS: ContextualChannel[] = [
+  "google",
+  "facebook",
+  "instagram",
+  "email",
+];
 
 const createInitialV4ChannelDeliveries = (): V4ChannelDeliveries => Object.fromEntries(
   (["google", "facebook", "instagram", "email", "website"] as ContextualChannel[])
@@ -1301,9 +1367,25 @@ const createInitialV4ChannelDeliveries = (): V4ChannelDeliveries => Object.fromE
     }]),
 ) as V4ChannelDeliveries;
 
+const createGeneratedV4ChannelDeliveries = (): V4ChannelDeliveries => Object.fromEntries(
+  (["google", "facebook", "instagram", "email", "website"] as ContextualChannel[])
+    .map((channel) => [channel, {
+      lifecycle: "unscheduled",
+      date: V4_INITIAL_DATE,
+      time: "09:00",
+      timezone: V4_TIMEZONE,
+      deleted: channel === "website",
+      statusOverride: null,
+    }]),
+) as V4ChannelDeliveries;
+
 function formatV4DeliveryDate(date: string) {
-  const day = Number(date.slice(-2));
-  return `Nov ${day}, 2026`;
+  const [year, month, day] = date.split("-").map(Number);
+  const monthName = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+  ][month - 1];
+  return `${monthName} ${day}, ${year}`;
 }
 
 function formatV4DeliveryTime(time: string) {
@@ -1379,6 +1461,19 @@ const CONTEXTUAL_CHANNELS: Array<{
     destination: "Beegreen Landscaping website",
   },
 ];
+
+const GENERATED_V4_RATIONALES: Partial<Record<ContextualChannel, string>> = {
+  google: "Reach homeowners actively searching for landscaping services with a clear, time-limited offer. The 15% savings and booking link give nearby prospects a direct reason to act now.",
+  facebook: "Share the limited-time 15% offer with your local community, where reactions and shares can extend its reach and encourage homeowners to book before it ends.",
+  instagram: "Use bold promotional artwork and concise offer details to stop the scroll, build urgency, and turn local inspiration into landscaping bookings.",
+  email: "Give customers and past leads a direct reminder that they can save 15% on landscaping services, with a clear deadline that encourages timely bookings.",
+};
+const GENERATED_V4_CONTEXTUAL_CHANNELS = CONTEXTUAL_CHANNELS
+  .filter(({ id }) => GENERATED_V4_CHANNELS.includes(id))
+  .map((channel) => ({
+    ...channel,
+    rationale: GENERATED_V4_RATIONALES[channel.id] ?? channel.rationale,
+  }));
 
 const SUGGESTED_DESTINATIONS: Record<ContextualChannel, { label: string; value: string }> = {
   google: { label: "Post to:", value: "Google profile: Beegreen Landscaping" },
@@ -1519,6 +1614,76 @@ type ChannelProgressStatus =
 
 type VersionFourSummaryStatus = "suggested" | "scheduled" | "sent" | "missed" | "error";
 
+type V4LoadingStage = {
+  message: string;
+  prefix: string;
+  emphasis: string;
+  suffix: string;
+  decoration: string;
+  decorationClass: string;
+  decorationWidth: number;
+  decorationHeight: number;
+};
+
+const V4_LOADING_STAGES: V4LoadingStage[] = [
+  {
+    message: "Understanding your marketing plan",
+    prefix: "Understanding your ",
+    emphasis: "marketing plan",
+    suffix: "",
+    decoration: "/assets/v4-loading-marketing-plan.svg",
+    decorationClass: "underline",
+    decorationWidth: 151.091,
+    decorationHeight: 5.18819,
+  },
+  {
+    message: "Pulling insights from your Jobber data",
+    prefix: "Pulling insights from your ",
+    emphasis: "Jobber data",
+    suffix: "",
+    decoration: "/assets/v4-loading-jobber-data.svg",
+    decorationClass: "ellipse",
+    decorationWidth: 149.011,
+    decorationHeight: 50.2461,
+  },
+  {
+    message: "Adapting the message for your audience",
+    prefix: "Adapting the message for your ",
+    emphasis: "audience",
+    suffix: "",
+    decoration: "/assets/v4-loading-audience.svg",
+    decorationClass: "underline",
+    decorationWidth: 104.05,
+    decorationHeight: 10,
+  },
+  {
+    message: "Optimizing for channel visibility",
+    prefix: "Optimizing for ",
+    emphasis: "channel visibility",
+    suffix: "",
+    decoration: "/assets/v4-loading-channel-visibility.svg",
+    decorationClass: "checkmark",
+    decorationWidth: 19.069,
+    decorationHeight: 22.0702,
+  },
+  {
+    message: "Adding the finishing touches",
+    prefix: "Adding the ",
+    emphasis: "finishing touches",
+    suffix: "",
+    decoration: "/assets/v4-loading-finishing-touches.svg",
+    decorationClass: "rays",
+    decorationWidth: 17.6085,
+    decorationHeight: 17.6071,
+  },
+];
+
+const V4_SUMMARY_COPY = "Your recent Hamilton clean up and mulching project (Job ID xxx) is a great one to showcase on all your platforms. It talks about transforming a property with a seasonal clean up and fresh mulch, highlighting the visual impact and value of a well-maintained landscape.";
+const GENERATED_V4_CAMPAIGN_TITLE = "15% promotion";
+const GENERATED_V4_SUMMARY_COPY = "Promotional content is a great one to showcase on all your platforms. It talks about a limited-time opportunity for homeowners to save on landscaping services, creating urgency while encouraging potential customers to book before the promotion ends.";
+const GENERATED_V4_SCHEDULE_TEXT = "Nov 7th, 2026 9:00am";
+const INSTAGRAM_IMAGE_REQUIRED_MESSAGE = "Add at least 1 image before posting or scheduling to Instagram";
+
 const V4_SUMMARY_STATUS_PRESENTATION: Record<
   VersionFourSummaryStatus,
   { label: string; tone: "informative" | "success" | "warning" | "critical" }
@@ -1543,21 +1708,73 @@ function contextualProgressStatus(
   return deliveries[channel].statusOverride ?? deliveries[channel].lifecycle;
 }
 
+function VersionFourLoadingContent({ stage }: { stage: number }) {
+  const current = V4_LOADING_STAGES[stage] ?? V4_LOADING_STAGES[0];
+
+  return (
+    <section className="v4-generated-inner v4-loading-surface" aria-label="Our recommendation">
+      <header className="v4-loading-header">
+        <h2>OUR RECOMMENDATION</h2>
+      </header>
+      <div className="v4-loading-center">
+        <img
+          className="v4-loading-jobber-mark"
+          src="/assets/v4-loading-jobber-mark.svg"
+          width="52.78"
+          height="52.7733"
+          alt=""
+          aria-hidden="true"
+        />
+        <p
+          className="v4-loading-message"
+          role="status"
+          aria-live="polite"
+          aria-label={current.message}
+          key={current.message}
+        >
+          <span aria-hidden="true">
+            {current.prefix}
+            <strong className={`v4-loading-emphasis v4-loading-decoration--${current.decorationClass}`}>
+              {current.emphasis}
+              <img
+                src={current.decoration}
+                width={current.decorationWidth}
+                height={current.decorationHeight}
+                alt=""
+                aria-hidden="true"
+              />
+            </strong>
+            {current.suffix}
+          </span>
+        </p>
+      </div>
+    </section>
+  );
+}
+
 function VersionFourSummaryModal({
   title,
-  summary,
   images,
   channels,
   statuses,
+  delivery,
+  description = V4_SUMMARY_COPY,
+  scheduleText,
+  artwork,
+  origin = "calendar",
   iconStyle = "jobber",
   onStartReview,
   onClose,
 }: {
   title: string;
-  summary: string;
   images: GalleryImage[];
   channels: ContextualChannel[];
   statuses: Partial<Record<ContextualChannel, ChannelProgressStatus>>;
+  delivery: V4ChannelDelivery;
+  description?: string;
+  scheduleText?: string;
+  artwork?: GalleryImage;
+  origin?: "calendar" | "generated";
   iconStyle?: SocialIconStyle;
   onStartReview: () => void;
   onClose: () => void;
@@ -1569,32 +1786,34 @@ function VersionFourSummaryModal({
     : [];
 
   useEffect(() => {
-    closeButtonRef.current?.focus();
-  }, []);
+    if (origin === "calendar") closeButtonRef.current?.focus();
+  }, [origin]);
 
   useEffect(() => {
+    if (origin !== "calendar") return;
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
     };
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [onClose]);
+  }, [onClose, origin]);
 
-  return (
-    <div
-      className="calendar-modal-overlay v4-context-overlay v4-summary-overlay"
-      role="presentation"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
+  const summary = (
+    <section
+      className={`v4-context-modal v4-summary-modal v4-summary-modal--${origin}`}
+      {...(origin === "calendar"
+        ? {
+            role: "dialog",
+            "aria-modal": true,
+            "aria-labelledby": "v4-summary-header-title",
+          }
+        : { "aria-label": "Generated marketing summary" })}
     >
-      <section
-        className="v4-context-modal v4-summary-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="v4-summary-title"
-      >
-        <header className="v4-summary-header">
+      <header className="v4-summary-header">
+        <h2 id={origin === "calendar" ? "v4-summary-header-title" : undefined}>
+          {origin === "generated" ? "OUR RECOMMENDATION" : "REVIEW MULTIPLE CHANNELS"}
+        </h2>
+        {origin === "calendar" && (
           <button
             ref={closeButtonRef}
             type="button"
@@ -1603,46 +1822,60 @@ function VersionFourSummaryModal({
           >
             <X size={24} aria-hidden="true" />
           </button>
-        </header>
-        <div className="v4-summary-body">
-          <section className="v4-summary-details">
-            <div className="v4-summary-copy">
-              <h1 id="v4-summary-title">{title}</h1>
-              <div>
-                <h2>Post to multiple channels for highest impact</h2>
-                <p>{summary}</p>
-              </div>
-              <hr />
-              <ul className="v4-summary-status-list" aria-label="Channel statuses">
-                {orderedChannels.map(({ id, label }) => {
-                  const status = versionFourSummaryStatus(statuses[id] ?? "suggested");
-                  const presentation = V4_SUMMARY_STATUS_PRESENTATION[status];
-                  return (
-                    <li key={id} data-channel={id}>
-                      <span className="v4-summary-channel">
-                        <StepperChannelIcon channel={id} iconStyle={iconStyle} />
-                        <span>{label}</span>
-                      </span>
-                      <span
-                        className={`v4-summary-status v4-summary-status--${presentation.tone}`}
-                        data-status={status}
-                      >
-                        <span aria-hidden="true" />
-                        {presentation.label}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
+        )}
+      </header>
+      <div className="v4-summary-body">
+        <section className="v4-summary-details">
+          <div className="v4-summary-copy">
+            <h1>{title}</h1>
+            <p>{description}</p>
+            <hr />
+            <div className="v4-summary-schedule">
+              <p>
+                <strong>Schedule date:</strong>{" "}
+                {scheduleText ?? formatV4DeliveryDateTime(delivery).replace(" · ", " ")}
+              </p>
+              <p><strong>Post to:</strong></p>
             </div>
-            <button
-              type="button"
-              className="primary-button v4-summary-start"
-              onClick={onStartReview}
-            >
-              Start Review
-            </button>
-          </section>
+            <ul className="v4-summary-status-list" aria-label="Channel statuses">
+              {orderedChannels.map(({ id, label }) => {
+                const status = versionFourSummaryStatus(statuses[id] ?? "suggested");
+                const presentation = V4_SUMMARY_STATUS_PRESENTATION[status];
+                return (
+                  <li key={id} data-channel={id}>
+                    <span className="v4-summary-channel">
+                      <StepperChannelIcon channel={id} iconStyle={iconStyle} />
+                      <span>{label}</span>
+                    </span>
+                    <span
+                      className={`v4-summary-status v4-summary-status--${presentation.tone}`}
+                      data-status={status}
+                    >
+                      <span aria-hidden="true" />
+                      {presentation.label}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+          <button
+            type="button"
+            className="primary-button v4-summary-start"
+            onClick={onStartReview}
+          >
+            Review Drafts
+          </button>
+        </section>
+        {artwork ? (
+          <img
+            className="v4-summary-artwork"
+            src={artwork.src}
+            alt={artwork.alt}
+            width={430}
+            height={577}
+          />
+        ) : (
           <section className="v4-summary-collage" aria-label="Campaign image collage">
             {[0, 1, 2].map((index) => {
               const image = collageImages[index];
@@ -1656,8 +1889,22 @@ function VersionFourSummaryModal({
               );
             })}
           </section>
-        </div>
-      </section>
+        )}
+      </div>
+    </section>
+  );
+
+  if (origin === "generated") return summary;
+
+  return (
+    <div
+      className="calendar-modal-overlay v4-context-overlay v4-summary-overlay"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      {summary}
     </div>
   );
 }
@@ -1718,11 +1965,14 @@ function EmailCampaignPreview({
   images,
   message,
   subject = INITIAL_EMAIL_SUBJECT,
+  campaignTitle = INITIAL_WEBSITE_TITLE,
 }: {
   images: GalleryImage[];
   message: string;
   subject?: string;
+  campaignTitle?: string;
 }) {
+  const isPromotion = campaignTitle === GENERATED_V4_CAMPAIGN_TITLE;
   return (
     <article className="context-email-preview">
       <header className="email-envelope">
@@ -1735,10 +1985,14 @@ function EmailCampaignPreview({
       </div>
       {images[0] && <img className="email-hero" src={images[0].src} alt={images[0].alt} />}
       <div className="email-content">
-        <p className="email-eyebrow">PROJECT SHOWCASE · HAMILTON</p>
-        <h2>Seasonal property clean up in Hamilton</h2>
+        <p className="email-eyebrow">
+          {isPromotion ? "LIMITED-TIME OFFER" : "PROJECT SHOWCASE · HAMILTON"}
+        </p>
+        <h2>{campaignTitle}</h2>
         <p className="propagated-body">{message}</p>
-        <span className="fake-cta">Plan your property clean up</span>
+        <span className="fake-cta">
+          {isPromotion ? "Book and save 15%" : "Plan your property clean up"}
+        </span>
       </div>
       <footer>
         Beegreen Landscaping · Hamilton, Ontario<br />
@@ -1805,13 +2059,20 @@ function ContextualPreviewContent({
   emailSubject,
   websiteMessage,
   websiteTitle,
-}: ContextModalContentProps & { channel: ContextualChannel }) {
+  campaignTitle,
+  collapseEmptyMedia = false,
+}: ContextModalContentProps & {
+  channel: ContextualChannel;
+  campaignTitle?: string;
+  collapseEmptyMedia?: boolean;
+}) {
   if (channel === "email") {
     return (
       <EmailCampaignPreview
         images={drafts.all.images}
         message={emailMessage}
         subject={emailSubject}
+        campaignTitle={campaignTitle}
       />
     );
   }
@@ -1835,6 +2096,7 @@ function ContextualPreviewContent({
       googleLinkDestination={drafts[channel].googleLinkDestination}
       googleButtonEnabled={drafts[channel].googleButtonEnabled}
       googleButtonAction={drafts[channel].googleButtonAction}
+      collapseEmptyMedia={collapseEmptyMedia}
     />
   );
 }
@@ -1998,13 +2260,17 @@ function SuggestedPromptSection({
   titleId,
   prompt,
   onPromptChange,
+  onSubmit,
   onClose,
+  loading = false,
 }: {
   title: string;
   titleId: string;
   prompt: string;
   onPromptChange: (value: string) => void;
+  onSubmit?: (prompt: string) => void;
   onClose: () => void;
+  loading?: boolean;
 }) {
   return (
     <div className="suggested-prompt-section">
@@ -2019,16 +2285,24 @@ function SuggestedPromptSection({
         onSubmit={(event) => {
           event.preventDefault();
           const nextPrompt = prompt.trim();
-          if (nextPrompt) onPromptChange(nextPrompt);
+          if (!nextPrompt || loading) return;
+          if (onSubmit) onSubmit(nextPrompt);
+          else onPromptChange(nextPrompt);
         }}
+        aria-busy={loading}
       >
         <input
           value={prompt}
           aria-label="Edit marketing content prompt"
           onChange={(event) => onPromptChange(event.target.value)}
-          autoFocus
+          readOnly={loading}
+          autoFocus={!loading}
         />
-        <button type="submit" aria-label="Regenerate suggestions" disabled={!prompt.trim()}>
+        <button
+          type="submit"
+          aria-label="Regenerate suggestions"
+          disabled={loading || !prompt.trim()}
+        >
           <Send size={18} aria-hidden="true" />
         </button>
       </form>
@@ -2595,6 +2869,8 @@ function VersionFourContextModal({
   emailSubject,
   websiteMessage,
   websiteTitle,
+  campaignTitle,
+  channelDefinitions = CONTEXTUAL_CHANNELS,
   initialIndex = 0,
   availableChannels,
   channelDeliveries,
@@ -2605,12 +2881,17 @@ function VersionFourContextModal({
   googleDemoState,
   onActiveChannelChange,
   iconStyle = "jobber",
+  embedded = false,
+  enforceInstagramImageRequirement = false,
+  onComplete,
 }: {
   drafts: V2Drafts;
   emailMessage: string;
   emailSubject: string;
   websiteMessage: string;
   websiteTitle: string;
+  campaignTitle?: string;
+  channelDefinitions?: typeof CONTEXTUAL_CHANNELS;
   initialIndex?: number;
   availableChannels: ContextualChannel[];
   channelDeliveries: V4ChannelDeliveries;
@@ -2621,10 +2902,13 @@ function VersionFourContextModal({
     channel: ContextualChannel,
     action: V4LifecycleAction,
     advance?: boolean,
-  ) => void;
+  ) => unknown;
   googleDemoState: GoogleContextDemoState;
   onActiveChannelChange: (channel: ContextualChannel | null) => void;
   iconStyle?: SocialIconStyle;
+  embedded?: boolean;
+  enforceInstagramImageRequirement?: boolean;
+  onComplete?: () => void;
 }) {
   const [activeIndex, setActiveIndex] = useState(initialIndex);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -2632,11 +2916,14 @@ function VersionFourContextModal({
   const splitMenuRef = useRef<HTMLDivElement>(null);
   const splitToggleRef = useRef<HTMLButtonElement>(null);
   const splitOptionRef = useRef<HTMLButtonElement>(null);
-  const channels = CONTEXTUAL_CHANNELS.filter(({ id }) => availableChannels.includes(id));
+  const channels = channelDefinitions.filter(({ id }) => availableChannels.includes(id));
   const safeIndex = Math.min(activeIndex, channels.length - 1);
   const active = channels[safeIndex];
   const activeDelivery = channelDeliveries[active.id];
   const activeState = activeDelivery.lifecycle;
+  const instagramPublishingBlocked = enforceInstagramImageRequirement
+    && active.id === "instagram"
+    && drafts.instagram.images.length === 0;
   const isGoogleDemo = active.id === "google";
   const googleStatus = isGoogleDemo && googleDemoState !== "suggested"
     ? {
@@ -2673,12 +2960,22 @@ function VersionFourContextModal({
     setActiveIndex((current) => Math.min(channels.length - 1, current + 1));
   };
   const scheduleCurrent = () => {
+    if (instagramPublishingBlocked) return;
     setSplitMenuOpen(false);
-    onLifecycleAction(active.id, "schedule", true);
+    if (onLifecycleAction(active.id, "schedule", true) === false) return;
+    if (embedded) {
+      if (safeIndex < channels.length - 1) setActiveIndex(safeIndex + 1);
+      else onComplete?.();
+    }
   };
   const sendCurrentNow = () => {
+    if (instagramPublishingBlocked) return;
     setSplitMenuOpen(false);
-    onLifecycleAction(active.id, "send", true);
+    if (onLifecycleAction(active.id, "send", true) === false) return;
+    if (embedded) {
+      if (safeIndex < channels.length - 1) setActiveIndex(safeIndex + 1);
+      else onComplete?.();
+    }
   };
   const editCurrent = () => {
     setSplitMenuOpen(false);
@@ -2706,14 +3003,14 @@ function VersionFourContextModal({
         splitToggleRef.current?.focus();
         return;
       }
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape" && !embedded) onClose();
       if (deleteDialogOpen) return;
       if (event.key === "ArrowLeft") goPrevious();
       if (event.key === "ArrowRight") goNext();
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [deleteDialogOpen, onClose, splitMenuOpen]);
+  }, [deleteDialogOpen, embedded, onClose, splitMenuOpen]);
 
   useEffect(() => {
     if (!splitMenuOpen) return;
@@ -2725,19 +3022,22 @@ function VersionFourContextModal({
     return () => document.removeEventListener("mousedown", closeOnOutsideClick);
   }, [splitMenuOpen]);
 
-  return (
-    <div className="calendar-modal-overlay v4-context-overlay" role="presentation">
-      <section
-        className={`v4-context-modal v4-five-channel-modal ${deleteDialogOpen ? "delete-dialog-open" : ""}`}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="v4-context-navigation-title"
-      >
+  const modal = (
+    <section
+      className={`v4-context-modal v4-five-channel-modal${embedded ? " v4-generated-review" : ""}${deleteDialogOpen ? " delete-dialog-open" : ""}`}
+      {...(!embedded
+        ? {
+            role: "dialog",
+            "aria-modal": true,
+            "aria-labelledby": "v4-context-title",
+          }
+        : { "aria-label": "Generated channel review" })}
+    >
         <header
           className="context-progress-header v4-context-navigation"
           inert={deleteDialogOpen ? true : undefined}
         >
-          <h2 id="v4-context-navigation-title">Review multiple channels</h2>
+          {!embedded && <span className="context-progress-spacer" aria-hidden="true" />}
           <ChannelProgressStepper
             channels={channels.map(({ id }) => id)}
             activeChannel={active.id}
@@ -2746,20 +3046,26 @@ function VersionFourContextModal({
             className="channel-progress-stepper--modal-v4"
             iconStyle={iconStyle}
           />
-          <button
-            className="context-progress-close"
-            type="button"
-            aria-label="Close"
-            onClick={onClose}
-          >
-            <X size={24} aria-hidden="true" />
-          </button>
+          {!embedded && (
+            <button
+              className="context-progress-close"
+              type="button"
+              aria-label="Close"
+              onClick={onClose}
+            >
+              <X size={24} aria-hidden="true" />
+            </button>
+          )}
         </header>
 
         <div className="v4-context-body" inert={deleteDialogOpen ? true : undefined}>
           <section className="v4-context-details">
             <div>
-              <h1 id="v4-context-title">Seasonal property clean up in Hamilton</h1>
+              <h1 id="v4-context-title">
+                {campaignTitle ?? (embedded
+                  ? GENERATED_V4_CAMPAIGN_TITLE
+                  : "Seasonal property clean up in Hamilton")}
+              </h1>
               <section className="v4-about-copy">
                 <div className="v4-about-heading">
                   <h2>{active.about}</h2>
@@ -2794,6 +3100,12 @@ function VersionFourContextModal({
               </dl>
             </div>
             <div className="v4-context-actions">
+              {instagramPublishingBlocked && (
+                <div className="v4-context-info-banner" role="status">
+                  <Info size={22} aria-hidden="true" />
+                  <span>{INSTAGRAM_IMAGE_REQUIRED_MESSAGE}</span>
+                </div>
+              )}
               {isGoogleDemo && googleDemoState === "error" && (
                 <div className="v4-context-error-banner" role="alert">
                   <TriangleAlert size={18} aria-hidden="true" />
@@ -2839,7 +3151,7 @@ function VersionFourContextModal({
                       Edit
                     </button>
                     <div className="v4-split-action" ref={splitMenuRef}>
-                      {splitMenuOpen && (
+                      {splitMenuOpen && !instagramPublishingBlocked && (
                         <div className="v4-split-menu" role="menu" aria-label="Publishing options">
                           <button
                             ref={splitOptionRef}
@@ -2851,8 +3163,12 @@ function VersionFourContextModal({
                           </button>
                         </div>
                       )}
-                      <span className="v4-split-button v4-schedule-next-button">
-                        <button type="button" onClick={scheduleCurrent}>
+                      <span className={`v4-split-button v4-schedule-next-button${instagramPublishingBlocked ? " is-disabled" : ""}`}>
+                        <button
+                          type="button"
+                          disabled={instagramPublishingBlocked}
+                          onClick={scheduleCurrent}
+                        >
                           Schedule and view next
                         </button>
                         <button
@@ -2861,7 +3177,11 @@ function VersionFourContextModal({
                           aria-label="Show publishing options"
                           aria-haspopup="menu"
                           aria-expanded={splitMenuOpen}
-                          onClick={() => setSplitMenuOpen((open) => !open)}
+                          disabled={instagramPublishingBlocked}
+                          onClick={() => {
+                            if (instagramPublishingBlocked) return;
+                            setSplitMenuOpen((open) => !open);
+                          }}
                         >
                           <ChevronDown size={20} />
                         </button>
@@ -2933,6 +3253,8 @@ function VersionFourContextModal({
                 emailSubject={emailSubject}
                 websiteMessage={websiteMessage}
                 websiteTitle={websiteTitle}
+                campaignTitle={campaignTitle}
+                collapseEmptyMedia={enforceInstagramImageRequirement}
               />
             </div>
           </section>
@@ -2948,6 +3270,65 @@ function VersionFourContextModal({
             }}
           />
         )}
+    </section>
+  );
+
+  if (embedded) return modal;
+
+  return (
+    <div className="calendar-modal-overlay v4-context-overlay" role="presentation">
+      {modal}
+    </div>
+  );
+}
+
+function VersionFourGeneratedFlowShell({
+  prompt,
+  loading,
+  onPromptChange,
+  onSubmit,
+  onClose,
+  children,
+}: {
+  prompt: string;
+  loading: boolean;
+  onPromptChange: (value: string) => void;
+  onSubmit: (prompt: string) => void;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  useEffect(() => {
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [onClose]);
+
+  return (
+    <div
+      className="calendar-modal-overlay suggested-content-overlay v4-generated-flow-overlay"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <section
+        className="suggested-content-dialog v4-generated-flow-shell"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="v4-generated-flow-title"
+      >
+        <SuggestedPromptSection
+          title="Suggested Marketing Content"
+          titleId="v4-generated-flow-title"
+          prompt={prompt}
+          onPromptChange={onPromptChange}
+          onSubmit={onSubmit}
+          onClose={onClose}
+          loading={loading}
+        />
+        <div className="v4-generated-flow-content">{children}</div>
       </section>
     </div>
   );
@@ -2994,37 +3375,6 @@ function GooglePrototypeStatusControls({
             )}
             {control.label}
           </button>
-        ))}
-      </div>
-    </fieldset>
-  );
-}
-
-function SocialIconStyleControls({
-  value,
-  onChange,
-}: {
-  value: SocialIconStyle;
-  onChange: (style: SocialIconStyle) => void;
-}) {
-  return (
-    <fieldset className="prototype-icon-style-controls">
-      <legend>Social icon style</legend>
-      <div>
-        {([
-          ["jobber", "Jobber"],
-          ["brand", "Brand color"],
-        ] as const).map(([style, label]) => (
-          <label key={style}>
-            <input
-              type="radio"
-              name="v4-social-icon-style"
-              value={style}
-              checked={value === style}
-              onChange={() => onChange(style)}
-            />
-            <span>{label}</span>
-          </label>
         ))}
       </div>
     </fieldset>
@@ -3443,6 +3793,7 @@ function VersionFourChannelReview({
   emailSubject,
   websiteMessage,
   websiteTitle,
+  campaignTitle,
   images,
   onBack,
   onEdit,
@@ -3458,6 +3809,8 @@ function VersionFourChannelReview({
   compactPreview = false,
   inactive = false,
   iconStyle = "brand",
+  publishingDisabled = false,
+  collapseEmptyMedia = false,
 }: {
   channel: ContextualChannel;
   socialDraft?: ChannelDraft;
@@ -3465,6 +3818,7 @@ function VersionFourChannelReview({
   emailSubject: string;
   websiteMessage: string;
   websiteTitle: string;
+  campaignTitle?: string;
   images: GalleryImage[];
   onBack: () => void;
   onEdit: () => void;
@@ -3480,6 +3834,8 @@ function VersionFourChannelReview({
   compactPreview?: boolean;
   inactive?: boolean;
   iconStyle?: SocialIconStyle;
+  publishingDisabled?: boolean;
+  collapseEmptyMedia?: boolean;
 }) {
   const [splitMenuOpen, setSplitMenuOpen] = useState(false);
   const splitMenuRef = useRef<HTMLDivElement>(null);
@@ -3527,6 +3883,15 @@ function VersionFourChannelReview({
           : INITIAL_EXTERNAL_LINK;
   const deleteLabel = isEmail ? "Delete Campaign" : isWebsite ? "Delete Page" : "Delete Post";
   const immediateActionLabel = isEmail ? "Send now" : isWebsite ? "Publish now" : "Post now";
+  const deleteEnabled = lifecycleEnabled && Boolean(onDelete);
+  const scheduleCurrent = () => {
+    if (publishingDisabled) return;
+    onSchedule?.();
+  };
+  const sendCurrentNow = () => {
+    if (publishingDisabled) return;
+    onSendNow?.();
+  };
 
   useEffect(() => {
     if (!splitMenuOpen) return;
@@ -3556,7 +3921,6 @@ function VersionFourChannelReview({
     >
       <section className="review-panel">
         <header className="review-navigation-header">
-          <span>Review multiple channels</span>
           <ChannelProgressStepper
             channels={availableChannels}
             activeChannel={channel}
@@ -3613,31 +3977,32 @@ function VersionFourChannelReview({
             <button
               className="delete-post"
               type="button"
-              aria-disabled={lifecycleEnabled ? undefined : "true"}
-              onClick={lifecycleEnabled ? onDelete : visualOnly}
+              aria-disabled={deleteEnabled ? undefined : "true"}
+              onClick={deleteEnabled ? onDelete : visualOnly}
             >
-              {lifecycleEnabled ? deleteLabel : "Delete Post"}
+              {deleteEnabled ? deleteLabel : "Delete Post"}
             </button>
           </div>
           {lifecycleEnabled ? (
             <div className="v4-split-action v4-review-split-action" ref={splitMenuRef}>
-              {splitMenuOpen && (
+              {splitMenuOpen && !publishingDisabled && (
                 <div className="v4-split-menu" role="menu" aria-label="Publishing options">
                   <button
                     ref={splitOptionRef}
                     type="button"
                     role="menuitem"
                     onClick={() => {
+                      if (publishingDisabled) return;
                       setSplitMenuOpen(false);
-                      onSendNow?.();
+                      sendCurrentNow();
                     }}
                   >
                     {immediateActionLabel}
                   </button>
                 </div>
               )}
-              <span className="v4-split-button">
-                <button type="button" onClick={onSchedule}>
+              <span className={`v4-split-button${publishingDisabled ? " is-disabled" : ""}`}>
+                <button type="button" disabled={publishingDisabled} onClick={scheduleCurrent}>
                   Schedule and view next
                 </button>
                 <button
@@ -3646,7 +4011,11 @@ function VersionFourChannelReview({
                   aria-label="Show publishing options"
                   aria-haspopup="menu"
                   aria-expanded={splitMenuOpen}
-                  onClick={() => setSplitMenuOpen((open) => !open)}
+                  disabled={publishingDisabled}
+                  onClick={() => {
+                    if (publishingDisabled) return;
+                    setSplitMenuOpen((open) => !open);
+                  }}
                 >
                   <ChevronDown size={20} />
                 </button>
@@ -3662,7 +4031,12 @@ function VersionFourChannelReview({
       {isEmail ? (
         <section className="preview-panel suggested-review-preview">
           <div className="preview-content">
-            <EmailCampaignPreview images={images} message={emailMessage} subject={emailSubject} />
+            <EmailCampaignPreview
+              images={images}
+              message={emailMessage}
+              subject={emailSubject}
+              campaignTitle={campaignTitle}
+            />
           </div>
         </section>
       ) : isWebsite ? (
@@ -3672,13 +4046,25 @@ function VersionFourChannelReview({
           </div>
         </section>
       ) : (
-        <SocialDraftPreview channel={channel} draft={socialDraft!} />
+        <SocialDraftPreview
+          channel={channel}
+          draft={socialDraft!}
+          collapseEmptyMedia={collapseEmptyMedia}
+        />
       )}
     </main>
   );
 }
 
-function SocialDraftPreview({ channel, draft }: { channel: PreviewChannel; draft: ChannelDraft }) {
+function SocialDraftPreview({
+  channel,
+  draft,
+  collapseEmptyMedia = false,
+}: {
+  channel: PreviewChannel;
+  draft: ChannelDraft;
+  collapseEmptyMedia?: boolean;
+}) {
   return (
     <section className="preview-panel social-only-preview v4-facebook-preview">
       <div className="preview-content">
@@ -3692,6 +4078,7 @@ function SocialDraftPreview({ channel, draft }: { channel: PreviewChannel; draft
           googleLinkDestination={draft.googleLinkDestination}
           googleButtonEnabled={draft.googleButtonEnabled}
           googleButtonAction={draft.googleButtonAction}
+          collapseEmptyMedia={collapseEmptyMedia}
         />
         <p className="preview-disclaimer">
           Social networks regularly make updates to formatting so your post may appear slightly
@@ -3708,12 +4095,14 @@ function VersionFourSocialEditor({
   setDraft,
   onCancel,
   onSave,
+  allowPrototypeImageSelection = false,
 }: {
   channel: PreviewChannel;
   draft: ChannelDraft;
   setDraft: (draft: ChannelDraft) => void;
   onCancel: () => void;
   onSave: () => void;
+  allowPrototypeImageSelection?: boolean;
 }) {
   const channelLabel = channel === "facebook" ? "Facebook" : "Instagram";
 
@@ -3756,7 +4145,12 @@ function VersionFourSocialEditor({
           </div>
           <div className="image-section v4-social-images">
             <div>
-              <label>Image <span className="optional">(optional)</span></label>
+              <label>
+                Image{" "}
+                <span className="optional">
+                  ({allowPrototypeImageSelection && channel === "instagram" ? "required" : "optional"})
+                </span>
+              </label>
               <p className="helper image-helper">
                 Max 10 images. Landscape image works best.<br />
                 To show before-and-after work, combine two images into one with the <u>collage tool</u>.
@@ -3767,7 +4161,19 @@ function VersionFourSocialEditor({
               setImages={(images) => setDraft({ ...draft, images })}
             />
             <div className="v4-social-dropzone">
-              <button type="button" aria-disabled="true">Choose image</button>
+              <button
+                type="button"
+                disabled={!allowPrototypeImageSelection || draft.images.length >= 10}
+                onClick={() => {
+                  if (!allowPrototypeImageSelection || draft.images.length >= 10) return;
+                  const nextImage = INITIAL_IMAGES.find((image) => (
+                    !draft.images.some(({ id }) => id === image.id)
+                  ));
+                  if (nextImage) setDraft({ ...draft, images: [...draft.images, nextImage] });
+                }}
+              >
+                Choose image
+              </button>
               <span>Select or drag files here to upload</span>
               <small>Maximum size 5MB per file</small>
             </div>
@@ -3778,7 +4184,11 @@ function VersionFourSocialEditor({
           <button className="primary-button" type="button" onClick={onSave}>Save Edit</button>
         </footer>
       </section>
-      <SocialDraftPreview channel={channel} draft={draft} />
+      <SocialDraftPreview
+        channel={channel}
+        draft={draft}
+        collapseEmptyMedia={allowPrototypeImageSelection}
+      />
     </main>
   );
 }
@@ -4412,6 +4822,7 @@ function PlatformPreviewCard({
   googleLinkDestination,
   googleButtonEnabled,
   googleButtonAction,
+  collapseEmptyMedia = false,
 }: {
   channel: PreviewChannel;
   message: string;
@@ -4422,6 +4833,7 @@ function PlatformPreviewCard({
   googleLinkDestination?: GoogleLinkDestination;
   googleButtonEnabled?: boolean;
   googleButtonAction?: GoogleButtonAction;
+  collapseEmptyMedia?: boolean;
 }) {
   const [instagramImage, setInstagramImage] = useState(0);
   const usesExplicitSocialFields = cta !== undefined;
@@ -4454,9 +4866,9 @@ function PlatformPreviewCard({
         </header>
         {images[0] ? (
           <img className="post-image" src={images[0].src} alt={images[0].alt} />
-        ) : (
-          <div className="empty-post-image"><Image size={32} /></div>
-        )}
+        ) : !collapseEmptyMedia ? (
+          <div className="empty-post-image"><Image size={32} /><span>No image added</span></div>
+        ) : null}
         <div className="post-copy">
           <p>{body}{hashtags ? `\n\n${hashtags}` : ""}</p>
           {showGoogleButton && (
@@ -4487,12 +4899,16 @@ function PlatformPreviewCard({
           {cta && <p className="post-cta">{cta}</p>}
           {hashtags && <p className="post-hashtags">{hashtags}</p>}
         </div>
-        <div className={`channel-image-grid count-${Math.min(images.length, 3)}`}>
-          {images.slice(0, 3).map((image) => (
-            <img src={image.src} alt={image.alt} key={image.id} />
-          ))}
-          {images.length === 0 && <div className="empty-post-image"><Image size={32} /></div>}
-        </div>
+        {(images.length > 0 || !collapseEmptyMedia) && (
+          <div className={`channel-image-grid count-${Math.min(images.length, 3)}`}>
+            {images.slice(0, 3).map((image) => (
+              <img src={image.src} alt={image.alt} key={image.id} />
+            ))}
+            {images.length === 0 && (
+              <div className="empty-post-image"><Image size={32} /><span>No image added</span></div>
+            )}
+          </div>
+        )}
         <footer className="channel-post-actions">
           <Heart size={24} /><MessageCircle size={24} /><Send size={24} />
         </footer>
@@ -4514,30 +4930,34 @@ function PlatformPreviewCard({
         <img src="/assets/avatar.png" alt="" />
         <div><strong>Landscape Service</strong><span>Just now · ◉</span></div>
       </header>
-      {usesExplicitSocialFields && instagramCopy}
       {selectedImage ? (
         <img className="instagram-post-image" src={selectedImage.src} alt={selectedImage.alt} />
-      ) : (
-        <div className="empty-post-image instagram-post-image"><Image size={32} /></div>
+      ) : !collapseEmptyMedia ? (
+        <div className="empty-post-image instagram-post-image">
+          <Image size={32} />
+          <span>No image added</span>
+        </div>
+      ) : null}
+      {(selectedImage || !collapseEmptyMedia) && (
+        <div className="instagram-controls">
+          <div className="instagram-dots">
+            {images.map((image, index) => (
+              <button
+                className={index === instagramImage ? "active" : ""}
+                type="button"
+                aria-label={`Show image ${index + 1}`}
+                onClick={() => setInstagramImage(index)}
+                key={image.id}
+              />
+            ))}
+          </div>
+          <div className="instagram-actions">
+            <span><Heart size={24} /><MessageCircle size={24} /><Send size={24} /></span>
+            <Bookmark size={24} />
+          </div>
+        </div>
       )}
-      <div className="instagram-controls">
-        <div className="instagram-dots">
-          {images.map((image, index) => (
-            <button
-              className={index === instagramImage ? "active" : ""}
-              type="button"
-              aria-label={`Show image ${index + 1}`}
-              onClick={() => setInstagramImage(index)}
-              key={image.id}
-            />
-          ))}
-        </div>
-        <div className="instagram-actions">
-          <span><Heart size={24} /><MessageCircle size={24} /><Send size={24} /></span>
-          <Bookmark size={24} />
-        </div>
-      </div>
-      {!usesExplicitSocialFields && instagramCopy}
+      {instagramCopy}
     </article>
   );
 }
@@ -4972,6 +5392,7 @@ function SuggestedTextEditor({
   channel,
   draft,
   images,
+  campaignTitle,
   setDraft,
   onCancel,
   onSave,
@@ -4979,6 +5400,7 @@ function SuggestedTextEditor({
   channel: "email" | "website";
   draft: SuggestedTextDraft;
   images: GalleryImage[];
+  campaignTitle?: string;
   setDraft: (draft: SuggestedTextDraft) => void;
   onCancel: () => void;
   onSave: () => void;
@@ -5036,7 +5458,12 @@ function SuggestedTextEditor({
       <section className="preview-panel suggested-text-preview">
         <div className="preview-content">
           {isEmail ? (
-            <EmailCampaignPreview images={images} message={draft.message} subject={draft.title} />
+            <EmailCampaignPreview
+              images={images}
+              message={draft.message}
+              subject={draft.title}
+              campaignTitle={campaignTitle}
+            />
           ) : (
             <WebsitePagePreview images={images} message={draft.message} title={draft.title} />
           )}
@@ -5075,6 +5502,25 @@ const createInitialDaisyVersionStates = (): Record<DaisyPrototypeVersion, DaisyV
   v5: createInitialDaisyVersionState(),
 });
 
+type GeneratedV4State = {
+  drafts: V2Drafts;
+  emailMessage: string;
+  emailSubject: string;
+  channelDeliveries: V4ChannelDeliveries;
+  googleDemoState: GoogleContextDemoState;
+};
+
+type GeneratedV4CalendarDeliveries =
+  Partial<Record<ContextualChannel, V4ChannelDelivery>>;
+
+const createInitialGeneratedV4State = (): GeneratedV4State => ({
+  drafts: createGeneratedV4Drafts(),
+  emailMessage: GENERATED_V4_EMAIL_MESSAGE,
+  emailSubject: GENERATED_V4_EMAIL_SUBJECT,
+  channelDeliveries: createGeneratedV4ChannelDeliveries(),
+  googleDemoState: "suggested",
+});
+
 export default function App() {
   const [message, setMessage] = useState(INITIAL_V1_MESSAGE);
   const [images, setImages] = useState(INITIAL_IMAGES);
@@ -5082,6 +5528,9 @@ export default function App() {
   const [v2Drafts, setV2Drafts] = useState<V2Drafts>(createInitialV2Drafts);
   const [v3Drafts, setV3Drafts] = useState<V2Drafts>(createInitialV2Drafts);
   const [daisyVersionStates, setDaisyVersionStates] = useState(createInitialDaisyVersionStates);
+  const [generatedV4State, setGeneratedV4State] = useState(createInitialGeneratedV4State);
+  const [generatedV4CalendarDeliveries, setGeneratedV4CalendarDeliveries] =
+    useState<GeneratedV4CalendarDeliveries>({});
   const activeDaisyVersion: DaisyPrototypeVersion = version === "v5" ? "v5" : "v4";
   const activeDaisyState = daisyVersionStates[activeDaisyVersion];
   const updateActiveDaisyState = (update: Partial<DaisyVersionState>) => {
@@ -5129,6 +5578,7 @@ export default function App() {
   const [suggestedDialogOpen, setSuggestedDialogOpen] = useState(false);
   const [suggestedPreviewIndex, setSuggestedPreviewIndex] = useState(0);
   const [v4Generating, setV4Generating] = useState(false);
+  const [v4LoadingStage, setV4LoadingStage] = useState(0);
   const suggestionTimerRef = useRef<number | null>(null);
   const [suggestedReviewChannel, setSuggestedReviewChannel] = useState<ContextualChannel | null>(null);
   const [suggestedEditor, setSuggestedEditor] = useState<ContextualChannel | null>(null);
@@ -5156,9 +5606,20 @@ export default function App() {
   const setGoogleContextDemoState = (googleDemoState: GoogleContextDemoState) => {
     updateActiveDaisyState({ googleDemoState });
   };
+  const setGeneratedV4Drafts = (next: V2Drafts | ((current: V2Drafts) => V2Drafts)) => {
+    setGeneratedV4State((current) => ({
+      ...current,
+      drafts: typeof next === "function" ? next(current.drafts) : next,
+    }));
+  };
+  const setGeneratedV4EmailMessage = (emailMessage: string) => {
+    setGeneratedV4State((current) => ({ ...current, emailMessage }));
+  };
+  const setGeneratedV4EmailSubject = (emailSubject: string) => {
+    setGeneratedV4State((current) => ({ ...current, emailSubject }));
+  };
   const [activeV4ContextChannel, setActiveV4ContextChannel] =
     useState<ContextualChannel | null>(null);
-  const [v4SocialIconStyle, setV4SocialIconStyle] = useState<SocialIconStyle>("jobber");
   const [activeV4GroupDate, setActiveV4GroupDate] = useState<string | null>(null);
   const [v4ReviewScopedChannels, setV4ReviewScopedChannels] =
     useState<ContextualChannel[] | null>(null);
@@ -5201,6 +5662,8 @@ export default function App() {
   const availableV4Channels = CONTEXTUAL_CHANNELS
     .filter(({ id }) => !v4ChannelDeliveries[id].deleted)
     .map(({ id }) => id);
+  const availableGeneratedV4Channels = GENERATED_V4_CHANNELS
+    .filter((channel) => !generatedV4State.channelDeliveries[channel].deleted);
   const scopedV4Channels = activeV4GroupDate
     ? availableV4Channels.filter((channel) => v4ChannelDeliveries[channel].date === activeV4GroupDate)
     : availableV4Channels;
@@ -5215,6 +5678,56 @@ export default function App() {
     calendarStatuses[activeDaisyVersion].suggested?.[CONTEXTUAL_TO_CALENDAR_CHANNEL[id]]
       ?? "suggested",
   ])) as Partial<Record<ContextualChannel, ChannelProgressStatus>>;
+  const generatedV4ProgressStatuses = Object.fromEntries(
+    availableGeneratedV4Channels.map((channel) => [
+      channel,
+      contextualProgressStatus(
+        channel,
+        generatedV4State.channelDeliveries,
+        generatedV4State.googleDemoState,
+      ),
+    ]),
+  ) as Partial<Record<ContextualChannel, ChannelProgressStatus>>;
+  const generatedV4CampaignCards: V4CampaignCalendarCard[] = Array.from(
+    new Set(Object.values(generatedV4CalendarDeliveries).map((delivery) => delivery.date)),
+  ).sort().map((date) => {
+    const channels = GENERATED_V4_CHANNELS.filter((channel) => (
+      generatedV4CalendarDeliveries[channel]?.date === date
+    ));
+    const allSent = channels.every((channel) => (
+      generatedV4CalendarDeliveries[channel]?.lifecycle === "sent"
+    ));
+    return {
+      date,
+      item: {
+        title: GENERATED_V4_CAMPAIGN_TITLE,
+        channels: channels.map((channel) => CONTEXTUAL_TO_CALENDAR_CHANNEL[channel]),
+        status: allSent ? "Sent" : "Scheduled",
+        generatedSuggestion: true,
+        generatedDelivery: true,
+        showDate: false,
+        campaignDate: date,
+        channelStatuses: Object.fromEntries(channels.map((channel) => [
+          CONTEXTUAL_TO_CALENDAR_CHANNEL[channel],
+          generatedV4CalendarDeliveries[channel]!.lifecycle,
+        ])),
+      },
+    };
+  });
+  const isV4GeneratedEditor = version === "v4" && v4ReviewOrigin === "suggested-content";
+  const suggestedFlowDrafts = isV4GeneratedEditor ? generatedV4State.drafts : v4Drafts;
+  const suggestedFlowEmailMessage = isV4GeneratedEditor
+    ? generatedV4State.emailMessage
+    : v4EmailMessage;
+  const suggestedFlowEmailSubject = isV4GeneratedEditor
+    ? generatedV4State.emailSubject
+    : v4EmailSubject;
+  const suggestedFlowChannels = isV4GeneratedEditor
+    ? availableGeneratedV4Channels
+    : CONTEXTUAL_CHANNELS.map(({ id }) => id);
+  const suggestedFlowProgressStatuses = isV4GeneratedEditor
+    ? generatedV4ProgressStatuses
+    : suggestedProgressStatuses;
   const v4CampaignCards: V4CampaignCalendarCard[] = Array.from(
     new Set(availableV4Channels.map((channel) => v4ChannelDeliveries[channel].date)),
   ).sort().map((date) => {
@@ -5387,7 +5900,7 @@ export default function App() {
     setV4ReviewScopedChannels(null);
     setCombinedModalStartIndex(0);
   };
-  const deleteV4Channel = (channel: ContextualChannel) => {
+  const deleteV4Channel = (channel: ContextualChannel, returnToContext = true) => {
     if (channel === "google") setGoogleContextDemoState("suggested");
     const originDate = activeV4GroupDate ?? v4ChannelDeliveries[channel].date;
     const nextDeliveries: V4ChannelDeliveries = {
@@ -5403,14 +5916,134 @@ export default function App() {
     setReviewDeleteChannel(null);
     setV4ReviewScopedChannels(null);
     showContextualToast(contextualDeletionMessage(channel), true);
-    returnToV4ContextAfter(channel, originDate, nextDeliveries);
+    if (returnToContext) returnToV4ContextAfter(channel, originDate, nextDeliveries);
+  };
+  const performGeneratedV4LifecycleAction = (
+    channel: ContextualChannel,
+    action: V4LifecycleAction,
+  ) => {
+    if (channel === "instagram" && generatedV4State.drafts.instagram.images.length === 0) {
+      return false;
+    }
+    const lifecycle: V4ChannelState = action === "schedule"
+      ? "scheduled"
+      : action === "send"
+        ? "sent"
+        : "unscheduled";
+    const nextDelivery: V4ChannelDelivery = {
+      ...generatedV4State.channelDeliveries[channel],
+      lifecycle,
+      date: action === "send"
+        ? V4_TODAY_DATE
+        : generatedV4State.channelDeliveries[channel].date,
+      statusOverride: null,
+    };
+    setGeneratedV4State((current) => ({
+      ...current,
+      googleDemoState: channel === "google"
+        ? action === "schedule"
+          ? "scheduled"
+          : action === "send"
+            ? "sent"
+            : "suggested"
+        : current.googleDemoState,
+      channelDeliveries: {
+        ...current.channelDeliveries,
+        [channel]: nextDelivery,
+      },
+    }));
+    setGeneratedV4CalendarDeliveries((deliveries) => {
+      if (action !== "cancel") return { ...deliveries, [channel]: nextDelivery };
+      const next = { ...deliveries };
+      delete next[channel];
+      return next;
+    });
+    if (action !== "cancel") {
+      showContextualToast(contextualSuccessMessage(
+        channel,
+        action === "schedule" ? "schedule" : "post",
+      ), true);
+    }
+    return true;
+  };
+  const deleteGeneratedV4Channel = (channel: ContextualChannel) => {
+    setGeneratedV4State((current) => ({
+      ...current,
+      googleDemoState: channel === "google" ? "suggested" : current.googleDemoState,
+      channelDeliveries: {
+        ...current.channelDeliveries,
+        [channel]: {
+          ...current.channelDeliveries[channel],
+          lifecycle: "unscheduled",
+          deleted: true,
+          statusOverride: null,
+        },
+      },
+    }));
+    setGeneratedV4CalendarDeliveries((deliveries) => {
+      const next = { ...deliveries };
+      delete next[channel];
+      return next;
+    });
+    setCalendarChannelStatus(
+      "v4",
+      "suggested",
+      CONTEXTUAL_TO_CALENDAR_CHANNEL[channel],
+      null,
+    );
+    showContextualToast(contextualDeletionMessage(channel), true);
   };
   const cancelSuggestionGeneration = () => {
     if (suggestionTimerRef.current !== null) {
-      window.clearTimeout(suggestionTimerRef.current);
+      window.clearInterval(suggestionTimerRef.current);
       suggestionTimerRef.current = null;
     }
     setV4Generating(false);
+    setV4LoadingStage(0);
+  };
+  const closeGeneratedV4Session = () => {
+    cancelSuggestionGeneration();
+    setGeneratedV4State(createInitialGeneratedV4State());
+    setV4SuggestedSummaryOpen(false);
+    setSuggestedDialogOpen(false);
+    setSuggestedPreviewIndex(0);
+    setSuggestedReviewChannel(null);
+    setSuggestedEditor(null);
+    setSuggestedGoogleDrafts(null);
+    setSuggestedTextDraft(null);
+    setSocialEditDraft(null);
+    setActiveV4ContextChannel(null);
+    setV4ReviewOrigin(null);
+    setSuggestedPrompt("");
+    setCalendarPrompt("");
+  };
+  const performGeneratedReviewDeliveryAction = (
+    channel: ContextualChannel,
+    action: Extract<V4LifecycleAction, "schedule" | "send">,
+  ) => {
+    if (!performGeneratedV4LifecycleAction(channel, action)) return;
+    const currentIndex = availableGeneratedV4Channels.indexOf(channel);
+    const nextChannel = availableGeneratedV4Channels[currentIndex + 1];
+    if (nextChannel) {
+      setSuggestedReviewChannel(nextChannel);
+      return;
+    }
+    closeGeneratedV4Session();
+  };
+  const beginV4SuggestionGeneration = (value: string) => {
+    const prompt = value.trim();
+    if (!prompt || v4Generating) return;
+    if (suggestionTimerRef.current !== null) {
+      window.clearInterval(suggestionTimerRef.current);
+      suggestionTimerRef.current = null;
+    }
+    setSuggestedPrompt(prompt);
+    setV4SuggestedSummaryOpen(false);
+    setSuggestedDialogOpen(false);
+    setSuggestedPreviewIndex(0);
+    setV4ReviewOrigin(null);
+    setV4LoadingStage(0);
+    setV4Generating(true);
   };
   const switchVersion = (nextVersion: PrototypeVersion) => {
     if (
@@ -5424,6 +6057,8 @@ export default function App() {
     setV2Drafts(createInitialV2Drafts());
     setV3Drafts(createInitialV2Drafts());
     setDaisyVersionStates(createInitialDaisyVersionStates());
+    setGeneratedV4State(createInitialGeneratedV4State());
+    setGeneratedV4CalendarDeliveries({});
     setEnabledChannels({
       google: true,
       facebook: true,
@@ -5447,6 +6082,7 @@ export default function App() {
     setSuggestedDialogOpen(false);
     setSuggestedPreviewIndex(0);
     setV4Generating(false);
+    setV4LoadingStage(0);
     setSuggestedReviewChannel(null);
     setSuggestedEditor(null);
     setSuggestedGoogleDrafts(null);
@@ -5454,7 +6090,6 @@ export default function App() {
     setSocialWorkflowChannel("facebook");
     setSocialEditDraft(null);
     setActiveV4ContextChannel(null);
-    setV4SocialIconStyle("jobber");
     setActiveV4GroupDate(null);
     setV4ReviewScopedChannels(null);
     setScheduleEditorChannel(null);
@@ -5490,9 +6125,37 @@ export default function App() {
   };
 
   useEffect(() => {
+    if (version !== "v4" || !v4Generating) return;
+
+    let elapsedStages = 0;
+    const interval = window.setInterval(() => {
+      elapsedStages += 1;
+      if (elapsedStages < V4_LOADING_STAGES.length) {
+        setV4LoadingStage(elapsedStages);
+        return;
+      }
+
+      window.clearInterval(interval);
+      if (suggestionTimerRef.current === interval) suggestionTimerRef.current = null;
+      setV4Generating(false);
+      setV4LoadingStage(0);
+      setCalendarPrompt("");
+      setSuggestedPreviewIndex(0);
+      setV4ReviewOrigin(null);
+      setV4SuggestedSummaryOpen(true);
+    }, 1000);
+    suggestionTimerRef.current = interval;
+
     return () => {
-      if (suggestionTimerRef.current !== null) window.clearTimeout(suggestionTimerRef.current);
+      window.clearInterval(interval);
+      if (suggestionTimerRef.current === interval) suggestionTimerRef.current = null;
     };
+  }, [version, v4Generating]);
+
+  useEffect(() => () => {
+    if (suggestionTimerRef.current !== null) {
+      window.clearInterval(suggestionTimerRef.current);
+    }
   }, []);
 
   useEffect(() => {
@@ -5596,7 +6259,11 @@ export default function App() {
               setDrafts={setSuggestedGoogleDrafts}
               onCancel={returnToSuggestedReview}
               onSave={() => {
-                setV4Drafts(cloneDrafts(suggestedGoogleDrafts));
+                if (isV4GeneratedEditor) {
+                  setGeneratedV4Drafts(cloneDrafts(suggestedGoogleDrafts));
+                } else {
+                  setV4Drafts(cloneDrafts(suggestedGoogleDrafts));
+                }
                 returnToSuggestedReview();
               }}
             />
@@ -5605,15 +6272,18 @@ export default function App() {
               channel={suggestedEditor}
               draft={socialEditDraft}
               setDraft={setSocialEditDraft}
+              allowPrototypeImageSelection={isV4GeneratedEditor}
               onCancel={returnToSuggestedReview}
               onSave={() => {
-                setV4Drafts((current) => ({
+                const updateDraft = (current: V2Drafts) => ({
                   ...current,
                   [suggestedEditor]: {
                     ...socialEditDraft,
                     images: [...socialEditDraft.images],
                   },
-                }));
+                });
+                if (isV4GeneratedEditor) setGeneratedV4Drafts(updateDraft);
+                else setV4Drafts(updateDraft);
                 returnToSuggestedReview();
               }}
             />
@@ -5621,13 +6291,19 @@ export default function App() {
             <SuggestedTextEditor
               channel={suggestedEditor}
               draft={suggestedTextDraft}
-              images={v4Drafts.all.images}
+              images={suggestedFlowDrafts.all.images}
+              campaignTitle={isV4GeneratedEditor ? GENERATED_V4_CAMPAIGN_TITLE : undefined}
               setDraft={setSuggestedTextDraft}
               onCancel={returnToSuggestedReview}
               onSave={() => {
                 if (suggestedEditor === "email") {
-                  setV4EmailSubject(suggestedTextDraft.title);
-                  setV4EmailMessage(suggestedTextDraft.message);
+                  if (isV4GeneratedEditor) {
+                    setGeneratedV4EmailSubject(suggestedTextDraft.title);
+                    setGeneratedV4EmailMessage(suggestedTextDraft.message);
+                  } else {
+                    setV4EmailSubject(suggestedTextDraft.title);
+                    setV4EmailMessage(suggestedTextDraft.message);
+                  }
                 } else {
                   setV4WebsiteTitle(suggestedTextDraft.title);
                   setV4WebsiteMessage(suggestedTextDraft.message);
@@ -5643,35 +6319,60 @@ export default function App() {
                   suggestedReviewChannel === "google"
                   || suggestedReviewChannel === "facebook"
                   || suggestedReviewChannel === "instagram"
-                    ? v4Drafts[suggestedReviewChannel]
+                    ? suggestedFlowDrafts[suggestedReviewChannel]
                     : undefined
                 }
-                emailMessage={v4EmailMessage}
-                emailSubject={v4EmailSubject}
+                emailMessage={suggestedFlowEmailMessage}
+                emailSubject={suggestedFlowEmailSubject}
                 websiteMessage={v4WebsiteMessage}
                 websiteTitle={v4WebsiteTitle}
-                images={v4Drafts.all.images}
+                campaignTitle={isV4GeneratedEditor ? GENERATED_V4_CAMPAIGN_TITLE : undefined}
+                images={suggestedFlowDrafts.all.images}
                 compactPreview
-                availableChannels={CONTEXTUAL_CHANNELS.map(({ id }) => id)}
-                progressStatuses={suggestedProgressStatuses}
+                collapseEmptyMedia={isV4GeneratedEditor}
+                lifecycleEnabled={isV4GeneratedEditor}
+                delivery={isV4GeneratedEditor
+                  ? generatedV4State.channelDeliveries[suggestedReviewChannel]
+                  : undefined}
+                publishingDisabled={isV4GeneratedEditor
+                  && suggestedReviewChannel === "instagram"
+                  && suggestedFlowDrafts.instagram.images.length === 0}
+                availableChannels={suggestedFlowChannels}
+                progressStatuses={suggestedFlowProgressStatuses}
                 onChannelChange={setSuggestedReviewChannel}
                 onBack={returnFromSuggestedReview}
+                onSchedule={isV4GeneratedEditor
+                  ? () => performGeneratedReviewDeliveryAction(
+                      suggestedReviewChannel,
+                      "schedule",
+                    )
+                  : undefined}
+                onSendNow={isV4GeneratedEditor
+                  ? () => performGeneratedReviewDeliveryAction(
+                      suggestedReviewChannel,
+                      "send",
+                    )
+                  : undefined}
                 onEdit={() => {
                   setSuggestedEditor(suggestedReviewChannel);
                   if (suggestedReviewChannel === "google") {
-                    setSuggestedGoogleDrafts(cloneDrafts(v4Drafts));
+                    setSuggestedGoogleDrafts(cloneDrafts(suggestedFlowDrafts));
                   } else if (
                     suggestedReviewChannel === "facebook"
                     || suggestedReviewChannel === "instagram"
                   ) {
                     setSocialEditDraft({
-                      ...v4Drafts[suggestedReviewChannel],
-                      images: [...v4Drafts[suggestedReviewChannel].images],
+                      ...suggestedFlowDrafts[suggestedReviewChannel],
+                      images: [...suggestedFlowDrafts[suggestedReviewChannel].images],
                     });
                   } else {
                     setSuggestedTextDraft({
-                      title: suggestedReviewChannel === "email" ? v4EmailSubject : v4WebsiteTitle,
-                      message: suggestedReviewChannel === "email" ? v4EmailMessage : v4WebsiteMessage,
+                      title: suggestedReviewChannel === "email"
+                        ? suggestedFlowEmailSubject
+                        : v4WebsiteTitle,
+                      message: suggestedReviewChannel === "email"
+                        ? suggestedFlowEmailMessage
+                        : v4WebsiteMessage,
                     });
                   }
                 }}
@@ -5699,7 +6400,7 @@ export default function App() {
                 availableChannels={reviewScopedV4Channels}
                 progressStatuses={v4ProgressStatuses}
                 onChannelChange={setSocialWorkflowChannel}
-                iconStyle={version === "v4" ? v4SocialIconStyle : "brand"}
+                iconStyle={version === "v4" ? "jobber" : "brand"}
                 onEditSchedule={() => setScheduleEditorChannel(socialWorkflowChannel)}
                 onDelete={() => setReviewDeleteChannel(socialWorkflowChannel)}
                 onSchedule={() => performReviewDeliveryAction(
@@ -5769,6 +6470,10 @@ export default function App() {
                   ? () => {
                       const prompt = calendarPrompt.trim();
                       if (!prompt || v4Generating || suggestionTimerRef.current !== null) return;
+                      if (version === "v4") {
+                        beginV4SuggestionGeneration(prompt);
+                        return;
+                      }
                       setSuggestedPrompt(prompt);
                       setV4Generating(true);
                       suggestionTimerRef.current = window.setTimeout(() => {
@@ -5777,11 +6482,7 @@ export default function App() {
                         setCalendarPrompt("");
                         setSuggestedPreviewIndex(0);
                         setV4ReviewOrigin(null);
-                      if (version === "v4") {
-                        setV4SuggestedSummaryOpen(true);
-                      } else {
                         setSuggestedDialogOpen(true);
-                      }
                       }, 1200);
                     }
                   : undefined}
@@ -5815,18 +6516,23 @@ export default function App() {
                 }}
                 combinedInteractive={version === "v3" || isDaisyVersion}
                 combinedChannels={currentSaturdayCompletion ?? undefined}
-                generatedSuggestionCard={isDaisyVersion ? suggestedCompletion?.card : undefined}
+                generatedSuggestionCard={version === "v5" ? suggestedCompletion?.card : undefined}
                 channelStatuses={calendarStatuses[version]}
-                v4CampaignCards={isDaisyVersion ? v4CampaignCards : undefined}
+                v4CampaignCards={isDaisyVersion
+                  ? [
+                      ...v4CampaignCards,
+                      ...(version === "v4" ? generatedV4CampaignCards : []),
+                    ]
+                  : undefined}
               />
               {v4CardSummaryOpen && version === "v4" && (
                 <VersionFourSummaryModal
                   title={activeV4CampaignTitle}
-                  summary="Showcase this Hamilton property’s seasonal clean up and fresh mulch to demonstrate the results, build local trust, and help homeowners know when to book similar work."
                   images={v4Drafts.all.images}
                   channels={scopedV4Channels}
                   statuses={v4ProgressStatuses}
-                  iconStyle={v4SocialIconStyle}
+                  delivery={v4ChannelDeliveries[scopedV4Channels[0] ?? "google"]}
+                  iconStyle="jobber"
                   onStartReview={() => {
                     setV4CardSummaryOpen(false);
                     setCombinedWorkflow("modal");
@@ -5840,28 +6546,79 @@ export default function App() {
                   }}
                 />
               )}
-              {v4SuggestedSummaryOpen && version === "v4" && (
-                <VersionFourSummaryModal
-                  title={suggestionCardTitle(suggestedPrompt)}
-                  summary={`Review the channel recommendations generated for “${suggestedPrompt}”. Each version is tailored to help this campaign reach customers where they are most likely to engage.`}
-                  images={v4Drafts.all.images}
-                  channels={availableV4Channels}
-                  statuses={suggestedProgressStatuses}
-                  iconStyle={v4SocialIconStyle}
-                  onStartReview={() => {
-                    setV4SuggestedSummaryOpen(false);
-                    setSuggestedDialogOpen(true);
-                  }}
+              {version === "v4"
+                && (v4Generating || v4SuggestedSummaryOpen || suggestedDialogOpen) && (
+                <VersionFourGeneratedFlowShell
+                  prompt={suggestedPrompt}
+                  loading={v4Generating}
+                  onPromptChange={setSuggestedPrompt}
+                  onSubmit={beginV4SuggestionGeneration}
                   onClose={() => {
-                    setV4SuggestedSummaryOpen(false);
-                    setSuggestedPreviewIndex(0);
-                    setV4ReviewOrigin(null);
+                    closeGeneratedV4Session();
                   }}
-                />
+                >
+                  {v4Generating ? (
+                    <VersionFourLoadingContent stage={v4LoadingStage} />
+                  ) : v4SuggestedSummaryOpen ? (
+                    <VersionFourSummaryModal
+                      title={GENERATED_V4_CAMPAIGN_TITLE}
+                      images={generatedV4State.drafts.all.images}
+                      channels={availableGeneratedV4Channels}
+                      statuses={generatedV4ProgressStatuses}
+                      delivery={generatedV4State.channelDeliveries.google}
+                      description={GENERATED_V4_SUMMARY_COPY}
+                      scheduleText={GENERATED_V4_SCHEDULE_TEXT}
+                      artwork={GENERATED_V4_PROMOTION_ARTWORK}
+                      origin="generated"
+                      iconStyle="jobber"
+                      onStartReview={() => {
+                        setV4SuggestedSummaryOpen(false);
+                        setSuggestedPreviewIndex(0);
+                        setSuggestedDialogOpen(true);
+                      }}
+                      onClose={() => undefined}
+                    />
+                  ) : (
+                    <VersionFourContextModal
+                      key={`generated-${suggestedPrompt}-${availableGeneratedV4Channels.join("-")}`}
+                      drafts={generatedV4State.drafts}
+                      emailMessage={generatedV4State.emailMessage}
+                      emailSubject={generatedV4State.emailSubject}
+                      websiteMessage={v4WebsiteMessage}
+                      websiteTitle={v4WebsiteTitle}
+                      campaignTitle={GENERATED_V4_CAMPAIGN_TITLE}
+                      channelDefinitions={GENERATED_V4_CONTEXTUAL_CHANNELS}
+                      initialIndex={suggestedPreviewIndex}
+                      availableChannels={availableGeneratedV4Channels}
+                      channelDeliveries={generatedV4State.channelDeliveries}
+                      googleDemoState={generatedV4State.googleDemoState}
+                      iconStyle="jobber"
+                      embedded
+                      enforceInstagramImageRequirement
+                      onActiveChannelChange={setActiveV4ContextChannel}
+                      onClose={() => undefined}
+                      onEdit={(channel) => {
+                        setSuggestedPreviewIndex(
+                          availableGeneratedV4Channels.indexOf(channel),
+                        );
+                        setSuggestedDialogOpen(false);
+                        setSuggestedReviewChannel(channel);
+                        setV4ReviewOrigin("suggested-content");
+                      }}
+                      onDelete={deleteGeneratedV4Channel}
+                      onLifecycleAction={(channel, action) => {
+                        return performGeneratedV4LifecycleAction(channel, action);
+                      }}
+                      onComplete={() => {
+                        closeGeneratedV4Session();
+                      }}
+                    />
+                  )}
+                </VersionFourGeneratedFlowShell>
               )}
-              {suggestedDialogOpen && isDaisyVersion && (
+              {suggestedDialogOpen && version === "v5" && (
                 <SuggestedMarketingContentDialog
-                  variant={version === "v5" ? "vertical" : "horizontal"}
+                  variant="vertical"
                   prompt={suggestedPrompt}
                   drafts={v4Drafts}
                   emailMessage={v4EmailMessage}
@@ -5983,7 +6740,7 @@ export default function App() {
                   availableChannels={scopedV4Channels}
                   channelDeliveries={v4ChannelDeliveries}
                   googleDemoState={googleContextDemoState}
-                  iconStyle={version === "v4" ? v4SocialIconStyle : "brand"}
+                  iconStyle={version === "v4" ? "jobber" : "brand"}
                   onActiveChannelChange={setActiveV4ContextChannel}
                   onClose={() => {
                     setActiveV4ContextChannel(null);
@@ -6177,13 +6934,6 @@ export default function App() {
             </div>
           )}
         </div>
-        {version === "v4"
-          && (combinedWorkflow === "modal" || v4CardSummaryOpen || v4SuggestedSummaryOpen) && (
-          <SocialIconStyleControls
-            value={v4SocialIconStyle}
-            onChange={setV4SocialIconStyle}
-          />
-        )}
       </div>
     </div>
   );

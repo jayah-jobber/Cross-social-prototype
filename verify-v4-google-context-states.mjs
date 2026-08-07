@@ -16,7 +16,7 @@ const saturdayCard = () => page.locator(".calendar-day").filter({
 
 async function openSaturdayReview() {
   await saturdayCard().click();
-  await page.locator(".v4-summary-modal").getByRole("button", { name: "Start Review" }).click();
+  await page.locator(".v4-summary-modal").getByRole("button", { name: "Review Drafts" }).click();
   await modal().waitFor();
 }
 

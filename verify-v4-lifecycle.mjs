@@ -20,13 +20,13 @@ async function selectVersionFour() {
 
 async function openSaturday() {
   await campaignCard("Saturday, Nov 7").click();
-  await page.locator(".v4-summary-modal").getByRole("button", { name: "Start Review" }).click();
+  await page.locator(".v4-summary-modal").getByRole("button", { name: "Review Drafts" }).click();
   await modal().waitFor();
 }
 
 async function openCampaignReview(day) {
   await campaignCard(day).click();
-  await page.locator(".v4-summary-modal").getByRole("button", { name: "Start Review" }).click();
+  await page.locator(".v4-summary-modal").getByRole("button", { name: "Review Drafts" }).click();
   await modal().waitFor();
 }
 

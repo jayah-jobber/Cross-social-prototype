@@ -18,6 +18,8 @@ const iconControls = () => page.getByRole("group", { name: "Social icon style" }
 const statusControls = () => page.getByRole("group", {
   name: "Google contextual modal demo status",
 });
+const revisedSummaryCopy = "Your recent Hamilton clean up and mulching project (Job ID xxx) is a great one to showcase on all your platforms. It talks about transforming a property with a seasonal clean up and fresh mulch, highlighting the visual impact and value of a well-maintained landscape.";
+const promotionSummaryCopy = "Promotional content is a great one to showcase on all your platforms. It talks about a limited-time opportunity for homeowners to save on landscaping services, creating urgency while encouraging potential customers to book before the promotion ends.";
 
 async function resetV4() {
   await page.getByRole("button", { name: "Version 1", exact: true }).click();
@@ -30,7 +32,7 @@ async function openSaturdaySummary() {
 }
 
 async function startCardReview() {
-  await summary().getByRole("button", { name: "Start Review", exact: true }).click();
+  await summary().getByRole("button", { name: "Review Drafts", exact: true }).click();
   await contextModal().waitFor();
 }
 
@@ -66,9 +68,24 @@ try {
   )), ["Google", "Facebook", "Instagram", "Email", "Website"]);
   assert.ok((await summaryRows().allTextContents()).every((text) => text.includes("Suggested")));
   assert.equal(await summary().locator(".v4-summary-collage img").count(), 3);
-  assert.equal(await summary().getByRole("button", { name: "Start Review" }).count(), 1);
+  assert.equal(await summary().getByRole("button", { name: "Review Drafts" }).count(), 1);
   assert.equal(await summary().locator(".channel-progress-stepper").count(), 0);
-  assert.equal(await iconControls().count(), 1);
+  assert.equal(await summary().getByRole("heading", {
+    name: "REVIEW MULTIPLE CHANNELS",
+    exact: true,
+  }).count(), 1);
+  assert.equal(await summary().getByRole("heading", {
+    name: "Post to multiple channels for highest impact",
+    exact: true,
+  }).count(), 0);
+  assert.equal(await summary().getByText(revisedSummaryCopy, { exact: true }).count(), 1);
+  assert.equal(await summary().getByText("Post to:", { exact: true }).count(), 1);
+  assert.equal(await summary().evaluate((dialog) => {
+    const schedule = dialog.querySelector(".v4-summary-schedule");
+    const list = dialog.querySelector(".v4-summary-status-list");
+    return Boolean(schedule && list && (schedule.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING));
+  }), true);
+  assert.equal(await iconControls().count(), 0);
   assert.deepEqual(await imageSources(summary()), [
     "/assets/jobber-google-channel-icon.svg",
     "/assets/jobber-facebook-channel-icon.svg",
@@ -92,34 +109,61 @@ try {
   });
   assert.deepEqual(layout, {
     width: 1043,
-    height: 852,
+    height: 759,
     headerHeight: 84,
     detailsWidth: 437,
-    collageWidth: 430,
-    collageHeight: 548,
+    collageWidth: 462,
+    collageHeight: 591,
   });
   await page.screenshot({ path: "/tmp/v4-summary-initial.png" });
 
-  // Icon experiment updates Summary and carries into existing V4 review.
-  await iconControls().getByRole("radio", { name: "Brand color" }).check();
+  // V4 uses fixed Jobber social icons and no prototype icon-style selector.
+  assert.equal(await iconControls().count(), 0);
   assert.deepEqual(await imageSources(summary()), [
-    "/assets/google-channel-icon.svg",
-    "/assets/facebook-channel-icon.png",
-    "/assets/instagram-channel-icon.png",
+    "/assets/jobber-google-channel-icon.svg",
+    "/assets/jobber-facebook-channel-icon.svg",
+    "/assets/jobber-instagram-channel-icon.svg",
   ]);
   await startCardReview();
   assert.equal(
     await contextModal().locator(".channel-progress-stepper--modal-v4").getByRole("button").count(),
     5,
   );
+  assert.equal(await contextModal().getByRole("heading", {
+    name: "REVIEW MULTIPLE CHANNELS",
+    exact: true,
+  }).count(), 0);
+  assert.equal(await contextModal().getAttribute("aria-labelledby"), "v4-context-title");
+  const reviewHeaderGeometry = await contextModal().evaluate((dialog) => {
+    const modal = dialog.getBoundingClientRect();
+    const stepper = dialog.querySelector(".channel-progress-stepper")?.getBoundingClientRect();
+    const close = dialog.querySelector(".context-progress-close")?.getBoundingClientRect();
+    return {
+      centerDelta: Math.abs(
+        (stepper?.left ?? 0) + (stepper?.width ?? 0) / 2 - (modal.left + modal.width / 2),
+      ),
+      closeRightDelta: Math.abs((close?.right ?? 0) - (modal.right - 32)),
+    };
+  });
+  assert.ok(reviewHeaderGeometry.centerDelta <= 1);
+  assert.ok(reviewHeaderGeometry.closeRightDelta <= 1);
+  const modalStepper = contextModal().locator(".channel-progress-stepper--modal-v4");
+  await modalStepper.getByRole("button", { name: /^Google,/ }).focus();
+  await page.keyboard.press("ArrowRight");
+  assert.equal(
+    await modalStepper.getByRole("button", { name: /^Facebook,/ }).getAttribute("aria-current"),
+    "step",
+  );
+  await modalStepper.getByRole("button", { name: /^Google,/ }).click();
+  await page.screenshot({ path: "/tmp/v4-calendar-review.png" });
   assert.deepEqual(
     await contextModal().locator(".channel-progress-stepper--modal-v4 img").evaluateAll((images) => (
       images.slice(0, 3).map((image) => new URL(image.src).pathname)
     )),
     [
-      "/assets/google-channel-icon.svg",
-      "/assets/facebook-channel-icon.png",
-      "/assets/instagram-channel-icon.png",
+      "/assets/jobber-google-channel-icon.svg",
+      "/assets/jobber-facebook-channel-icon.svg",
+      "/assets/jobber-instagram-channel-icon.svg",
     ],
   );
 
@@ -192,18 +236,86 @@ try {
   await page.getByRole("button", { name: "Generate suggested marketing content" }).click();
   await summary().waitFor();
   assert.equal(await page.locator(".suggested-horizontal-dialog").count(), 0);
+  assert.equal(await page.locator(".v4-generated-flow-shell").count(), 1);
   assert.equal(await summary().getByRole("heading", {
-    name: "Promote fall cleanup",
+    name: "15% promotion",
     exact: true,
   }).count(), 1);
+  assert.equal(await summary().getByRole("heading", {
+    name: "OUR RECOMMENDATION",
+    exact: true,
+  }).count(), 1);
+  assert.equal(await summary().getByText(promotionSummaryCopy, { exact: true }).count(), 1);
+  assert.deepEqual(await summaryRows().evaluateAll((rows) => (
+    rows.map((row) => row.querySelector(".v4-summary-channel")?.textContent?.trim())
+  )), ["Google", "Facebook", "Instagram", "Email"]);
+  assert.equal(await summaryRow("Website").count(), 0);
+  assert.equal(
+    await summary().getByText("Schedule date: Nov 7th, 2026 9:00am", { exact: true }).count(),
+    1,
+  );
+  assert.equal(await summary().locator(".v4-summary-collage").count(), 0);
+  assert.equal(
+    new URL(await summary().locator(".v4-summary-artwork").getAttribute("src"), baseUrl).pathname,
+    "/assets/v4-15-percent-promotion.png",
+  );
+  assert.deepEqual(
+    await summary().locator(".v4-summary-artwork").evaluate((image) => ({
+      width: Math.round(image.getBoundingClientRect().width),
+      height: Math.round(image.getBoundingClientRect().height),
+    })),
+    { width: 430, height: 577 },
+  );
+  assert.equal(await summary().getByRole("button", { name: /close/i }).count(), 0);
+  assert.equal(
+    await page.locator(".v4-generated-flow-shell").getByLabel("Edit marketing content prompt").inputValue(),
+    "Promote fall cleanup",
+  );
   assert.ok((await summaryRows().allTextContents()).every((text) => text.includes("Suggested")));
-  await summary().getByRole("button", { name: "Start Review", exact: true }).click();
-  const suggested = page.locator(".suggested-horizontal-dialog");
-  await suggested.getByRole("heading", { name: "Suggested Marketing Content", exact: true }).waitFor();
-  await suggested.getByText("1 of 5", { exact: true }).waitFor();
-  await suggested.locator(".suggested-content-footer")
+  await summary().getByRole("button", { name: "Review Drafts", exact: true }).click();
+  const suggested = page.locator(".v4-generated-flow-shell");
+  const generatedReview = suggested.locator(".v4-generated-review");
+  await generatedReview.waitFor();
+  assert.equal(await generatedReview.getByRole("heading", {
+    name: "15% promotion",
+    exact: true,
+  }).count(), 1);
+  assert.equal(await generatedReview.locator(".channel-progress-stepper--modal-v4").count(), 1);
+  assert.equal(
+    await generatedReview.locator(".channel-progress-stepper--modal-v4").getByRole("button").count(),
+    4,
+  );
+  assert.equal(await generatedReview.getByRole("button", { name: /^Website,/ }).count(), 0);
+  assert.equal(
+    await generatedReview.getByText(/Christmas Special: Save 15% on Winter Landscaping Services/).count(),
+    1,
+  );
+  const generatedStepper = generatedReview.locator(".channel-progress-stepper--modal-v4");
+  await generatedStepper.getByRole("button", { name: /^Facebook,/ }).click();
+  assert.equal(
+    await generatedReview.getByText(/Christmas Special: Save 15% on Winter Landscaping Services/).count(),
+    1,
+  );
+  await generatedStepper.getByRole("button", { name: /^Instagram,/ }).click();
+  assert.equal(
+    await generatedReview.getByText(/Christmas Special: Save 15% on Winter Landscaping Services/).count(),
+    1,
+  );
+  await generatedStepper.getByRole("button", { name: /^Email,/ }).click();
+  assert.equal(
+    await generatedReview.getByText(/Subject: Save 15% on your next landscaping project/).count(),
+    1,
+  );
+  assert.equal(
+    await generatedReview.getByText(/reserve your spot before our schedule fills up/).count(),
+    1,
+  );
+  await generatedStepper.getByRole("button", { name: /^Google,/ }).click();
+  assert.equal(await generatedReview.getByRole("button", { name: "Close", exact: true }).count(), 0);
+  assert.equal(await page.locator(".prototype-status-controls").count(), 0);
+  await generatedReview.locator(".v4-context-footer")
     .getByRole("button", { name: "Schedule and view next", exact: true }).click();
-  await suggested.getByText("2 of 5", { exact: true }).waitFor();
+  await generatedReview.getByRole("button", { name: /^Facebook,/ }).waitFor();
   await suggested.getByLabel("Close suggested marketing content").click();
 
   // V5 remains on its existing contextual modal and never renders Summary.

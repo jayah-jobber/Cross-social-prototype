@@ -47,7 +47,7 @@ async function verifyModal({ version, modalSelector, stepperSelector, copySelect
   await selectVersion(version);
   await saturdayCard().click();
   if (version === "Version 4") {
-    await page.locator(".v4-summary-modal").getByRole("button", { name: "Start Review" }).click();
+    await page.locator(".v4-summary-modal").getByRole("button", { name: "Review Drafts" }).click();
   }
   const modal = page.locator(modalSelector);
   await modal.waitFor();

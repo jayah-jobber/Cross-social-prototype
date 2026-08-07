@@ -38,7 +38,7 @@ async function openCampaign(version) {
   await resetTo(version);
   await saturdayCard().click();
   if (version === "Version 4") {
-    await page.locator(".v4-summary-modal").getByRole("button", { name: "Start Review" }).click();
+    await page.locator(".v4-summary-modal").getByRole("button", { name: "Review Drafts" }).click();
   }
   const modal = version === "Version 4" ? v4Modal() : v5Modal();
   await modal.waitFor();
@@ -106,13 +106,17 @@ async function assertIconFootprints(modal, stepperSelector) {
       const wrapperBox = icon.getBoundingClientRect();
       const artworkBox = icon.firstElementChild?.getBoundingClientRect();
       return {
+        channel: icon.getAttribute("data-channel"),
         wrapper: [Math.round(wrapperBox.width), Math.round(wrapperBox.height)],
         artwork: [Math.round(artworkBox?.width ?? 0), Math.round(artworkBox?.height ?? 0)],
       };
     }));
   assert.ok(
-    stepperFootprints.every(({ wrapper, artwork }) => (
-      wrapper[0] === 24 && wrapper[1] === 24 && artwork[0] === 24 && artwork[1] === 24
+    stepperFootprints.every(({ channel, wrapper, artwork }) => (
+      wrapper[0] === 24
+      && wrapper[1] === 24
+      && artwork[0] === (channel === "google" ? 20 : 24)
+      && artwork[1] === (channel === "google" ? 20 : 24)
     )),
     JSON.stringify(stepperFootprints),
   );
@@ -127,6 +131,7 @@ async function assertIconFootprints(modal, stepperSelector) {
       const artworkBox = artwork?.getBoundingClientRect();
       const titleBox = title?.getBoundingClientRect();
       return {
+        channel: wrapper?.getAttribute("data-channel"),
         wrapper: [Math.round(wrapperBox?.width ?? 0), Math.round(wrapperBox?.height ?? 0)],
         artwork: [Math.round(artworkBox?.width ?? 0), Math.round(artworkBox?.height ?? 0)],
         centerDelta: Math.abs(
@@ -136,7 +141,10 @@ async function assertIconFootprints(modal, stepperSelector) {
       };
     });
     assert.deepEqual(alignment.wrapper, [24, 24]);
-    assert.deepEqual(alignment.artwork, [24, 24]);
+    assert.deepEqual(
+      alignment.artwork,
+      alignment.channel === "google" ? [20, 20] : [24, 24],
+    );
     assert.ok(alignment.centerDelta <= 1, JSON.stringify(alignment));
   }
 }
@@ -144,18 +152,10 @@ async function assertIconFootprints(modal, stepperSelector) {
 try {
   await page.goto(baseUrl, { waitUntil: "networkidle" });
 
-  // V4 opens in the full-modal Figma default: monochrome Jobber icons.
+  // V4 uses fixed monochrome Jobber icons with no prototype selector.
   let modal = await openCampaign("Version 4");
   let stepper = modal.locator(".channel-progress-stepper--modal-v4");
-  assert.equal(await iconControls().count(), 1);
-  assert.equal(await iconControls().getByRole("radio", { name: "Jobber" }).isChecked(), true);
-  assert.equal(
-    await page.locator(".prototype-frame").evaluate(
-      (frame, control) => frame.contains(control),
-      await iconControls().elementHandle(),
-    ),
-    false,
-  );
+  assert.equal(await iconControls().count(), 0);
   assert.deepEqual(await socialStepperSources(stepper), jobberSources);
   assert.equal(
     await imageSource(modal.locator(".v4-context-preview .channel-preview-title-icon")),
@@ -172,9 +172,6 @@ try {
   );
   await page.screenshot({ path: "/tmp/v4-icons-jobber-google-active.png" });
 
-  const fixedIconMarkup = await stepper.getByRole("button").evaluateAll((buttons) => (
-    buttons.slice(3).map((button) => button.querySelector(".channel-progress-icon")?.innerHTML)
-  ));
   for (const [index, channel] of ["Google", "Facebook", "Instagram"].entries()) {
     await stepper.getByRole("button", { name: new RegExp(`^${channel},`) }).click();
     assert.equal(
@@ -187,55 +184,16 @@ try {
     await stepper.getByRole("button", { name: new RegExp(`^${channel},`) }).click();
     await assertIconFootprints(modal, ".channel-progress-stepper--modal-v4");
   }
-  await stepper.getByRole("button", { name: /^Instagram,/ }).click();
-
-  // Brand comparison updates both locations without filtering colored artwork.
-  await iconControls().getByRole("radio", { name: "Brand color" }).check();
-  assert.deepEqual(await socialStepperSources(stepper), brandSources);
-  assert.equal(
-    await imageSource(modal.locator(".v4-context-preview .channel-preview-title-icon")),
-    brandSources[2],
-  );
-  assert.equal(
-    await stepper.getByRole("button", { name: "Instagram, unscheduled" })
-      .locator(".brand-social-icon")
-      .evaluate((icon) => getComputedStyle(icon).filter),
-    "none",
-  );
-  assert.deepEqual(
-    await stepper.getByRole("button").evaluateAll((buttons) => (
-      buttons.slice(3).map((button) => button.querySelector(".channel-progress-icon")?.innerHTML)
-    )),
-    fixedIconMarkup,
-  );
-  for (const [index, channel] of ["Google", "Facebook", "Instagram"].entries()) {
-    await stepper.getByRole("button", { name: new RegExp(`^${channel},`) }).click();
-    assert.equal(
-      await imageSource(modal.locator(".v4-context-preview .channel-preview-title-icon")),
-      brandSources[index],
-    );
-    await assertIconFootprints(modal, ".channel-progress-stepper--modal-v4");
-  }
-  for (const channel of ["Email", "Website"]) {
-    await stepper.getByRole("button", { name: new RegExp(`^${channel},`) }).click();
-    await assertIconFootprints(modal, ".channel-progress-stepper--modal-v4");
-  }
-  await stepper.getByRole("button", { name: /^Instagram,/ }).click();
-  await page.screenshot({ path: "/tmp/v4-icons-brand-instagram-active.png" });
 
   await modal.locator(".v4-context-footer").getByRole("button", { name: "Edit", exact: true }).click();
   await review().waitFor();
   let reviewStepper = review().locator(".channel-progress-stepper--review");
-  assert.deepEqual(await socialStepperSources(reviewStepper), brandSources);
+  assert.deepEqual(await socialStepperSources(reviewStepper), jobberSources);
   assert.equal(await iconControls().count(), 0);
   await review().locator(".review-footer").getByRole("button", { name: "Back", exact: true }).click();
   modal = v4Modal();
   await modal.waitFor();
   stepper = modal.locator(".channel-progress-stepper--modal-v4");
-  assert.equal(await iconControls().getByRole("radio", { name: "Brand color" }).isChecked(), true);
-
-  await iconControls().getByRole("radio", { name: "Jobber" }).check();
-  assert.deepEqual(await socialStepperSources(stepper), jobberSources);
   await stepper.getByRole("button", { name: /^Google,/ }).click();
   assert.equal(
     await imageSource(modal.locator(".v4-context-preview .channel-preview-title-icon")),
@@ -309,16 +267,8 @@ try {
   await assertCompleted(reviewStepper.getByRole("button", { name: "Google, scheduled" }));
   assert.equal(await iconControls().count(), 0);
 
-  // Version changes reset the short-lived experiment to Jobber.
-  modal = await openCampaign("Version 4");
-  assert.equal(await iconControls().getByRole("radio", { name: "Jobber" }).isChecked(), true);
-  assert.deepEqual(
-    await socialStepperSources(modal.locator(".channel-progress-stepper--modal-v4")),
-    jobberSources,
-  );
-
   console.log(
-    "Verified V4 Jobber/brand switching, uniform 24px icon footprints, full-modal active/completed states, workflow, reset, and V5 isolation.",
+    "Verified fixed V4 Jobber icons, normalized artwork, full-modal active/completed states, workflow, and V5 isolation.",
   );
 } finally {
   await browser.close();

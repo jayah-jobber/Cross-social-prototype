@@ -14,7 +14,11 @@ const channels = [
   { id: "website", review: "Review Website Page", editor: "Edit Website Page" },
 ];
 
-const suggestedFooterEdit = () => page.locator(".suggested-content-footer").getByRole("button", { name: "Edit" });
+const generatedReview = () => page.locator(".v4-generated-review");
+const generatedStepper = () => generatedReview().locator(".channel-progress-stepper--modal-v4");
+const suggestedFooterEdit = () => generatedReview()
+  .locator(".v4-context-footer")
+  .getByRole("button", { name: "Edit" });
 const contentEdit = () => page.locator(".review-field").first().getByRole("button", { name: "Edit" });
 const reviewBack = () => page.locator(".review-footer").getByRole("button", { name: "Back" });
 
@@ -108,22 +112,30 @@ async function assertInitialSocialFields(channel) {
   assert.ok(previewText.indexOf(cta) < previewText.indexOf(hashtags));
 
   if (channel === "instagram") {
-    assert.equal(
+    assert.deepEqual(
       await page.locator(".instagram-post-card").evaluate((card) => {
         const copy = card.querySelector(".instagram-post-copy");
         const image = card.querySelector(".instagram-post-image");
-        return Boolean(copy && image && (copy.compareDocumentPosition(image) & Node.DOCUMENT_POSITION_FOLLOWING));
+        const controls = card.querySelector(".instagram-controls");
+        return [
+          Boolean(image && copy && (image.compareDocumentPosition(copy) & Node.DOCUMENT_POSITION_FOLLOWING)),
+          Boolean(controls && copy && (controls.compareDocumentPosition(copy) & Node.DOCUMENT_POSITION_FOLLOWING)),
+        ];
       }),
-      true,
-      "V4 Instagram copy should render before its images",
+      [true, true],
+      "V4 Instagram image and actions should render before its copy",
     );
   }
 }
 
 async function verifyChannel(channel, index) {
+  const channelButton = generatedStepper().getByRole("button", {
+    name: new RegExp(`^${channel.id[0].toUpperCase() + channel.id.slice(1)},`),
+  });
+  await channelButton.click();
   if (channel.id === "instagram") {
     assert.equal(
-      (await page.locator(".suggested-preview-section").textContent()).includes("facebook-saved"),
+      (await generatedReview().locator(".v4-context-preview").textContent()).includes("facebook-saved"),
       false,
       "Suggested Facebook edits must not change the Instagram draft",
     );
@@ -142,7 +154,7 @@ async function verifyChannel(channel, index) {
   await reviewBack().click();
   await expectHeading("Suggested Marketing Content");
   assert.equal(await page.getByLabel("Edit marketing content prompt").inputValue(), "Five channel QA prompt");
-  await page.getByText(`${index + 1} of 5`, { exact: true }).waitFor();
+  assert.equal(await channelButton.getAttribute("aria-current"), "step");
 
   await suggestedFooterEdit().click();
   await contentEdit().click();
@@ -191,22 +203,25 @@ async function verifyChannel(channel, index) {
 
   await reviewBack().click();
   await expectHeading("Suggested Marketing Content");
-  assert.ok((await page.locator(".suggested-preview-section").textContent()).includes(saveMarker));
+  assert.ok((await generatedReview().locator(".v4-context-preview").textContent()).includes(saveMarker));
 
   if (channel.id === "instagram") {
-    await page.getByRole("button", { name: "Previous channel" }).click();
-    const facebookPreview = await page.locator(".suggested-preview-section").textContent();
+    await generatedStepper().getByRole("button", { name: /^Facebook,/ }).click();
+    const facebookPreview = await generatedReview().locator(".v4-context-preview").textContent();
     assert.ok(facebookPreview.includes("facebook-saved"));
     assert.equal(
       facebookPreview.includes("instagram-saved"),
       false,
       "Suggested Instagram edits must not change the Facebook draft",
     );
-    await page.getByRole("button", { name: "Next channel" }).click();
+    await generatedStepper().getByRole("button", { name: /^Instagram,/ }).click();
   }
 
   if (index < channels.length - 1) {
-    await page.getByRole("button", { name: "Next channel" }).click();
+    const next = channels[index + 1];
+    await generatedStepper().getByRole("button", {
+      name: new RegExp(`^${next.id[0].toUpperCase() + next.id.slice(1)},`),
+    }).click();
   }
 }
 
@@ -216,7 +231,7 @@ try {
   if (await versionFourButton.count()) await versionFourButton.click();
   await page.getByLabel("Add to your marketing calendar").fill("Five channel QA prompt");
   await page.getByRole("button", { name: "Generate suggested marketing content" }).click();
-  await page.locator(".v4-summary-modal").getByRole("button", { name: "Start Review" }).click();
+  await page.locator(".v4-summary-modal").getByRole("button", { name: "Review Drafts" }).click();
   await expectHeading("Suggested Marketing Content");
 
   for (const [index, channel] of channels.entries()) {
@@ -225,7 +240,7 @@ try {
 
   await page.getByLabel("Close suggested marketing content").click();
   await page.locator(".combined-target-card").click();
-  await page.locator(".v4-summary-modal").getByRole("button", { name: "Start Review" }).click();
+  await page.locator(".v4-summary-modal").getByRole("button", { name: "Review Drafts" }).click();
   const modalStepper = page.locator(".channel-progress-stepper--modal-v4");
   await modalStepper.getByRole("button", { name: /^Facebook,/ }).click();
   await page.locator(".v4-context-footer").getByRole("button", { name: "Edit" }).click();

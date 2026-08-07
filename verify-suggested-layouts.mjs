@@ -11,13 +11,15 @@ async function selectVersion(name) {
   await page.getByRole("button", { name, exact: true }).click();
 }
 
-async function openSuggested(prompt) {
+async function openSuggested(prompt, version) {
   await page.getByLabel("Add to your marketing calendar").fill(prompt);
   await page.getByRole("button", { name: "Generate suggested marketing content" }).click();
-  await page.getByRole("dialog").waitFor();
-  const summary = page.locator(".v4-summary-modal");
-  if (await summary.count()) {
-    await summary.getByRole("button", { name: "Start Review" }).click();
+  if (version === "v4") {
+    const summary = page.locator(".v4-summary-modal--generated");
+    await summary.waitFor();
+    await summary.getByRole("button", { name: "Review Drafts" }).click();
+  } else {
+    await page.locator(".suggested-vertical-dialog").waitFor();
   }
 }
 
@@ -36,31 +38,41 @@ try {
   await page.goto(baseUrl, { waitUntil: "networkidle" });
 
   await selectVersion("Version 4");
-  await openSuggested("V4 suggested layout prompt");
-  const horizontal = page.locator(".suggested-horizontal-dialog");
+  await openSuggested("V4 suggested layout prompt", "v4");
+  const horizontal = page.locator(".v4-generated-flow-shell");
+  const generatedReview = horizontal.locator(".v4-generated-review");
   await horizontal.getByRole("heading", { name: "Suggested Marketing Content", exact: true }).waitFor();
   assert.equal(await page.locator(".suggested-vertical-dialog").count(), 0);
   assert.equal(
-    await horizontal.getByRole("heading", { name: "REVIEW MULTIPLE CHANNELS", exact: true }).count(),
-    1,
+    await generatedReview.getByRole("heading", { name: "REVIEW MULTIPLE CHANNELS", exact: true }).count(),
+    0,
   );
-  assert.equal(await horizontal.locator(".v4-context-body").count(), 1);
+  assert.equal(await generatedReview.locator(".channel-progress-stepper--modal-v4").count(), 1);
+  assert.equal(await generatedReview.locator(".v4-context-body").count(), 1);
   await horizontal.getByLabel("Edit marketing content prompt").fill("Regenerated V4 idea");
   await horizontal.getByRole("button", { name: "Regenerate suggestions" }).click();
+  const regeneratedSummary = horizontal.locator(".v4-summary-modal--generated");
+  await regeneratedSummary.waitFor();
   assert.equal(
     await horizontal.getByLabel("Edit marketing content prompt").inputValue(),
     "Regenerated V4 idea",
   );
-  await verifyCarousel(horizontal, ".v4-context-preview-scroll");
-  await horizontal.getByRole("button", { name: "Previous channel" }).click();
-  await horizontal.locator(".suggested-content-footer").getByRole("button", { name: "Edit" }).click();
-  await page.getByRole("heading", { name: "Review Email Campaign", exact: true }).waitFor();
+  await regeneratedSummary.getByRole("button", { name: "Review Drafts" }).click();
+  await generatedReview.waitFor();
+  for (const channel of channels) {
+    const channelButton = generatedReview.getByRole("button", { name: new RegExp(`^${channel},`) });
+    await channelButton.click();
+    assert.equal(await channelButton.getAttribute("aria-current"), "step");
+    assert.equal(await generatedReview.locator(".v4-context-preview-scroll > *").count(), 1);
+  }
+  await generatedReview.locator(".v4-context-footer").getByRole("button", { name: "Edit" }).click();
+  await page.getByRole("heading", { name: "Review Website Page", exact: true }).waitFor();
   await page.locator(".review-footer").getByRole("button", { name: "Back" }).click();
-  await horizontal.getByText("4 of 5", { exact: true }).waitFor();
+  await generatedReview.getByRole("button", { name: /^Website,/ }).waitFor();
   await horizontal.getByLabel("Close suggested marketing content").click();
 
   await selectVersion("Version 5");
-  await openSuggested("V5 suggested layout prompt");
+  await openSuggested("V5 suggested layout prompt", "v5");
   const vertical = page.locator(".suggested-vertical-dialog");
   await vertical.getByRole("heading", { name: "Start from your own idea", exact: true }).waitFor();
   assert.equal(await page.locator(".suggested-horizontal-dialog").count(), 0);

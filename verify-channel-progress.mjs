@@ -21,7 +21,7 @@ async function openCampaign(version) {
   await resetTo(version);
   await saturdayCard().click();
   if (version === "Version 4") {
-    await page.locator(".v4-summary-modal").getByRole("button", { name: "Start Review" }).click();
+    await page.locator(".v4-summary-modal").getByRole("button", { name: "Review Drafts" }).click();
   }
   const selector = version === "Version 4" ? ".v4-five-channel-modal" : ".v5-context-modal";
   await page.locator(selector).waitFor();
@@ -87,12 +87,23 @@ async function assertContextModalLayout(modal, version) {
     (await modal.locator(".context-progress-header").textContent())?.toLowerCase().includes(
       "review multiple channels",
     ),
-    true,
+    version === "v5",
   );
   assert.equal(
     await modal.locator(".context-progress-header").getByRole("button", { name: "Close" }).count(),
     1,
   );
+  if (version === "v4") {
+    const centerDelta = await modal.evaluate((dialog) => {
+      const modalBox = dialog.getBoundingClientRect();
+      const stepperBox = dialog.querySelector(".channel-progress-stepper")?.getBoundingClientRect();
+      return Math.abs(
+        (stepperBox?.left ?? 0) + (stepperBox?.width ?? 0) / 2
+          - (modalBox.left + modalBox.width / 2),
+      );
+    });
+    assert.ok(centerDelta <= 1);
+  }
   assert.ok(await stepper.getByRole("button").evaluateAll((buttons) => (
     buttons.every((button) => {
       const box = button.getBoundingClientRect();
@@ -155,6 +166,7 @@ async function assertFigmaReviewLayout() {
     const left = main.querySelector(".review-panel");
     const right = main.querySelector(".preview-panel");
     const header = main.querySelector(".review-navigation-header");
+    const stepper = header?.querySelector(".channel-progress-stepper");
     const heading = main.querySelector(".review-scroll h1");
     const footer = main.querySelector(".review-footer");
     const preview = main.querySelector(".preview-content");
@@ -163,6 +175,7 @@ async function assertFigmaReviewLayout() {
     const leftBox = box(left);
     const rightBox = box(right);
     const headerBox = box(header);
+    const stepperBox = box(stepper);
     const headingBox = box(heading);
     const footerBox = box(footer);
     const previewBox = box(preview);
@@ -170,6 +183,11 @@ async function assertFigmaReviewLayout() {
       leftRatio: (leftBox?.width ?? 0) / (mainBox?.width ?? 1),
       rightRatio: (rightBox?.width ?? 0) / (mainBox?.width ?? 1),
       headerHeight: Math.round(headerBox?.height ?? 0),
+      headerCenterOffset: Math.round(
+        (stepperBox?.left ?? 0) + (stepperBox?.width ?? 0) / 2
+        - ((headerBox?.left ?? 0) + (headerBox?.width ?? 0) / 2),
+      ),
+      hasReviewLabel: header?.textContent?.includes("Review multiple channels") ?? false,
       contentTopGap: Math.round((headingBox?.top ?? 0) - (headerBox?.bottom ?? 0)),
       footerBottomGap: Math.round((leftBox?.bottom ?? 0) - (footerBox?.bottom ?? 0)),
       previewCenterOffset: Math.round(
@@ -182,6 +200,8 @@ async function assertFigmaReviewLayout() {
   assert.ok(Math.abs(layout.leftRatio - 0.491) < 0.005, JSON.stringify(layout));
   assert.ok(Math.abs(layout.rightRatio - 0.509) < 0.005, JSON.stringify(layout));
   assert.equal(layout.headerHeight, 68);
+  assert.ok(Math.abs(layout.headerCenterOffset) <= 1, JSON.stringify(layout));
+  assert.equal(layout.hasReviewLabel, false);
   assert.equal(layout.contentTopGap, 48);
   assert.equal(layout.footerBottomGap, 0);
   assert.ok(Math.abs(layout.previewCenterOffset) <= 1, JSON.stringify(layout));
