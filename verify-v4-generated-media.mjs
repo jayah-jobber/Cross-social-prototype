@@ -58,10 +58,10 @@ try {
   // Generation and review alone never create calendar state.
   await generate("Christmas winter landscaping promotion");
   assert.equal(await generatedCards().count(), 0);
-  assert.equal(
-    new URL(await summary().locator(".v4-summary-artwork").getAttribute("src"), baseUrl).pathname,
-    "/assets/v4-15-percent-promotion.png",
-  );
+  assert.equal(await summary().locator(".v4-summary-artwork").count(), 0);
+  assert.equal(await summary().locator(".v4-summary-collage").count(), 0);
+  assert.equal(await summary().locator(".v4-summary-image-placeholder").count(), 0);
+  assert.equal(await summary().locator(".v4-summary-body--text-only").count(), 1);
   await summary().getByRole("button", { name: "Review Drafts", exact: true }).click();
 
   await assertCollapsedMedia();
@@ -83,9 +83,14 @@ try {
   await context().getByText(imageRequirement, { exact: true }).waitFor();
 
   const contextSchedule = context().getByRole("button", {
-    name: "Schedule and view next",
+    name: "Schedule Instagram post",
     exact: true,
   });
+  assert.equal(
+    await context().locator(".v4-context-footer")
+      .getByRole("button", { name: "Delete", exact: true }).count(),
+    1,
+  );
   const contextSplit = context().getByRole("button", { name: "Show publishing options" });
   assert.equal(await contextSchedule.isDisabled(), true);
   assert.equal(await contextSplit.isDisabled(), true);
@@ -113,8 +118,12 @@ try {
   }).click();
   const reviewFooter = page.locator(".v4-channel-review .review-footer");
   assert.equal(
-    await reviewFooter.getByRole("button", { name: "Schedule and view next" }).isDisabled(),
+    await reviewFooter.getByRole("button", { name: "Schedule Instagram post" }).isDisabled(),
     true,
+  );
+  assert.equal(
+    await reviewFooter.getByRole("button", { name: "Delete", exact: true }).count(),
+    1,
   );
   await page.locator(".review-field").first().getByRole("button", { name: "Edit" }).click();
   const chooseImage = page.getByRole("button", { name: "Choose image", exact: true });
@@ -124,12 +133,29 @@ try {
   assert.equal(await page.locator(".instagram-post-image").count(), 1);
   await page.getByRole("button", { name: "Save Edit", exact: true }).click();
   assert.equal(
-    await reviewFooter.getByRole("button", { name: "Schedule and view next" }).isEnabled(),
+    await reviewFooter.getByRole("button", { name: "Schedule Instagram post" }).isEnabled(),
     true,
   );
   await reviewFooter.getByRole("button", { name: "Back", exact: true }).click();
   assert.equal(await context().getByText(imageRequirement, { exact: true }).count(), 0);
   assert.equal(await contextSchedule.isEnabled(), true);
+
+  // Generated content review deletion stays in review and opens the next available channel.
+  await selectContextChannel("Facebook");
+  await context().locator(".v4-context-footer")
+    .getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("heading", { name: "Review Facebook Post" }).waitFor();
+  await reviewFooter.getByRole("button", { name: "Delete", exact: true }).click();
+  await page.getByRole("dialog", { name: "Improve future recommendations" })
+    .getByRole("button", { name: "Delete Post", exact: true }).click();
+  await page.getByRole("heading", { name: "Review Instagram Post" }).waitFor();
+  assert.equal(
+    await page.locator(".v4-channel-review").getByRole("button", { name: /^Facebook,/ }).count(),
+    0,
+  );
+  await page.getByText("Facebook post is deleted", { exact: true }).waitFor();
+  await reviewFooter.getByRole("button", { name: "Back", exact: true }).click();
+  assert.equal(await context().getByRole("button", { name: /^Facebook,/ }).count(), 0);
 
   // Closing discards every unscheduled draft, including edited media.
   await outerClose().click();
@@ -144,7 +170,7 @@ try {
   await assertCollapsedMedia();
   await selectContextChannel("Google");
   await context().getByRole("button", {
-    name: "Schedule and view next",
+    name: "Schedule Google post",
     exact: true,
   }).click();
   assert.equal(await generatedCards().count(), 1);

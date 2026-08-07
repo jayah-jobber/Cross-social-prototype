@@ -258,7 +258,7 @@ try {
   modal = await openCampaign("Version 4");
   await modal.locator(".v4-context-footer").getByRole("button", { name: "Edit", exact: true }).click();
   await page.getByRole("heading", { name: "Review Google Post" }).waitFor();
-  await reviewFooter().getByRole("button", { name: "Schedule and view next", exact: true }).click();
+  await reviewFooter().getByRole("button", { name: "Schedule Google post", exact: true }).click();
   await page.getByRole("heading", { name: "Review Facebook Post" }).waitFor();
   await page.getByText("Your post is scheduled", { exact: true }).waitFor();
   const scheduledGoogle = review().getByRole("button", { name: "Google, scheduled" });
@@ -303,14 +303,14 @@ try {
   assert.equal(await modal.getByRole("button", { name: /Facebook,/ }).count(), 0);
   await modal.getByRole("button", { name: "Google, unscheduled" }).click();
   await modal.locator(".v4-context-footer").getByRole("button", { name: "Edit", exact: true }).click();
-  await reviewFooter().getByRole("button", { name: "Schedule and view next", exact: true }).click();
+  await reviewFooter().getByRole("button", { name: "Schedule Google post", exact: true }).click();
   await page.getByRole("heading", { name: "Review Instagram Post" }).waitFor();
   assert.equal(await review().getByRole("button", { name: /Facebook,/ }).count(), 0);
 
   // Delivering the final available V4 channel returns to the calendar.
   await review().getByRole("button", { name: "Website, unscheduled" }).click();
   await page.getByRole("heading", { name: "Review Website Page" }).waitFor();
-  await reviewFooter().getByRole("button", { name: "Schedule and view next", exact: true }).click();
+  await reviewFooter().getByRole("button", { name: "Publish Website page", exact: true }).click();
   await page.getByRole("heading", { name: "Marketing Plan" }).waitFor();
   assert.equal(await review().count(), 0);
   await page.getByText("Your post is scheduled", { exact: true }).waitFor();

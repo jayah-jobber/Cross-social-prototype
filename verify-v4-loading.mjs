@@ -95,13 +95,10 @@ try {
   }).count(), 1);
   assert.equal(await generatedSummary().locator(".v4-summary-status-list > li").count(), 4);
   assert.equal(await generatedSummary().getByText("Website", { exact: true }).count(), 0);
-  assert.equal(
-    new URL(
-      await generatedSummary().locator(".v4-summary-artwork").getAttribute("src"),
-      baseUrl,
-    ).pathname,
-    "/assets/v4-15-percent-promotion.png",
-  );
+  assert.equal(await generatedSummary().locator(".v4-summary-artwork").count(), 0);
+  assert.equal(await generatedSummary().locator(".v4-summary-collage").count(), 0);
+  assert.equal(await generatedSummary().locator(".v4-summary-image-placeholder").count(), 0);
+  assert.equal(await generatedSummary().locator(".v4-summary-body--text-only").count(), 1);
   await page.screenshot({ path: "/tmp/v4-generated-summary.png" });
   assert.equal(await generatedSummary().getByRole("button", { name: /close/i }).count(), 0);
   assert.equal(await promptInput().inputValue(), "Promote fall cleanup");
@@ -146,7 +143,7 @@ try {
 
   // Lifecycle state survives button regeneration from generated review.
   await generatedReview().locator(".v4-context-footer")
-    .getByRole("button", { name: "Schedule and view next", exact: true }).click();
+    .getByRole("button", { name: "Schedule Google post", exact: true }).click();
   await generatedReview().getByRole("button", { name: /^Facebook,/ }).waitFor();
   await promptInput().fill("Promote updated cleanup");
   await regenerate().click();
@@ -178,6 +175,7 @@ try {
   const calendarSummary = page.locator(".v4-summary-modal--calendar");
   await calendarSummary.getByRole("button", { name: "Review Drafts" }).click();
   const statusControls = page.locator(".prototype-status-controls");
+  await statusControls.waitFor();
   assert.equal(await statusControls.count(), 1);
   await statusControls.getByRole("button", { name: "Missed", exact: true }).click();
   assert.equal(

@@ -60,7 +60,7 @@ try {
   await expectFacts("Schedule date");
   await footer().getByRole("button", { name: "Delete", exact: true }).waitFor();
   await footer().getByRole("button", { name: "Edit", exact: true }).waitFor();
-  await footer().getByRole("button", { name: "Schedule and view next", exact: true }).waitFor();
+  await footer().getByRole("button", { name: "Schedule Google post", exact: true }).waitFor();
   await footer().getByRole("button", { name: "Show publishing options" }).click();
   await modal().getByRole("menuitem", { name: "Post now and view next", exact: true }).waitFor();
   await page.keyboard.press("Escape");
@@ -68,7 +68,7 @@ try {
   await selectState("Scheduled");
   await modal().getByText("Scheduled", { exact: true }).waitFor();
   await expectFacts("Schedule date");
-  await footer().getByRole("button", { name: "Delete Post", exact: true }).waitFor();
+  await footer().getByRole("button", { name: "Delete", exact: true }).waitFor();
   await footer().getByRole("button", { name: "Edit", exact: true }).waitFor();
   await footer().getByRole("button", { name: "Show scheduled post options" }).click();
   assert.deepEqual(
@@ -88,7 +88,7 @@ try {
   await modal().getByText("Missed", { exact: true }).waitFor();
   await expectFacts("Original schedule date");
   assert.equal(await modal().locator(".v4-warning-fact svg").count(), 1);
-  await footer().getByRole("button", { name: "Delete Post", exact: true }).waitFor();
+  await footer().getByRole("button", { name: "Delete", exact: true }).waitFor();
   await footer().getByRole("button", { name: "Edit", exact: true }).waitFor();
   await footer().getByRole("button", { name: "Send Now", exact: true }).waitFor();
 
@@ -99,7 +99,7 @@ try {
     "Posting failed due to a connection issue.",
     { exact: true },
   ).waitFor();
-  await footer().getByRole("button", { name: "Delete Post", exact: true }).waitFor();
+  await footer().getByRole("button", { name: "Delete", exact: true }).waitFor();
   await footer().getByRole("button", { name: "Edit", exact: true }).waitFor();
   await footer().getByRole("button", { name: "Post Now", exact: true }).waitFor();
 

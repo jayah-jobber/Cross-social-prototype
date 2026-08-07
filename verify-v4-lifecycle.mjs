@@ -12,6 +12,13 @@ const calendarDay = (name) => page.locator(".calendar-day").filter({
   has: page.getByRole("heading", { name, exact: true }),
 });
 const campaignCard = (day) => calendarDay(day).locator(".combined-target-card");
+const v4ActionLabels = [
+  ["Google", "Schedule Google post"],
+  ["Facebook", "Schedule Facebook post"],
+  ["Instagram", "Schedule Instagram post"],
+  ["Email", "Schedule Email"],
+  ["Website", "Publish Website page"],
+];
 
 async function selectVersionFour() {
   await page.getByRole("button", { name: "Version 1" }).click();
@@ -56,6 +63,13 @@ async function deleteCurrentFromModal(buttonName = "Delete Post") {
     .click();
 }
 
+async function deleteCurrentFromReview(buttonName = "Delete Post") {
+  await reviewFooter().getByRole("button", { name: "Delete", exact: true }).click();
+  await page.getByRole("dialog", { name: "Improve future recommendations" })
+    .getByRole("button", { name: buttonName, exact: true })
+    .click();
+}
+
 async function openUnscheduledMenu() {
   await modalFooter().getByRole("button", { name: "Show publishing options" }).click();
 }
@@ -80,11 +94,19 @@ try {
   assert.equal((await cardChannels("Saturday, Nov 7")).length, 5);
   await openSaturday();
 
-  // Unscheduled contextual action is an exact split CTA.
-  assert.equal(
-    await modalFooter().getByRole("button", { name: "Schedule and view next", exact: true }).count(),
-    1,
-  );
+  // Every V4 contextual channel uses its specific unscheduled CTA and exact Delete label.
+  for (const [channel, actionLabel] of v4ActionLabels) {
+    await selectModalChannel(channel);
+    assert.equal(
+      await modalFooter().getByRole("button", { name: actionLabel, exact: true }).count(),
+      1,
+    );
+    assert.equal(
+      await modalFooter().getByRole("button", { name: "Delete", exact: true }).count(),
+      1,
+    );
+  }
+  await selectModalChannel("Google");
   await openUnscheduledMenu();
   assert.equal(
     await modal().getByRole("menuitem", { name: "Post now and view next", exact: true }).count(),
@@ -99,6 +121,19 @@ try {
   );
   await modalFooter().getByRole("button", { name: "Edit", exact: true }).click();
   await page.getByRole("heading", { name: "Review Google Post" }).waitFor();
+  const reviewStepper = page.locator(".v4-channel-review .channel-progress-stepper--review");
+  for (const [channel, actionLabel] of v4ActionLabels) {
+    await reviewStepper.getByRole("button", { name: new RegExp(`^${channel},`) }).click();
+    assert.equal(
+      await reviewFooter().getByRole("button", { name: actionLabel, exact: true }).count(),
+      1,
+    );
+    assert.equal(
+      await reviewFooter().getByRole("button", { name: "Delete", exact: true }).count(),
+      1,
+    );
+  }
+  await reviewStepper.getByRole("button", { name: /^Google,/ }).click();
   const reviewSchedule = page.locator(".review-field").filter({ hasText: "Schedule Post" });
   await reviewSchedule.getByRole("button", { name: "Edit" }).click();
   const scheduleDialog = page.getByRole("dialog", { name: "Schedule Date" });
@@ -204,7 +239,7 @@ try {
   // Scheduled Send now also moves a channel to Nov 6.
   await selectVersionFour();
   await openSaturday();
-  await modalFooter().getByRole("button", { name: "Schedule and view next", exact: true }).click();
+  await modalFooter().getByRole("button", { name: "Schedule Google post", exact: true }).click();
   await page.getByText("Your post is scheduled", { exact: true }).waitFor();
   await selectModalChannel("Google");
   await modalFooter().getByRole("button", { name: "Show scheduled post options" }).click();
@@ -220,7 +255,7 @@ try {
   await modalFooter().getByRole("button", { name: "Edit", exact: true }).click();
   await page.getByRole("heading", { name: "Review Facebook Post" }).waitFor();
   assert.equal(
-    await reviewFooter().getByRole("button", { name: "Delete Post" }).getAttribute("aria-disabled"),
+    await reviewFooter().getByRole("button", { name: "Delete", exact: true }).getAttribute("aria-disabled"),
     null,
   );
   await reviewSchedule.getByRole("button", { name: "Edit" }).click();
@@ -228,10 +263,10 @@ try {
   await scheduleDialog.getByRole("button", { name: "Save Edits" }).click();
   await reviewSchedule.getByText("Nov 8, 2026 9:00 AM", { exact: true }).waitFor();
   assert.equal(
-    await reviewFooter().getByRole("button", { name: "Schedule and view next", exact: true }).count(),
+    await reviewFooter().getByRole("button", { name: "Schedule Facebook post", exact: true }).count(),
     1,
   );
-  await reviewFooter().getByRole("button", { name: "Schedule and view next", exact: true }).click();
+  await reviewFooter().getByRole("button", { name: "Schedule Facebook post", exact: true }).click();
   await page.getByText("Your post is scheduled", { exact: true }).waitFor();
   assert.equal(await modal().count(), 0);
   assert.equal(await campaignCard("Sunday, Nov 8").locator(".status-scheduled").count(), 1);
@@ -254,7 +289,28 @@ try {
   assert.deepEqual(await cardChannels("Friday, Nov 6"), ["fFacebook post"]);
   assert.equal(await campaignCard("Sunday, Nov 8").count(), 0);
 
-  // Deleting the only channel in a moved group removes the card without 0-of-0.
+  // Deleting a middle review item immediately opens the next scoped preview.
+  await selectVersionFour();
+  await openSaturday();
+  await selectModalChannel("Facebook");
+  await modalFooter().getByRole("button", { name: "Edit", exact: true }).click();
+  await deleteCurrentFromReview();
+  await page.getByRole("heading", { name: "Review Instagram Post" }).waitFor();
+  assert.equal(await reviewStepper.getByRole("button", { name: /^Facebook,/ }).count(), 0);
+  await page.getByText("Facebook post is deleted", { exact: true }).waitFor();
+
+  // Review progression skips channels that were already deleted ahead.
+  await selectVersionFour();
+  await openSaturday();
+  await selectModalChannel("Instagram");
+  await deleteCurrentFromModal();
+  await selectModalChannel("Facebook");
+  await modalFooter().getByRole("button", { name: "Edit", exact: true }).click();
+  await deleteCurrentFromReview();
+  await page.getByRole("heading", { name: "Review Email Campaign" }).waitFor();
+  assert.equal(await reviewStepper.getByRole("button", { name: /^Facebook|^Instagram/ }).count(), 0);
+
+  // Deleting the only channel in a moved review group returns to the calendar.
   await selectVersionFour();
   await openSaturday();
   assert.equal(
@@ -265,8 +321,7 @@ try {
   await reviewSchedule.getByRole("button", { name: "Edit" }).click();
   await scheduleDialog.getByLabel("Schedule date for Google").fill("2026-11-05");
   await scheduleDialog.getByRole("button", { name: "Save Edits" }).click();
-  await reviewFooter().getByRole("button", { name: "Back" }).click();
-  await deleteCurrentFromModal();
+  await deleteCurrentFromReview();
   await page.getByRole("heading", { name: "Marketing Plan" }).waitFor();
   assert.equal(await modal().count(), 0);
   assert.equal(await campaignCard("Thursday, Nov 5").count(), 0);

@@ -177,7 +177,7 @@ try {
   await openSaturdaySummary();
   await startCardReview();
   await contextModal().locator(".v4-context-footer")
-    .getByRole("button", { name: "Schedule and view next", exact: true }).click();
+    .getByRole("button", { name: "Schedule Google post", exact: true }).click();
   await contextModal().getByRole("button", { name: "Close", exact: true }).click();
   await openSaturdaySummary();
   assert.equal(await summaryRow("Google").locator("[data-status='scheduled']").count(), 1);
@@ -255,17 +255,9 @@ try {
     1,
   );
   assert.equal(await summary().locator(".v4-summary-collage").count(), 0);
-  assert.equal(
-    new URL(await summary().locator(".v4-summary-artwork").getAttribute("src"), baseUrl).pathname,
-    "/assets/v4-15-percent-promotion.png",
-  );
-  assert.deepEqual(
-    await summary().locator(".v4-summary-artwork").evaluate((image) => ({
-      width: Math.round(image.getBoundingClientRect().width),
-      height: Math.round(image.getBoundingClientRect().height),
-    })),
-    { width: 430, height: 577 },
-  );
+  assert.equal(await summary().locator(".v4-summary-artwork").count(), 0);
+  assert.equal(await summary().locator(".v4-summary-image-placeholder").count(), 0);
+  assert.equal(await summary().locator(".v4-summary-body--text-only").count(), 1);
   assert.equal(await summary().getByRole("button", { name: /close/i }).count(), 0);
   assert.equal(
     await page.locator(".v4-generated-flow-shell").getByLabel("Edit marketing content prompt").inputValue(),
@@ -314,7 +306,7 @@ try {
   assert.equal(await generatedReview.getByRole("button", { name: "Close", exact: true }).count(), 0);
   assert.equal(await page.locator(".prototype-status-controls").count(), 0);
   await generatedReview.locator(".v4-context-footer")
-    .getByRole("button", { name: "Schedule and view next", exact: true }).click();
+    .getByRole("button", { name: "Schedule Google post", exact: true }).click();
   await generatedReview.getByRole("button", { name: /^Facebook,/ }).waitFor();
   await suggested.getByLabel("Close suggested marketing content").click();
 

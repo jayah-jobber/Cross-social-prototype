@@ -202,7 +202,7 @@ try {
 
   // Scheduling Google yields the exact Google-complete/Facebook-active state.
   await modal.locator(".v4-context-footer")
-    .getByRole("button", { name: "Schedule and view next", exact: true })
+    .getByRole("button", { name: "Schedule Google post", exact: true })
     .click();
   modal = v4Modal();
   await modal.waitFor();

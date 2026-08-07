@@ -93,11 +93,6 @@ const INITIAL_IMAGES: GalleryImage[] = [
   { id: "garden-one", src: "/assets/gallery-1.png", alt: "Ornamental grass" },
 ];
 
-const GENERATED_V4_PROMOTION_ARTWORK: GalleryImage = {
-  id: "v4-15-percent-promotion",
-  src: "/assets/v4-15-percent-promotion.png",
-  alt: "Marketing channels surrounding the Jobber logo",
-};
 const GENERATED_V4_BODY = `🎄 Christmas Special: Save 15% on Winter Landscaping Services
 
 Give your landscape the care it deserves this winter with 15% off our winter landscaping services.
@@ -1512,6 +1507,13 @@ function contextualDeletionMessage(channel: ContextualChannel) {
   return `${label} post is deleted`;
 }
 
+function v4UnscheduledActionLabel(channel: ContextualChannel) {
+  if (channel === "email") return "Schedule Email";
+  if (channel === "website") return "Publish Website page";
+  const label = CONTEXTUAL_CHANNELS.find(({ id }) => id === channel)!.label;
+  return `Schedule ${label} post`;
+}
+
 function nextAvailableChannel(
   actedOn: ContextualChannel,
   availableChannels: ContextualChannel[],
@@ -1530,6 +1532,19 @@ function nextAvailableChannel(
   ))
     ?? orderedAfter[0]
     ?? otherChannels[0];
+}
+
+function nextScopedReviewChannel(
+  actedOn: ContextualChannel,
+  reviewScope: ContextualChannel[],
+  deliveries: V4ChannelDeliveries,
+) {
+  const actedIndex = reviewScope.indexOf(actedOn);
+  if (actedIndex < 0) return null;
+  return reviewScope
+    .slice(actedIndex + 1)
+    .find((channel) => !deliveries[channel].deleted)
+    ?? null;
 }
 
 function ContextualChannelIcon({ channel }: { channel: ContextualChannel }) {
@@ -1824,7 +1839,10 @@ function VersionFourSummaryModal({
           </button>
         )}
       </header>
-      <div className="v4-summary-body">
+      <div className={`v4-summary-body${origin === "generated" && !artwork
+        ? " v4-summary-body--text-only"
+        : ""}`}
+      >
         <section className="v4-summary-details">
           <div className="v4-summary-copy">
             <h1>{title}</h1>
@@ -1875,7 +1893,7 @@ function VersionFourSummaryModal({
             width={430}
             height={577}
           />
-        ) : (
+        ) : origin === "calendar" ? (
           <section className="v4-summary-collage" aria-label="Campaign image collage">
             {[0, 1, 2].map((index) => {
               const image = collageImages[index];
@@ -1889,7 +1907,7 @@ function VersionFourSummaryModal({
               );
             })}
           </section>
-        )}
+        ) : null}
       </div>
     </section>
   );
@@ -3126,7 +3144,7 @@ function VersionFourContextModal({
                       setDeleteDialogOpen(true);
                     }}
                   >
-                    {isGoogleDemo && googleDemoState !== "suggested" ? "Delete Post" : "Delete"}
+                    Delete
                   </button>
                 )}
                 <div>
@@ -3169,7 +3187,7 @@ function VersionFourContextModal({
                           disabled={instagramPublishingBlocked}
                           onClick={scheduleCurrent}
                         >
-                          Schedule and view next
+                          {v4UnscheduledActionLabel(active.id)}
                         </button>
                         <button
                           ref={splitToggleRef}
@@ -3811,6 +3829,7 @@ function VersionFourChannelReview({
   iconStyle = "brand",
   publishingDisabled = false,
   collapseEmptyMedia = false,
+  versionFourActionLabels = false,
 }: {
   channel: ContextualChannel;
   socialDraft?: ChannelDraft;
@@ -3836,6 +3855,7 @@ function VersionFourChannelReview({
   iconStyle?: SocialIconStyle;
   publishingDisabled?: boolean;
   collapseEmptyMedia?: boolean;
+  versionFourActionLabels?: boolean;
 }) {
   const [splitMenuOpen, setSplitMenuOpen] = useState(false);
   const splitMenuRef = useRef<HTMLDivElement>(null);
@@ -3881,7 +3901,16 @@ function VersionFourChannelReview({
         : channel === "email"
           ? "All clients · 394 of 400 subscribed to email marketing"
           : INITIAL_EXTERNAL_LINK;
-  const deleteLabel = isEmail ? "Delete Campaign" : isWebsite ? "Delete Page" : "Delete Post";
+  const deleteLabel = versionFourActionLabels
+    ? "Delete"
+    : isEmail
+      ? "Delete Campaign"
+      : isWebsite
+        ? "Delete Page"
+        : "Delete Post";
+  const scheduleActionLabel = versionFourActionLabels
+    ? v4UnscheduledActionLabel(channel)
+    : "Schedule and view next";
   const immediateActionLabel = isEmail ? "Send now" : isWebsite ? "Publish now" : "Post now";
   const deleteEnabled = lifecycleEnabled && Boolean(onDelete);
   const scheduleCurrent = () => {
@@ -4003,7 +4032,7 @@ function VersionFourChannelReview({
               )}
               <span className={`v4-split-button${publishingDisabled ? " is-disabled" : ""}`}>
                 <button type="button" disabled={publishingDisabled} onClick={scheduleCurrent}>
-                  Schedule and view next
+                  {scheduleActionLabel}
                 </button>
                 <button
                   ref={splitToggleRef}
@@ -4023,7 +4052,7 @@ function VersionFourChannelReview({
             </div>
           ) : (
             <button className="schedule-split" type="button" aria-disabled="true" onClick={visualOnly}>
-              <span>Schedule and view next</span><ChevronDown size={20} />
+              <span>{scheduleActionLabel}</span><ChevronDown size={20} />
             </button>
           )}
         </footer>
@@ -5868,25 +5897,12 @@ export default function App() {
     if (returnToContext) returnToV4ContextAfter(channel, originDate, nextDeliveries);
     return nextDeliveries;
   };
-  const performReviewDeliveryAction = (
+  const advanceV4Review = (
     channel: ContextualChannel,
-    action: Extract<V4LifecycleAction, "schedule" | "send">,
+    nextDeliveries: V4ChannelDeliveries,
   ) => {
-    if (version === "v5") {
-      performV4LifecycleAction(channel, action, true);
-      return;
-    }
-
-    const nextDeliveries = performV4LifecycleAction(channel, action);
-    const actedIndex = CONTEXTUAL_CHANNELS.findIndex(({ id }) => id === channel);
     const reviewScope = v4ReviewScopedChannels ?? scopedV4Channels;
-    const nextChannel = CONTEXTUAL_CHANNELS
-      .slice(actedIndex + 1)
-      .map(({ id }) => id)
-      .find((candidate) => (
-        reviewScope.includes(candidate)
-        && !nextDeliveries[candidate].deleted
-      ));
+    const nextChannel = nextScopedReviewChannel(channel, reviewScope, nextDeliveries);
 
     if (nextChannel) {
       setSocialWorkflowChannel(nextChannel);
@@ -5899,6 +5915,18 @@ export default function App() {
     setActiveV4GroupDate(null);
     setV4ReviewScopedChannels(null);
     setCombinedModalStartIndex(0);
+  };
+  const performReviewDeliveryAction = (
+    channel: ContextualChannel,
+    action: Extract<V4LifecycleAction, "schedule" | "send">,
+  ) => {
+    if (version === "v5") {
+      performV4LifecycleAction(channel, action, true);
+      return;
+    }
+
+    const nextDeliveries = performV4LifecycleAction(channel, action);
+    advanceV4Review(channel, nextDeliveries);
   };
   const deleteV4Channel = (channel: ContextualChannel, returnToContext = true) => {
     if (channel === "google") setGoogleContextDemoState("suggested");
@@ -5914,9 +5942,16 @@ export default function App() {
     };
     setV4ChannelDeliveries(nextDeliveries);
     setReviewDeleteChannel(null);
-    setV4ReviewScopedChannels(null);
     showContextualToast(contextualDeletionMessage(channel), true);
-    if (returnToContext) returnToV4ContextAfter(channel, originDate, nextDeliveries);
+    if (returnToContext) {
+      setV4ReviewScopedChannels(null);
+      returnToV4ContextAfter(channel, originDate, nextDeliveries);
+    }
+    return nextDeliveries;
+  };
+  const deleteV4ReviewChannel = (channel: ContextualChannel) => {
+    const nextDeliveries = deleteV4Channel(channel, false);
+    advanceV4Review(channel, nextDeliveries);
   };
   const performGeneratedV4LifecycleAction = (
     channel: ContextualChannel,
@@ -5938,6 +5973,10 @@ export default function App() {
         : generatedV4State.channelDeliveries[channel].date,
       statusOverride: null,
     };
+    const nextDeliveries: V4ChannelDeliveries = {
+      ...generatedV4State.channelDeliveries,
+      [channel]: nextDelivery,
+    };
     setGeneratedV4State((current) => ({
       ...current,
       googleDemoState: channel === "google"
@@ -5947,10 +5986,7 @@ export default function App() {
             ? "sent"
             : "suggested"
         : current.googleDemoState,
-      channelDeliveries: {
-        ...current.channelDeliveries,
-        [channel]: nextDelivery,
-      },
+      channelDeliveries: nextDeliveries,
     }));
     setGeneratedV4CalendarDeliveries((deliveries) => {
       if (action !== "cancel") return { ...deliveries, [channel]: nextDelivery };
@@ -5964,21 +6000,22 @@ export default function App() {
         action === "schedule" ? "schedule" : "post",
       ), true);
     }
-    return true;
+    return nextDeliveries;
   };
   const deleteGeneratedV4Channel = (channel: ContextualChannel) => {
+    const nextDeliveries: V4ChannelDeliveries = {
+      ...generatedV4State.channelDeliveries,
+      [channel]: {
+        ...generatedV4State.channelDeliveries[channel],
+        lifecycle: "unscheduled",
+        deleted: true,
+        statusOverride: null,
+      },
+    };
     setGeneratedV4State((current) => ({
       ...current,
       googleDemoState: channel === "google" ? "suggested" : current.googleDemoState,
-      channelDeliveries: {
-        ...current.channelDeliveries,
-        [channel]: {
-          ...current.channelDeliveries[channel],
-          lifecycle: "unscheduled",
-          deleted: true,
-          statusOverride: null,
-        },
-      },
+      channelDeliveries: nextDeliveries,
     }));
     setGeneratedV4CalendarDeliveries((deliveries) => {
       const next = { ...deliveries };
@@ -5991,7 +6028,9 @@ export default function App() {
       CONTEXTUAL_TO_CALENDAR_CHANNEL[channel],
       null,
     );
+    setReviewDeleteChannel(null);
     showContextualToast(contextualDeletionMessage(channel), true);
+    return nextDeliveries;
   };
   const cancelSuggestionGeneration = () => {
     if (suggestionTimerRef.current !== null) {
@@ -6017,18 +6056,32 @@ export default function App() {
     setSuggestedPrompt("");
     setCalendarPrompt("");
   };
-  const performGeneratedReviewDeliveryAction = (
+  const advanceGeneratedV4Review = (
     channel: ContextualChannel,
-    action: Extract<V4LifecycleAction, "schedule" | "send">,
+    nextDeliveries: V4ChannelDeliveries,
   ) => {
-    if (!performGeneratedV4LifecycleAction(channel, action)) return;
-    const currentIndex = availableGeneratedV4Channels.indexOf(channel);
-    const nextChannel = availableGeneratedV4Channels[currentIndex + 1];
+    const nextChannel = nextScopedReviewChannel(
+      channel,
+      GENERATED_V4_CHANNELS,
+      nextDeliveries,
+    );
     if (nextChannel) {
       setSuggestedReviewChannel(nextChannel);
       return;
     }
     closeGeneratedV4Session();
+  };
+  const performGeneratedReviewDeliveryAction = (
+    channel: ContextualChannel,
+    action: Extract<V4LifecycleAction, "schedule" | "send">,
+  ) => {
+    const nextDeliveries = performGeneratedV4LifecycleAction(channel, action);
+    if (nextDeliveries === false) return;
+    advanceGeneratedV4Review(channel, nextDeliveries);
+  };
+  const deleteGeneratedV4ReviewChannel = (channel: ContextualChannel) => {
+    const nextDeliveries = deleteGeneratedV4Channel(channel);
+    advanceGeneratedV4Review(channel, nextDeliveries);
   };
   const beginV4SuggestionGeneration = (value: string) => {
     const prompt = value.trim();
@@ -6118,7 +6171,9 @@ export default function App() {
     setSuggestedGoogleDrafts(null);
     setSuggestedTextDraft(null);
     setSocialEditDraft(null);
-    setSuggestedPreviewIndex(CONTEXTUAL_CHANNELS.findIndex(({ id }) => id === suggestedReviewChannel));
+    setSuggestedPreviewIndex(v4ReviewOrigin === "suggested-content" && version === "v4"
+      ? availableGeneratedV4Channels.indexOf(suggestedReviewChannel)
+      : CONTEXTUAL_CHANNELS.findIndex(({ id }) => id === suggestedReviewChannel));
     setSuggestedReviewChannel(null);
     setV4ReviewOrigin(null);
     setSuggestedDialogOpen(true);
@@ -6331,6 +6386,8 @@ export default function App() {
                 compactPreview
                 collapseEmptyMedia={isV4GeneratedEditor}
                 lifecycleEnabled={isV4GeneratedEditor}
+                inactive={reviewDeleteChannel !== null}
+                versionFourActionLabels={isV4GeneratedEditor}
                 delivery={isV4GeneratedEditor
                   ? generatedV4State.channelDeliveries[suggestedReviewChannel]
                   : undefined}
@@ -6352,6 +6409,9 @@ export default function App() {
                       suggestedReviewChannel,
                       "send",
                     )
+                  : undefined}
+                onDelete={isV4GeneratedEditor
+                  ? () => setReviewDeleteChannel(suggestedReviewChannel)
                   : undefined}
                 onEdit={() => {
                   setSuggestedEditor(suggestedReviewChannel);
@@ -6377,6 +6437,13 @@ export default function App() {
                   }
                 }}
               />
+              {reviewDeleteChannel && isV4GeneratedEditor && (
+                <DeletionFeedbackDialog
+                  channel={reviewDeleteChannel}
+                  onCancel={() => setReviewDeleteChannel(null)}
+                  onConfirm={() => deleteGeneratedV4ReviewChannel(reviewDeleteChannel)}
+                />
+              )}
             </>
           ) : combinedWorkflow === "review" ? (
             <>
@@ -6401,6 +6468,7 @@ export default function App() {
                 progressStatuses={v4ProgressStatuses}
                 onChannelChange={setSocialWorkflowChannel}
                 iconStyle={version === "v4" ? "jobber" : "brand"}
+                versionFourActionLabels={version === "v4"}
                 onEditSchedule={() => setScheduleEditorChannel(socialWorkflowChannel)}
                 onDelete={() => setReviewDeleteChannel(socialWorkflowChannel)}
                 onSchedule={() => performReviewDeliveryAction(
@@ -6448,7 +6516,10 @@ export default function App() {
                 <DeletionFeedbackDialog
                   channel={reviewDeleteChannel}
                   onCancel={() => setReviewDeleteChannel(null)}
-                  onConfirm={() => deleteV4Channel(reviewDeleteChannel)}
+                  onConfirm={() => {
+                    if (version === "v4") deleteV4ReviewChannel(reviewDeleteChannel);
+                    else deleteV4Channel(reviewDeleteChannel);
+                  }}
                 />
               )}
             </>
@@ -6568,7 +6639,6 @@ export default function App() {
                       delivery={generatedV4State.channelDeliveries.google}
                       description={GENERATED_V4_SUMMARY_COPY}
                       scheduleText={GENERATED_V4_SCHEDULE_TEXT}
-                      artwork={GENERATED_V4_PROMOTION_ARTWORK}
                       origin="generated"
                       iconStyle="jobber"
                       onStartReview={() => {

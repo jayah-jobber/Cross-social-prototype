@@ -630,6 +630,11 @@ button {
   padding: 32px 48px 40px;
 }
 
+.v4-summary-body--text-only {
+  grid-template-columns: minmax(0, 600px);
+  justify-content: center;
+}
+
 .v4-summary-details {
   display: flex;
   min-width: 0;
