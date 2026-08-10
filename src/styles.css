@@ -1923,13 +1923,23 @@ button {
 
 .v4-five-channel-modal .v4-about-copy p,
 .v4-five-channel-modal .v4-context-facts dt,
-.v4-five-channel-modal .v4-context-facts dd,
-.v4-five-channel-modal .post-copy p,
-.v4-five-channel-modal .channel-post-copy p,
-.v4-five-channel-modal .instagram-post-copy p,
-.v4-five-channel-modal .email-content p,
-.v4-five-channel-modal .website-copy p {
+.v4-five-channel-modal .v4-context-facts dd {
   font-size: 14px;
+}
+
+.v4-five-channel-modal .v4-context-preview-scroll .post-copy > p,
+.v4-five-channel-modal .v4-context-preview-scroll .channel-post-copy > p,
+.v4-five-channel-modal .v4-context-preview-scroll .instagram-post-copy > p,
+.v4-five-channel-modal .v4-context-preview-scroll .email-content > .propagated-body,
+.v4-five-channel-modal .v4-context-preview-scroll .website-copy > .propagated-body,
+.v4-channel-review > .preview-panel .post-copy > p,
+.v4-channel-review > .preview-panel .channel-post-copy > p,
+.v4-channel-review > .preview-panel .instagram-post-copy > p,
+.v4-channel-review > .preview-panel .email-content > .propagated-body,
+.v4-channel-review > .preview-panel .website-copy > .propagated-body {
+  font-size: 16px;
+  line-height: 1.35;
+  white-space: pre-wrap;
 }
 
 .v4-context-footer {

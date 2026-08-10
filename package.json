@@ -13,8 +13,10 @@
     "verify:v4-dashboard": "node verify-v4-dashboard.mjs",
     "verify:v4-generated-reopen": "node verify-v4-generated-reopen.mjs",
     "verify:v4-navigation": "node verify-v4-navigation-style.mjs",
+    "verify:v4-review-typography": "node verify-v4-review-typography.mjs",
     "verify:v4-social-editor": "node verify-v4-social-editor.mjs",
     "verify:v4-loading": "node verify-v4-loading.mjs",
+    "verify:v4-lifecycle": "node verify-v4-lifecycle.mjs",
     "verify:research": "node verify-research-mode.mjs"
   },
   "dependencies": {

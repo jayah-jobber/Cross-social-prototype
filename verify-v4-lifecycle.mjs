@@ -262,6 +262,7 @@ try {
   await openSaturday();
   await modalFooter().getByRole("button", { name: "Schedule Google post", exact: true }).click();
   await page.getByText("Your post is scheduled", { exact: true }).waitFor();
+  await expectProgress("2 of 5");
   await selectModalChannel("Google");
   await modalFooter().getByRole("button", { name: "Show scheduled post options" }).click();
   await modal().getByRole("menuitem", { name: "Send now", exact: true }).click();
@@ -293,6 +294,8 @@ try {
   await reviewFooter().getByRole("button", { name: "Schedule Facebook post", exact: true }).click();
   await page.getByText("Your post is scheduled", { exact: true }).waitFor();
   await page.getByRole("heading", { name: "Review Instagram Post" }).waitFor();
+  assert.equal(await reviewStepper.getByRole("button", { name: /^Facebook,/ }).count(), 0);
+  assert.equal(await reviewStepper.getByRole("button").count(), 4);
   await reviewFooter().getByRole("button", { name: "Back" }).click();
   await modal().getByRole("button", { name: "Close", exact: true }).click();
   assert.equal(await campaignCard("Sunday, Nov 8").locator(".status-scheduled").count(), 1);
@@ -305,15 +308,29 @@ try {
   await page.getByRole("menuitem", { name: "Post now", exact: true }).click();
   await page.getByRole("heading", { name: "Review Instagram Post" }).waitFor();
   assert.equal(
-    await page.getByRole("button", { name: "Facebook, sent" }).getAttribute("class"),
-    "completed",
+    await reviewStepper.getByRole("button", { name: /^Facebook,/ }).count(),
+    0,
   );
+  assert.equal(await reviewStepper.getByRole("button").count(), 4);
   await reviewFooter().getByRole("button", { name: "Back" }).click();
   await expectProgress("2 of 4");
   await page.getByText("Your Facebook post has been successfully posted.", { exact: true }).waitFor();
   await modal().getByRole("button", { name: "Close", exact: true }).click();
   assert.deepEqual(await cardChannels("Friday, Nov 6"), ["fFacebook post"]);
   assert.equal(await campaignCard("Sunday, Nov 8").count(), 0);
+
+  // Moving the final review channel with Post now exits to Calendar.
+  await selectVersionFour();
+  await openSaturday();
+  await selectModalChannel("Website");
+  await modalFooter().getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("heading", { name: "Review Website Page" }).waitFor();
+  await reviewFooter().getByRole("button", { name: "Show publishing options" }).click();
+  await page.getByRole("menuitem", { name: "Publish now", exact: true }).click();
+  await page.getByRole("heading", { name: "Marketing Plan" }).waitFor();
+  assert.equal(await modal().count(), 0);
+  assert.deepEqual(await cardChannels("Friday, Nov 6"), ["Website"]);
+  assert.equal((await cardChannels("Saturday, Nov 7")).length, 4);
 
   // Deleting a middle review item immediately opens the next scoped preview.
   await selectVersionFour();

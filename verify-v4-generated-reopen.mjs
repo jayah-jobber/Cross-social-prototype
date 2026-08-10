@@ -79,7 +79,16 @@ try {
     { exact: true },
   ).waitFor();
   await review.getByRole("heading", { name: "Review Facebook Post", exact: true }).waitFor();
+  assert.equal(
+    await review.locator(".v4-arrow-navigator").getByText("1 of 3", { exact: true }).count(),
+    1,
+  );
   await review.locator(".review-footer").getByRole("button", { name: "Back", exact: true }).click();
+  assert.equal(
+    await flow().locator(".v4-generated-review .v4-arrow-navigator")
+      .getByText("1 of 3", { exact: true }).count(),
+    1,
+  );
   await closeGeneratedFlow();
 
   assert.equal(await generatedCard("Sunday, Nov 8").count(), 1);
@@ -124,6 +133,11 @@ try {
   await flow().locator(".v4-context-footer")
     .getByRole("button", { name: "Schedule Facebook post", exact: true })
     .click();
+  assert.equal(
+    await flow().locator(".v4-generated-review .v4-arrow-navigator")
+      .getByText("3 of 4", { exact: true }).count(),
+    1,
+  );
   await selectEmbeddedChannel("Instagram");
   await flow().locator(".v4-context-footer")
     .getByRole("button", { name: "Schedule Instagram post", exact: true })

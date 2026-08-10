@@ -1787,12 +1787,16 @@ function nextScopedReviewChannel(
   actedOn: ContextualChannel,
   reviewScope: ContextualChannel[],
   deliveries: V4ChannelDeliveries,
+  resultingScope = reviewScope,
 ) {
   const actedIndex = reviewScope.indexOf(actedOn);
   if (actedIndex < 0) return null;
   return reviewScope
     .slice(actedIndex + 1)
-    .find((channel) => !deliveries[channel].deleted)
+    .find((channel) => (
+      resultingScope.includes(channel)
+      && !deliveries[channel].deleted
+    ))
     ?? null;
 }
 
@@ -3190,6 +3194,7 @@ function VersionFourContextModal({
   iconStyle = "jobber",
   embedded = false,
   enforceInstagramImageRequirement = false,
+  scopeDate,
   onComplete,
 }: {
   drafts: V2Drafts;
@@ -3216,6 +3221,7 @@ function VersionFourContextModal({
   iconStyle?: SocialIconStyle;
   embedded?: boolean;
   enforceInstagramImageRequirement?: boolean;
+  scopeDate?: string;
   onComplete?: () => void;
 }) {
   const [activeIndex, setActiveIndex] = useState(initialIndex);
@@ -3272,7 +3278,9 @@ function VersionFourContextModal({
     setSplitMenuOpen(false);
     if (onLifecycleAction(active.id, "schedule", true) === false) return;
     if (embedded) {
-      if (safeIndex < channels.length - 1) setActiveIndex(safeIndex + 1);
+      const movedOutOfScope = Boolean(scopeDate && activeDelivery.date !== scopeDate);
+      if (movedOutOfScope && safeIndex < channels.length - 1) setActiveIndex(safeIndex);
+      else if (!movedOutOfScope && safeIndex < channels.length - 1) setActiveIndex(safeIndex + 1);
       else onComplete?.();
     }
   };
@@ -3281,7 +3289,9 @@ function VersionFourContextModal({
     setSplitMenuOpen(false);
     if (onLifecycleAction(active.id, "send", true) === false) return;
     if (embedded) {
-      if (safeIndex < channels.length - 1) setActiveIndex(safeIndex + 1);
+      const movedOutOfScope = Boolean(scopeDate && V4_TODAY_DATE !== scopeDate);
+      if (movedOutOfScope && safeIndex < channels.length - 1) setActiveIndex(safeIndex);
+      else if (!movedOutOfScope && safeIndex < channels.length - 1) setActiveIndex(safeIndex + 1);
       else onComplete?.();
     }
   };
@@ -6168,9 +6178,10 @@ export default function App() {
     ? generatedV4State.emailSubject
     : v4EmailSubject;
   const suggestedFlowChannels = isV4GeneratedEditor
-    ? isReopenedGeneratedV4Editor
-      ? v4ReviewScopedChannels ?? activeGeneratedV4Channels
-      : availableGeneratedV4Channels
+    ? v4ReviewScopedChannels
+      ?? (isReopenedGeneratedV4Editor
+        ? activeGeneratedV4Channels
+        : availableGeneratedV4Channels)
     : CONTEXTUAL_CHANNELS.map(({ id }) => id);
   const suggestedFlowProgressStatuses = isV4GeneratedEditor
     ? isReopenedGeneratedV4Editor
@@ -6279,9 +6290,22 @@ export default function App() {
   const advanceV4Review = (
     channel: ContextualChannel,
     nextDeliveries: V4ChannelDeliveries,
+    regroupAfterDelivery = false,
   ) => {
     const reviewScope = v4ReviewScopedChannels ?? scopedV4Channels;
-    const nextChannel = nextScopedReviewChannel(channel, reviewScope, nextDeliveries);
+    const resultingScope = regroupAfterDelivery && activeV4GroupDate
+      ? reviewScope.filter((candidate) => (
+          !nextDeliveries[candidate].deleted
+          && nextDeliveries[candidate].date === activeV4GroupDate
+        ))
+      : reviewScope.filter((candidate) => !nextDeliveries[candidate].deleted);
+    if (regroupAfterDelivery) setV4ReviewScopedChannels(resultingScope);
+    const nextChannel = nextScopedReviewChannel(
+      channel,
+      reviewScope,
+      nextDeliveries,
+      resultingScope,
+    );
 
     if (nextChannel) {
       setSocialWorkflowChannel(nextChannel);
@@ -6306,7 +6330,7 @@ export default function App() {
     }
 
     const nextDeliveries = performV4LifecycleAction(channel, action);
-    advanceV4Review(channel, nextDeliveries);
+    advanceV4Review(channel, nextDeliveries, true);
   };
   const deleteV4Channel = (channel: ContextualChannel, returnToContext = true) => {
     if (channel === "google") setGoogleContextDemoState("suggested");
@@ -6331,7 +6355,7 @@ export default function App() {
   };
   const deleteV4ReviewChannel = (channel: ContextualChannel) => {
     const nextDeliveries = deleteV4Channel(channel, false);
-    advanceV4Review(channel, nextDeliveries);
+    advanceV4Review(channel, nextDeliveries, true);
   };
   const performGeneratedV4LifecycleAction = (
     channel: ContextualChannel,
@@ -6373,6 +6397,17 @@ export default function App() {
     if (action !== "cancel") nextCalendarDeliveries[channel] = nextDelivery;
     else delete nextCalendarDeliveries[channel];
     setGeneratedV4CalendarDeliveries(nextCalendarDeliveries);
+    if (
+      activeV4CampaignSource === "generated"
+      && activeV4GroupDate
+      && action !== "cancel"
+    ) {
+      const reviewScope = v4ReviewScopedChannels ?? availableGeneratedV4Channels;
+      setV4ReviewScopedChannels(reviewScope.filter((candidate) => (
+        !nextDeliveries[candidate].deleted
+        && nextDeliveries[candidate].date === activeV4GroupDate
+      )));
+    }
     if (action !== "cancel") {
       showContextualToast(contextualSuccessMessage(
         channel,
@@ -6492,6 +6527,9 @@ export default function App() {
     setSocialEditDraft(null);
     setActiveV4ContextChannel(null);
     setV4ReviewOrigin(null);
+    setActiveV4GroupDate(null);
+    setActiveV4CampaignSource(null);
+    setV4ReviewScopedChannels(null);
     setSuggestedPrompt("");
     setCalendarPrompt("");
     setV4DashboardPrompt("");
@@ -6499,11 +6537,21 @@ export default function App() {
   const advanceGeneratedV4Review = (
     channel: ContextualChannel,
     nextDeliveries: V4ChannelDeliveries,
+    regroupAfterDelivery = false,
   ) => {
+    const reviewScope = v4ReviewScopedChannels ?? GENERATED_V4_CHANNELS;
+    const resultingScope = regroupAfterDelivery && activeV4GroupDate
+      ? reviewScope.filter((candidate) => (
+          !nextDeliveries[candidate].deleted
+          && nextDeliveries[candidate].date === activeV4GroupDate
+        ))
+      : reviewScope.filter((candidate) => !nextDeliveries[candidate].deleted);
+    if (regroupAfterDelivery) setV4ReviewScopedChannels(resultingScope);
     const nextChannel = nextScopedReviewChannel(
       channel,
-      v4ReviewScopedChannels ?? GENERATED_V4_CHANNELS,
+      reviewScope,
       nextDeliveries,
+      resultingScope,
     );
     if (nextChannel) {
       setSuggestedReviewChannel(nextChannel);
@@ -6527,11 +6575,11 @@ export default function App() {
   ) => {
     const nextDeliveries = performGeneratedV4LifecycleAction(channel, action);
     if (nextDeliveries === false) return;
-    advanceGeneratedV4Review(channel, nextDeliveries);
+    advanceGeneratedV4Review(channel, nextDeliveries, true);
   };
   const deleteGeneratedV4ReviewChannel = (channel: ContextualChannel) => {
     const nextDeliveries = deleteGeneratedV4Channel(channel);
-    advanceGeneratedV4Review(channel, nextDeliveries);
+    advanceGeneratedV4Review(channel, nextDeliveries, true);
   };
   const saveScheduleEdits = (
     channel: ContextualChannel,
@@ -6724,7 +6772,7 @@ export default function App() {
       return;
     }
     setSuggestedPreviewIndex(v4ReviewOrigin === "suggested-content" && version === "v4"
-      ? availableGeneratedV4Channels.indexOf(suggestedReviewChannel)
+      ? (v4ReviewScopedChannels ?? availableGeneratedV4Channels).indexOf(suggestedReviewChannel)
       : CONTEXTUAL_CHANNELS.findIndex(({ id }) => id === suggestedReviewChannel));
     setSuggestedReviewChannel(null);
     setV4ReviewOrigin(null);
@@ -7289,6 +7337,13 @@ export default function App() {
                       origin="generated"
                       iconStyle="jobber"
                       onStartReview={() => {
+                        const groupDate = V4_INITIAL_DATE;
+                        const groupChannels = availableGeneratedV4Channels.filter((channel) => (
+                          generatedV4State.channelDeliveries[channel].date === groupDate
+                        ));
+                        setActiveV4GroupDate(groupDate);
+                        setActiveV4CampaignSource("generated");
+                        setV4ReviewScopedChannels(groupChannels);
                         setV4SuggestedSummaryOpen(false);
                         setSuggestedPreviewIndex(0);
                         setSuggestedDialogOpen(true);
@@ -7306,13 +7361,14 @@ export default function App() {
                       campaignTitle={GENERATED_V4_CAMPAIGN_TITLE}
                       channelDefinitions={GENERATED_V4_CONTEXTUAL_CHANNELS}
                       initialIndex={suggestedPreviewIndex}
-                      availableChannels={availableGeneratedV4Channels}
+                      availableChannels={v4ReviewScopedChannels ?? availableGeneratedV4Channels}
                       channelDeliveries={generatedV4State.channelDeliveries}
                       googleDemoState={generatedV4State.googleDemoState}
                       navigationStyle={v4NavigationStyle}
                       iconStyle="jobber"
                       embedded
                       enforceInstagramImageRequirement
+                      scopeDate={activeV4GroupDate ?? undefined}
                       onActiveChannelChange={setActiveV4ContextChannel}
                       onClose={() => undefined}
                       onEdit={(channel) => {
@@ -7476,6 +7532,7 @@ export default function App() {
                     : googleContextDemoState}
                   navigationStyle={version === "v4" ? v4NavigationStyle : "progress"}
                   iconStyle={version === "v4" ? "jobber" : "brand"}
+                  scopeDate={activeV4GroupDate ?? undefined}
                   onActiveChannelChange={setActiveV4ContextChannel}
                   onClose={() => {
                     setActiveV4ContextChannel(null);
