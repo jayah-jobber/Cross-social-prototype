@@ -54,39 +54,60 @@ try {
   await page.goto(baseUrl, { waitUntil: "networkidle" });
   await page.getByRole("button", { name: "Version 4", exact: true }).click();
 
-  // Generated content review reschedules without a toast, then the green CTA owns success.
+  // Generated date edits stay on the same scoped review; the green CTA owns delivery.
   await beginGeneratedReview("Create a generated promotion");
-  await selectEmbeddedChannel("Google");
+  await selectEmbeddedChannel("Facebook");
   await flow().locator(".v4-context-footer")
     .getByRole("button", { name: "Edit", exact: true })
     .click();
   const review = page.locator(".v4-channel-review");
-  await review.getByRole("heading", { name: "Review Google Post", exact: true }).waitFor();
+  await review.getByRole("heading", { name: "Review Facebook Post", exact: true }).waitFor();
   const scheduleField = review.locator(".review-field").filter({ hasText: "Schedule Post" });
   await scheduleField.getByRole("button", { name: "Edit", exact: true }).click();
   const scheduleDialog = page.getByRole("dialog", { name: "Schedule Date" });
-  await scheduleDialog.getByLabel("Schedule date for Google").fill("2026-11-08");
+  await scheduleDialog.getByLabel("Schedule date for Facebook").fill("2026-11-08");
   await scheduleDialog.getByRole("button", { name: "Save Edits", exact: true }).click();
   await review.getByRole("heading", { name: "Review Facebook Post", exact: true }).waitFor();
-  await review.getByText("Nov 7, 2026 9:00 AM", { exact: true }).waitFor();
+  await review.getByText("Nov 8, 2026 9:00 AM", { exact: true }).waitFor();
+  assert.equal(
+    await review.locator(".v4-arrow-navigator").getByText("2 of 4", { exact: true }).count(),
+    1,
+  );
   assert.equal(await page.getByText("Your post is rescheduled", { exact: true }).count(), 0);
-  await review.getByRole("button", { name: "Previous channel", exact: true }).click();
-  await review.locator(".review-footer")
-    .getByRole("button", { name: "Schedule Google post", exact: true })
-    .click();
-  await page.getByText(
-    "Your Google post has been successfully scheduled.",
-    { exact: true },
-  ).waitFor();
+  assert.equal(await page.getByRole("status").count(), 0);
+  assert.equal(await page.locator(".generated-delivery-card").count(), 0);
+
+  // Cancel preserves the saved draft; reopening shows it, and unchanged Save does not navigate.
+  await scheduleField.getByRole("button", { name: "Edit", exact: true }).click();
+  const facebookDate = scheduleDialog.getByLabel("Schedule date for Facebook");
+  assert.equal(await facebookDate.inputValue(), "2026-11-08");
+  await facebookDate.fill("2026-11-06");
+  await scheduleDialog.getByRole("button", { name: "Close Schedule Date", exact: true }).click();
+  await review.getByRole("heading", { name: "Review Facebook Post", exact: true }).waitFor();
+  await scheduleField.getByRole("button", { name: "Edit", exact: true }).click();
+  assert.equal(await facebookDate.inputValue(), "2026-11-08");
+  await scheduleDialog.getByRole("button", { name: "Save Edits", exact: true }).click();
   await review.getByRole("heading", { name: "Review Facebook Post", exact: true }).waitFor();
   assert.equal(
-    await review.locator(".v4-arrow-navigator").getByText("1 of 3", { exact: true }).count(),
+    await review.locator(".v4-arrow-navigator").getByText("2 of 4", { exact: true }).count(),
+    1,
+  );
+  await review.locator(".review-footer")
+    .getByRole("button", { name: "Schedule Facebook post", exact: true })
+    .click();
+  await page.getByText(
+    "Your Facebook post has been successfully scheduled.",
+    { exact: true },
+  ).waitFor();
+  await review.getByRole("heading", { name: "Review Instagram Post", exact: true }).waitFor();
+  assert.equal(
+    await review.locator(".v4-arrow-navigator").getByText("2 of 3", { exact: true }).count(),
     1,
   );
   await review.locator(".review-footer").getByRole("button", { name: "Back", exact: true }).click();
   assert.equal(
     await flow().locator(".v4-generated-review .v4-arrow-navigator")
-      .getByText("1 of 3", { exact: true }).count(),
+      .getByText("2 of 3", { exact: true }).count(),
     1,
   );
   await closeGeneratedFlow();
@@ -102,21 +123,24 @@ try {
   );
   await context().getByText("Scheduled", { exact: true }).waitFor();
   assert.equal(await context().getByText(generatedCopy).count(), 1);
-  await assertGeneratedImage(context().locator(".post-image"));
+  await assertGeneratedImage(context().locator(".channel-image-grid img"));
 
   // Reopened generated Edit and schedule changes continue to use generated state.
   await context().locator(".v4-context-footer")
     .getByRole("button", { name: "Edit", exact: true })
     .click();
-  await review.getByRole("heading", { name: "Review Google Post", exact: true }).waitFor();
+  await review.getByRole("heading", { name: "Review Facebook Post", exact: true }).waitFor();
   assert.ok(await review.getByText(generatedCopy).count() >= 1);
-  await assertGeneratedImage(review.locator(".post-image"));
+  await assertGeneratedImage(review.locator(".channel-image-grid img"));
   await scheduleField.getByRole("button", { name: "Edit", exact: true }).click();
-  await scheduleDialog.getByLabel("Schedule date for Google").fill("2026-11-07");
+  await scheduleDialog.getByLabel("Schedule date for Facebook").fill("2026-11-07");
   await scheduleDialog.getByRole("button", { name: "Save Edits", exact: true }).click();
-  await page.getByRole("heading", { name: "Marketing Plan" }).waitFor();
-  assert.equal(await context().count(), 0);
+  await review.getByRole("heading", { name: "Review Facebook Post", exact: true }).waitFor();
+  await review.getByText("Nov 7, 2026 9:00 AM", { exact: true }).waitFor();
   assert.equal(await page.getByText("Your post is rescheduled", { exact: true }).count(), 0);
+  await review.locator(".review-footer").getByRole("button", { name: "Back", exact: true }).click();
+  await context().waitFor();
+  await context().getByRole("button", { name: "Close", exact: true }).click();
   assert.equal(await generatedCard("Sunday, Nov 8").count(), 0);
   assert.equal(await generatedCard("Saturday, Nov 7").count(), 1);
 
@@ -159,7 +183,7 @@ try {
   assert.equal(await context().getByText(generatedCopy).count(), 1);
   await assertGeneratedImage(context().locator(".channel-image-grid img"));
 
-  // A reopened generated middle channel advances with its sibling's original delivery facts.
+  // A reopened generated middle channel keeps its review scope while its delivered card regroups.
   await context().locator(".v4-context-footer")
     .getByRole("button", { name: "Edit", exact: true })
     .click();
@@ -167,13 +191,21 @@ try {
   await scheduleField.getByRole("button", { name: "Edit", exact: true }).click();
   await scheduleDialog.getByLabel("Schedule date for Facebook").fill("2026-11-08");
   await scheduleDialog.getByRole("button", { name: "Save Edits", exact: true }).click();
-  await review.getByRole("heading", { name: "Review Instagram Post", exact: true }).waitFor();
-  await review.getByText("Nov 7, 2026 9:00 AM", { exact: true }).waitFor();
+  await review.getByRole("heading", { name: "Review Facebook Post", exact: true }).waitFor();
+  await review.getByText("Nov 8, 2026 9:00 AM", { exact: true }).waitFor();
+  assert.equal(
+    await review.locator(".v4-arrow-navigator").getByText("1 of 2", { exact: true }).count(),
+    1,
+  );
   assert.equal(await page.getByText("Your post is rescheduled", { exact: true }).count(), 0);
   await review.locator(".review-footer").getByRole("button", { name: "Back", exact: true }).click();
   await context().waitFor();
+  assert.equal(await context().getByText("1 of 1", { exact: true }).count(), 1);
+  await context().getByRole("button", { name: "Close", exact: true }).click();
 
   // Sending the remaining Nov 7 channel regroups it while preserving Facebook on Nov 8.
+  await generatedCard("Saturday, Nov 7").click();
+  await context().waitFor();
   await context().getByRole("button", { name: "Show scheduled post options" }).click();
   await context().getByRole("menuitem", { name: "Send now", exact: true }).click();
   await context().waitFor({ state: "detached" });

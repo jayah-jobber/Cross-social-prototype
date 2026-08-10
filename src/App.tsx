@@ -5852,6 +5852,7 @@ type DaisyVersionState = {
   websiteMessage: string;
   websiteTitle: string;
   channelDeliveries: V4ChannelDeliveries;
+  calendarDeliveries: V4ChannelDeliveries;
   googleDemoState: GoogleContextDemoState;
   suggestedCompletion: SuggestedCompletion | null;
 };
@@ -5864,6 +5865,7 @@ const createInitialDaisyVersionState = (): DaisyVersionState => ({
   websiteMessage: INITIAL_WEBSITE_MESSAGE,
   websiteTitle: INITIAL_WEBSITE_TITLE,
   channelDeliveries: createInitialV4ChannelDeliveries(),
+  calendarDeliveries: createInitialV4ChannelDeliveries(),
   googleDemoState: "suggested",
   suggestedCompletion: null,
 });
@@ -5981,6 +5983,12 @@ export default function App() {
   const setV4ChannelDeliveries = (channelDeliveries: V4ChannelDeliveries) => {
     updateActiveDaisyState({ channelDeliveries });
   };
+  const v4CalendarDeliveries = version === "v4"
+    ? activeDaisyState.calendarDeliveries
+    : v4ChannelDeliveries;
+  const setV4CalendarDeliveries = (calendarDeliveries: V4ChannelDeliveries) => {
+    updateActiveDaisyState({ calendarDeliveries });
+  };
   const googleContextDemoState = activeDaisyState.googleDemoState;
   const setGoogleContextDemoState = (googleDemoState: GoogleContextDemoState) => {
     updateActiveDaisyState({ googleDemoState });
@@ -6046,7 +6054,9 @@ export default function App() {
   const availableGeneratedV4Channels = GENERATED_V4_CHANNELS
     .filter((channel) => !generatedV4State.channelDeliveries[channel].deleted);
   const scopedV4Channels = activeV4GroupDate
-    ? availableV4Channels.filter((channel) => v4ChannelDeliveries[channel].date === activeV4GroupDate)
+    ? availableV4Channels.filter(
+        (channel) => v4CalendarDeliveries[channel].date === activeV4GroupDate,
+      )
     : availableV4Channels;
   const reviewScopedV4Channels = (v4ReviewScopedChannels ?? scopedV4Channels)
     .filter((channel) => !v4ChannelDeliveries[channel].deleted);
@@ -6103,13 +6113,13 @@ export default function App() {
     };
   });
   const v4CampaignCards: V4CampaignCalendarCard[] = Array.from(
-    new Set(availableV4Channels.map((channel) => v4ChannelDeliveries[channel].date)),
+    new Set(availableV4Channels.map((channel) => v4CalendarDeliveries[channel].date)),
   ).sort().map((date) => {
     const channels = CONTEXTUAL_CHANNELS
       .map(({ id }) => id)
       .filter((channel) => (
         !v4ChannelDeliveries[channel].deleted
-        && v4ChannelDeliveries[channel].date === date
+        && v4CalendarDeliveries[channel].date === date
       ));
     const allSent = channels.every((channel) => v4ChannelDeliveries[channel].lifecycle === "sent");
     const allScheduledOrSent = channels.every((channel) => (
@@ -6270,16 +6280,23 @@ export default function App() {
       : action === "send"
         ? "sent"
         : "unscheduled";
+    const nextDelivery: V4ChannelDelivery = {
+      ...v4ChannelDeliveries[channel],
+      lifecycle: nextState,
+      date: action === "send" ? V4_TODAY_DATE : v4ChannelDeliveries[channel].date,
+      statusOverride: null,
+    };
     const nextDeliveries: V4ChannelDeliveries = {
       ...v4ChannelDeliveries,
-      [channel]: {
-        ...v4ChannelDeliveries[channel],
-        lifecycle: nextState,
-        date: action === "send" ? V4_TODAY_DATE : v4ChannelDeliveries[channel].date,
-        statusOverride: null,
-      },
+      [channel]: nextDelivery,
     };
     setV4ChannelDeliveries(nextDeliveries);
+    if (version === "v4") {
+      setV4CalendarDeliveries({
+        ...v4CalendarDeliveries,
+        [channel]: nextDelivery,
+      });
+    }
     if (action === "schedule") showContextualToast("Your post is scheduled", true);
     if (action === "send") {
       showContextualToast(contextualSuccessMessage(channel, "post"), true);
@@ -6589,7 +6606,6 @@ export default function App() {
     if (version === "v4" && isV4GeneratedEditor) {
       const currentDelivery = generatedV4CalendarDeliveries[channel]
         ?? generatedV4State.channelDeliveries[channel];
-      const dateChanged = date !== currentDelivery.date;
       const nextDelivery: V4ChannelDelivery = {
         ...currentDelivery,
         date,
@@ -6610,28 +6626,30 @@ export default function App() {
         }));
       }
       setScheduleEditorChannel(null);
-      if (dateChanged) {
-        advanceGeneratedV4Review(channel, nextDeliveries);
-      }
       return;
     }
 
     const currentDelivery = v4ChannelDeliveries[channel];
-    const dateChanged = date !== currentDelivery.date;
+    const nextDelivery: V4ChannelDelivery = {
+      ...currentDelivery,
+      date,
+      time,
+    };
     const nextDeliveries: V4ChannelDeliveries = {
       ...v4ChannelDeliveries,
-      [channel]: {
-        ...currentDelivery,
-        date,
-        time,
-      },
+      [channel]: nextDelivery,
     };
     setV4ChannelDeliveries(nextDeliveries);
     setScheduleEditorChannel(null);
 
     if (version === "v4") {
-      if (dateChanged) {
-        advanceV4Review(channel, nextDeliveries);
+      // Draft date edits do not place unscheduled content on a new calendar date.
+      // Delivered content is already persisted, so rescheduling it updates its card immediately.
+      if (currentDelivery.lifecycle !== "unscheduled") {
+        setV4CalendarDeliveries({
+          ...v4CalendarDeliveries,
+          [channel]: nextDelivery,
+        });
       }
       return;
     }
@@ -6764,10 +6782,19 @@ export default function App() {
     setSuggestedTextDraft(null);
     setSocialEditDraft(null);
     if (v4ReviewOrigin === "generated-calendar") {
-      setCombinedModalStartIndex(
-        activeGeneratedV4Channels.indexOf(suggestedReviewChannel),
-      );
+      const delivery = generatedV4CalendarDeliveries[suggestedReviewChannel];
+      const destinationChannels = delivery && delivery.date !== activeV4GroupDate
+        ? GENERATED_V4_CHANNELS.filter((channel) => (
+            generatedV4CalendarDeliveries[channel]?.date === delivery.date
+            && !generatedV4State.channelDeliveries[channel].deleted
+          ))
+        : activeGeneratedV4Channels;
+      if (delivery && delivery.date !== activeV4GroupDate) {
+        setActiveV4GroupDate(delivery.date);
+      }
+      setCombinedModalStartIndex(destinationChannels.indexOf(suggestedReviewChannel));
       setSuggestedReviewChannel(null);
+      setV4ReviewScopedChannels(null);
       setCombinedWorkflow("modal");
       return;
     }
@@ -7147,6 +7174,21 @@ export default function App() {
                     setCombinedWorkflow(null);
                     return;
                   }
+                  const delivery = v4ChannelDeliveries[socialWorkflowChannel];
+                  if (
+                    version === "v4"
+                    && delivery.lifecycle !== "unscheduled"
+                    && delivery.date !== activeV4GroupDate
+                  ) {
+                    const destinationChannels = availableV4Channels.filter((channel) => (
+                      v4CalendarDeliveries[channel].date === delivery.date
+                    ));
+                    setActiveV4GroupDate(delivery.date);
+                    setCombinedModalStartIndex(destinationChannels.indexOf(socialWorkflowChannel));
+                    setV4ReviewScopedChannels(null);
+                    setCombinedWorkflow("modal");
+                    return;
+                  }
                   setCombinedModalStartIndex(scopedV4Channels.indexOf(socialWorkflowChannel));
                   setV4ReviewScopedChannels(null);
                   setCombinedWorkflow("modal");
@@ -7242,7 +7284,7 @@ export default function App() {
                           generatedV4CalendarDeliveries[channel]?.date === campaignDate
                         ))
                       : availableV4Channels.filter(
-                          (channel) => v4ChannelDeliveries[channel].date === campaignDate,
+                          (channel) => v4CalendarDeliveries[channel].date === campaignDate,
                         );
                     if (groupChannels.length === 0) return;
                     setActiveV4GroupDate(campaignDate);

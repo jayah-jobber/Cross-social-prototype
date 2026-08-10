@@ -147,6 +147,21 @@ async function verifyCalendar(page, url) {
   await flow.locator(".v4-arrow-navigator").waitFor();
   await assertResearchChromeAbsent(page);
   assert.equal(await flow.locator(".channel-progress-stepper").count(), 0);
+  await flow.getByRole("button", { name: "Next channel", exact: true }).click();
+  await flow.locator(".v4-context-footer").getByRole("button", { name: "Edit", exact: true }).click();
+  const review = page.locator(".v4-channel-review");
+  await review.getByRole("heading", { name: "Review Facebook Post", exact: true }).waitFor();
+  const scheduleField = review.locator(".review-field").filter({ hasText: "Schedule Post" });
+  await scheduleField.getByRole("button", { name: "Edit", exact: true }).click();
+  const scheduleDialog = page.getByRole("dialog", { name: "Schedule Date" });
+  await scheduleDialog.getByLabel("Schedule date for Facebook").fill("2026-11-08");
+  await scheduleDialog.getByRole("button", { name: "Save Edits", exact: true }).click();
+  await review.getByRole("heading", { name: "Review Facebook Post", exact: true }).waitFor();
+  assert.equal(
+    await review.locator(".v4-arrow-navigator").getByText("2 of 5", { exact: true }).count(),
+    1,
+  );
+  assert.equal(await page.getByText("Your post is rescheduled", { exact: true }).count(), 0);
 }
 
 async function verifyDashboard(page, url) {
@@ -170,6 +185,21 @@ async function verifyDashboard(page, url) {
   await flow.locator(".v4-arrow-navigator").waitFor();
   await assertResearchChromeAbsent(page);
   assert.equal(await flow.locator(".channel-progress-stepper").count(), 0);
+  await flow.getByRole("button", { name: "Next channel", exact: true }).click();
+  await flow.locator(".v4-context-footer").getByRole("button", { name: "Edit", exact: true }).click();
+  const review = page.locator(".v4-channel-review");
+  await review.getByRole("heading", { name: "Review Facebook Post", exact: true }).waitFor();
+  const scheduleField = review.locator(".review-field").filter({ hasText: "Schedule Post" });
+  await scheduleField.getByRole("button", { name: "Edit", exact: true }).click();
+  const scheduleDialog = page.getByRole("dialog", { name: "Schedule Date" });
+  await scheduleDialog.getByLabel("Schedule date for Facebook").fill("2026-11-08");
+  await scheduleDialog.getByRole("button", { name: "Save Edits", exact: true }).click();
+  await review.getByRole("heading", { name: "Review Facebook Post", exact: true }).waitFor();
+  assert.equal(
+    await review.locator(".v4-arrow-navigator").getByText("2 of 4", { exact: true }).count(),
+    1,
+  );
+  assert.equal(await page.getByText("Your post is rescheduled", { exact: true }).count(), 0);
 }
 
 async function verifyDevelopmentControls(page, url) {

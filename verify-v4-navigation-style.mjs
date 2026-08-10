@@ -110,6 +110,18 @@ try {
   await arrowNavigator(review).getByRole("button", { name: "Next channel" }).click();
   await assertArrowNavigation(review, 3, 4);
   await review.getByRole("heading", { name: "Review Email Campaign", exact: true }).waitFor();
+
+  // Draft schedule edits preserve the active channel and arrow scope.
+  const scheduleField = review.locator(".review-field").filter({ hasText: "Schedule Campaign" });
+  await scheduleField.getByRole("button", { name: "Edit", exact: true }).click();
+  const scheduleDialog = page.getByRole("dialog", { name: "Schedule Date" });
+  await scheduleDialog.getByLabel("Schedule date for Email").fill("2026-11-08");
+  await scheduleDialog.getByRole("button", { name: "Save Edits", exact: true }).click();
+  await review.getByRole("heading", { name: "Review Email Campaign", exact: true }).waitFor();
+  await assertArrowNavigation(review, 3, 4);
+  await scheduleField.getByText("Nov 8, 2026 9:00 AM", { exact: true }).waitFor();
+  assert.equal(await page.getByText("Your post is rescheduled", { exact: true }).count(), 0);
+
   await review.locator(".review-footer").getByRole("button", { name: "Back", exact: true }).click();
   await modal().getByRole("button", { name: "Close", exact: true }).click();
 
