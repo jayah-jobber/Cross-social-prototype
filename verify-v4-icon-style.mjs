@@ -36,6 +36,9 @@ async function resetTo(version) {
 
 async function openCampaign(version) {
   await resetTo(version);
+  if (version === "Version 4") {
+    await page.getByRole("button", { name: "Progress button", exact: true }).click();
+  }
   await saturdayCard().click();
   if (version === "Version 4") {
     await page.locator(".v4-summary-modal").getByRole("button", { name: "Review Drafts" }).click();

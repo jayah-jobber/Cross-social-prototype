@@ -23,6 +23,7 @@ const v4ActionLabels = [
 async function selectVersionFour() {
   await page.getByRole("button", { name: "Version 1" }).click();
   await page.getByRole("button", { name: "Version 4" }).click();
+  await page.getByRole("button", { name: "Progress button", exact: true }).click();
 }
 
 async function openSaturday() {
@@ -33,7 +34,10 @@ async function openSaturday() {
 
 async function openCampaignReview(day) {
   await campaignCard(day).click();
-  await page.locator(".v4-summary-modal").getByRole("button", { name: "Review Drafts" }).click();
+  const summary = page.locator(".v4-summary-modal");
+  if (await summary.count()) {
+    await summary.getByRole("button", { name: "Review Drafts" }).click();
+  }
   await modal().waitFor();
 }
 
@@ -86,6 +90,7 @@ async function cardChannels(day) {
 try {
   await page.goto(baseUrl, { waitUntil: "networkidle" });
   await page.getByRole("button", { name: "Version 4" }).click();
+  await page.getByRole("button", { name: "Progress button", exact: true }).click();
 
   // V4 alone uses the selected Nov 2–8 week and starts with one Nov 7 campaign card.
   assert.equal(await calendarDay("Sunday, Nov 1").count(), 0);
@@ -151,20 +156,33 @@ try {
   await timeInput.fill("14:30");
   await scheduleDialog.getByRole("button", { name: "Close Schedule Date" }).click();
   await reviewSchedule.getByText("Nov 7, 2026 9:00 AM", { exact: true }).waitFor();
+  assert.equal(await page.getByText("Your post is rescheduled", { exact: true }).count(), 0);
 
+  // An unchanged save stays on the current review and does not show a toast.
+  await reviewSchedule.getByRole("button", { name: "Edit" }).click();
+  await scheduleDialog.getByRole("button", { name: "Save Edits" }).click();
+  await page.getByRole("heading", { name: "Review Google Post" }).waitFor();
+  assert.equal(await page.getByText("Your post is rescheduled", { exact: true }).count(), 0);
+
+  // An actual date change regroups Google and advances within the original scope.
   await reviewSchedule.getByRole("button", { name: "Edit" }).click();
   await scheduleDialog.getByLabel("Schedule date for Google").fill("2026-11-05");
   await scheduleDialog.getByLabel("Schedule time for Google").fill("14:30");
   await scheduleDialog.getByRole("button", { name: "Save Edits" }).click();
-  await reviewSchedule.getByText("Nov 5, 2026 2:30 PM", { exact: true }).waitFor();
+  await page.getByRole("heading", { name: "Review Facebook Post" }).waitFor();
+  await reviewSchedule.getByText("Nov 7, 2026 9:00 AM", { exact: true }).waitFor();
+  assert.equal(await page.getByText("Your post is rescheduled", { exact: true }).count(), 0);
   await reviewFooter().getByRole("button", { name: "Back" }).click();
-  await expectProgress("1 of 1");
+  await expectProgress("1 of 4");
   await modal().getByRole("button", { name: "Close", exact: true }).click();
   assert.deepEqual(await cardChannels("Thursday, Nov 5"), ["GGoogle post"]);
   assert.equal((await cardChannels("Saturday, Nov 7")).length, 4);
 
-  // Moving back aggregates with the existing same-topic Nov 7 channels.
-  await openCampaignReview("Thursday, Nov 5");
+  // Rescheduling a direct single-channel card returns to the calendar.
+  await campaignCard("Thursday, Nov 5").click();
+  await modal().waitFor();
+  assert.equal(await page.locator(".v4-summary-modal").count(), 0);
+  await expectProgress("1 of 1");
   assert.equal(
     await modal().locator(".v4-context-facts").getByRole("button", { name: "Edit" }).count(),
     0,
@@ -174,9 +192,9 @@ try {
   await scheduleDialog.getByLabel("Schedule date for Google").fill("2026-11-07");
   await scheduleDialog.getByLabel("Schedule time for Google").fill("09:00");
   await scheduleDialog.getByRole("button", { name: "Save Edits" }).click();
-  await reviewFooter().getByRole("button", { name: "Back" }).click();
-  await expectProgress("1 of 5");
-  await modal().getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("heading", { name: "Marketing Plan" }).waitFor();
+  assert.equal(await modal().count(), 0);
+  assert.equal(await page.getByText("Your post is rescheduled", { exact: true }).count(), 0);
   assert.equal(await campaignCard("Thursday, Nov 5").count(), 0);
   assert.equal((await cardChannels("Saturday, Nov 7")).length, 5);
 
@@ -195,9 +213,12 @@ try {
   assert.equal(await campaignCard("Friday, Nov 6").locator(".status-sent").count(), 1);
   assert.equal((await cardChannels("Saturday, Nov 7")).length, 4);
 
-  // Date-specific cards open scoped carousels.
-  await openCampaignReview("Friday, Nov 6");
+  // Single-channel date cards skip Summary and open scoped context directly.
+  await campaignCard("Friday, Nov 6").click();
+  await modal().waitFor();
+  assert.equal(await page.locator(".v4-summary-modal").count(), 0);
   await expectProgress("1 of 1");
+  await modal().getByText("Sent", { exact: true }).waitFor();
   await modal().getByRole("button", { name: "Close", exact: true }).click();
   await openCampaignReview("Saturday, Nov 7");
   await expectProgress("1 of 4");
@@ -248,7 +269,7 @@ try {
   await modal().getByRole("button", { name: "Close", exact: true }).click();
   assert.deepEqual(await cardChannels("Friday, Nov 6"), ["GGoogle post"]);
 
-  // Saturday review uses its current date and has scheduling/posting parity.
+  // A middle-channel date change advances without a toast; its green CTA owns success feedback.
   await selectVersionFour();
   await openSaturday();
   await selectModalChannel("Facebook");
@@ -261,14 +282,19 @@ try {
   await reviewSchedule.getByRole("button", { name: "Edit" }).click();
   await scheduleDialog.getByLabel("Schedule date for Facebook").fill("2026-11-08");
   await scheduleDialog.getByRole("button", { name: "Save Edits" }).click();
-  await reviewSchedule.getByText("Nov 8, 2026 9:00 AM", { exact: true }).waitFor();
+  await page.getByRole("heading", { name: "Review Instagram Post" }).waitFor();
+  await reviewSchedule.getByText("Nov 7, 2026 9:00 AM", { exact: true }).waitFor();
+  assert.equal(await page.getByText("Your post is rescheduled", { exact: true }).count(), 0);
+  await reviewStepper.getByRole("button", { name: /^Facebook,/ }).click();
   assert.equal(
     await reviewFooter().getByRole("button", { name: "Schedule Facebook post", exact: true }).count(),
     1,
   );
   await reviewFooter().getByRole("button", { name: "Schedule Facebook post", exact: true }).click();
   await page.getByText("Your post is scheduled", { exact: true }).waitFor();
-  assert.equal(await modal().count(), 0);
+  await page.getByRole("heading", { name: "Review Instagram Post" }).waitFor();
+  await reviewFooter().getByRole("button", { name: "Back" }).click();
+  await modal().getByRole("button", { name: "Close", exact: true }).click();
   assert.equal(await campaignCard("Sunday, Nov 8").locator(".status-scheduled").count(), 1);
 
   await selectVersionFour();
@@ -299,18 +325,21 @@ try {
   assert.equal(await reviewStepper.getByRole("button", { name: /^Facebook,/ }).count(), 0);
   await page.getByText("Facebook post is deleted", { exact: true }).waitFor();
 
-  // Review progression skips channels that were already deleted ahead.
+  // Reschedule progression skips channels that were already deleted ahead.
   await selectVersionFour();
   await openSaturday();
   await selectModalChannel("Instagram");
   await deleteCurrentFromModal();
   await selectModalChannel("Facebook");
   await modalFooter().getByRole("button", { name: "Edit", exact: true }).click();
-  await deleteCurrentFromReview();
+  await reviewSchedule.getByRole("button", { name: "Edit" }).click();
+  await scheduleDialog.getByLabel("Schedule date for Facebook").fill("2026-11-08");
+  await scheduleDialog.getByRole("button", { name: "Save Edits" }).click();
   await page.getByRole("heading", { name: "Review Email Campaign" }).waitFor();
-  assert.equal(await reviewStepper.getByRole("button", { name: /^Facebook|^Instagram/ }).count(), 0);
+  assert.equal(await reviewStepper.getByRole("button", { name: /^Instagram,/ }).count(), 0);
+  assert.equal(await page.getByText("Your post is rescheduled", { exact: true }).count(), 0);
 
-  // Deleting the only channel in a moved review group returns to the calendar.
+  // Rescheduling the only channel in a direct card returns to the calendar.
   await selectVersionFour();
   await openSaturday();
   assert.equal(
@@ -321,17 +350,26 @@ try {
   await reviewSchedule.getByRole("button", { name: "Edit" }).click();
   await scheduleDialog.getByLabel("Schedule date for Google").fill("2026-11-05");
   await scheduleDialog.getByRole("button", { name: "Save Edits" }).click();
-  await deleteCurrentFromReview();
+  await page.getByRole("heading", { name: "Review Facebook Post" }).waitFor();
+  await reviewFooter().getByRole("button", { name: "Back" }).click();
+  await modal().getByRole("button", { name: "Close", exact: true }).click();
+  await campaignCard("Thursday, Nov 5").click();
+  await modalFooter().getByRole("button", { name: "Edit", exact: true }).click();
+  await reviewSchedule.getByRole("button", { name: "Edit" }).click();
+  await scheduleDialog.getByLabel("Schedule date for Google").fill("2026-11-04");
+  await scheduleDialog.getByRole("button", { name: "Save Edits" }).click();
   await page.getByRole("heading", { name: "Marketing Plan" }).waitFor();
   assert.equal(await modal().count(), 0);
   assert.equal(await campaignCard("Thursday, Nov 5").count(), 0);
-  await page.getByText("Google post is deleted", { exact: true }).waitFor();
+  assert.deepEqual(await cardChannels("Wednesday, Nov 4"), ["GGoogle post"]);
+  assert.equal(await page.getByText("Your post is rescheduled", { exact: true }).count(), 0);
 
   // Reset restores five Nov 7 channels; V1 keeps its original static week.
   await page.getByRole("button", { name: "Version 1" }).click();
   assert.equal(await calendarDay("Sunday, Nov 1").count(), 1);
   assert.equal(await calendarDay("Sunday, Nov 8").count(), 0);
   await page.getByRole("button", { name: "Version 4" }).click();
+  await page.getByRole("button", { name: "Progress button", exact: true }).click();
   assert.equal(await campaignCard("Friday, Nov 6").count(), 0);
   assert.equal((await cardChannels("Saturday, Nov 7")).length, 5);
   await openSaturday();

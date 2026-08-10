@@ -6,8 +6,16 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:research:calendar": "VITE_PROTOTYPE_VERSION=version_4 VITE_RESEARCH_MODE=true VITE_ENTRY_SURFACE=calendar VITE_NAVIGATION_STYLE=arrows npm run build",
+    "build:research:dashboard": "VITE_PROTOTYPE_VERSION=version_4 VITE_RESEARCH_MODE=true VITE_ENTRY_SURFACE=dashboard VITE_NAVIGATION_STYLE=arrows npm run build",
     "preview": "vite preview",
-    "verify:icon-style": "node verify-v4-icon-style.mjs"
+    "verify:icon-style": "node verify-v4-icon-style.mjs",
+    "verify:v4-dashboard": "node verify-v4-dashboard.mjs",
+    "verify:v4-generated-reopen": "node verify-v4-generated-reopen.mjs",
+    "verify:v4-navigation": "node verify-v4-navigation-style.mjs",
+    "verify:v4-social-editor": "node verify-v4-social-editor.mjs",
+    "verify:v4-loading": "node verify-v4-loading.mjs",
+    "verify:research": "node verify-research-mode.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

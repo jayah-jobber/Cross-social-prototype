@@ -48,6 +48,7 @@ async function selectState(label) {
 try {
   await page.goto(baseUrl, { waitUntil: "networkidle" });
   await page.getByRole("button", { name: "Version 4" }).click();
+  await page.getByRole("button", { name: "Progress button", exact: true }).click();
   await openSaturdayReview();
 
   assert.deepEqual(
@@ -124,6 +125,7 @@ try {
 
   await page.getByRole("button", { name: "Version 1" }).click();
   await page.getByRole("button", { name: "Version 4" }).click();
+  await page.getByRole("button", { name: "Progress button", exact: true }).click();
   await openSaturdayReview();
   assert.equal(
     await controls().getByRole("button", { name: "Suggested", exact: true }).getAttribute("aria-pressed"),

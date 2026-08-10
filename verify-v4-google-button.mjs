@@ -38,10 +38,11 @@ try {
   await page.getByRole("button", { name: "Version 4" }).click();
   await openSuggestedGoogleEditor();
 
-  // Figma default state and exact menu contents/order.
+  // Generated Google starts with its established Book + Online booking page defaults.
   assert.equal(await buttonText().getAttribute("aria-expanded"), "false");
-  assert.equal(await buttonUrl().inputValue(), "http://yourwebsite.com");
-  assert.match(await linkDestination().getAttribute("aria-label"), /External link$/);
+  assert.equal(await buttonText().textContent(), "TextBook");
+  assert.equal(await buttonUrl().count(), 0);
+  assert.match(await linkDestination().getAttribute("aria-label"), /Online booking page$/);
   await buttonText().focus();
   await page.keyboard.press("ArrowDown");
   const menu = buttonSection().getByRole("menu", { name: "Button text options" });
@@ -70,8 +71,15 @@ try {
   );
   await linkMenu.getByText("Request Forms", { exact: true }).waitFor();
   assert.equal(await linkMenu.getByRole("menuitem", { name: "Request Forms" }).count(), 0);
-  assert.equal(await linkMenu.getByRole("menuitemradio", { name: "External link" }).getAttribute("aria-checked"), "true");
-  assert.equal(await linkMenu.getByRole("menuitemradio", { name: "External link" }).locator("svg").count(), 1);
+  assert.equal(
+    await linkMenu.getByRole("menuitemradio", { name: "Online booking page" })
+      .getAttribute("aria-checked"),
+    "true",
+  );
+  assert.equal(
+    await linkMenu.getByRole("menuitemradio", { name: "Online booking page" }).locator("svg").count(),
+    1,
+  );
   await page.keyboard.press("ArrowDown");
   assert.equal(
     await linkMenu.getByRole("menuitemradio", { name: "Online booking page" })
@@ -82,7 +90,10 @@ try {
   assert.equal(await linkMenu.count(), 0);
   assert.equal(await linkDestination().evaluate((item) => item === document.activeElement), true);
 
-  // Every internal destination hides external controls; returning restores the typed URL.
+  // Every internal destination hides external controls; external mode retains its typed URL.
+  await linkDestination().click();
+  await linkMenu.getByRole("menuitemradio", { name: "External link" }).click();
+  assert.equal(await buttonUrl().inputValue(), "http://yourwebsite.com");
   await buttonUrl().fill("https://example.com/preserved");
   for (const option of ["Online booking page", "Untitled Form (Default)", "My other form"]) {
     await linkDestination().click();
@@ -139,13 +150,13 @@ try {
   await page.getByRole("heading", { name: "Review Google Post", exact: true }).waitFor();
   await page.locator(".review-field").first().getByRole("button", { name: "Edit" }).click();
   await expectGoogleEditor();
-  assert.equal(await buttonText().textContent(), "TextLearn More");
-  assert.equal(await buttonUrl().inputValue(), "http://yourwebsite.com");
-  assert.match(await linkDestination().getAttribute("aria-label"), /External link$/);
+  assert.equal(await buttonText().textContent(), "TextBook");
+  assert.equal(await buttonUrl().count(), 0);
+  assert.match(await linkDestination().getAttribute("aria-label"), /Online booking page$/);
 
-  // Save commits an internal destination plus its retained URL to all V4 origins.
-  await buttonText().click();
-  await menu.getByRole("menuitemradio", { name: "Book" }).click();
+  // Save commits an internal destination plus its retained URL to the generated source.
+  await linkDestination().click();
+  await linkMenu.getByRole("menuitemradio", { name: "External link" }).click();
   await buttonUrl().fill("https://example.com/book");
   await linkDestination().click();
   await linkMenu.getByRole("menuitemradio", { name: "Untitled Form (Default)" }).click();
@@ -158,26 +169,25 @@ try {
   await page.locator(".v4-generated-review .v4-context-preview")
     .getByRole("button", { name: "Book", exact: true }).waitFor();
 
-  // The committed draft also reaches Saturday contextual and Friday preview/editor origins.
+  // Generated edits remain source-aware; original V4 campaign origins keep their own defaults.
   await page.getByLabel("Close suggested marketing content").click();
   await page.locator(".combined-target-card").click();
   await page.locator(".v4-summary-modal").getByRole("button", { name: "Review Drafts" }).click();
-  await page.locator(".v4-context-preview").getByRole("button", { name: "Book", exact: true }).waitFor();
-  assert.ok(!(await page.locator(".v4-context-preview").textContent()).includes("https://example.com/book"));
+  await page.locator(".v4-context-preview")
+    .getByRole("link", { name: "Learn More", exact: true }).waitFor();
   await page.getByRole("button", { name: "Close", exact: true }).click();
 
   await page.locator(".target-card:not(.combined-target-card)").click();
-  await page.locator(".calendar-modal-preview").getByRole("button", { name: "Book", exact: true }).waitFor();
+  await page.locator(".calendar-modal-preview")
+    .getByRole("link", { name: "Learn More", exact: true }).waitFor();
   await page.locator(".calendar-modal-actions").getByRole("button", { name: "Edit" }).click();
-  await page.locator(".review-carousel-preview").getByRole("button", { name: "Book", exact: true }).waitFor();
+  await page.locator(".review-carousel-preview")
+    .getByRole("link", { name: "Learn More", exact: true }).waitFor();
   await page.locator(".review-field").first().getByRole("button", { name: "Edit" }).click();
   await expectGoogleEditor();
-  assert.equal(await buttonText().textContent(), "TextBook");
-  assert.match(await linkDestination().getAttribute("aria-label"), /Untitled Form \(Default\)$/);
-  assert.equal(await buttonUrl().count(), 0);
-  await linkDestination().click();
-  await linkMenu.getByRole("menuitemradio", { name: "External link" }).click();
-  assert.equal(await buttonUrl().inputValue(), "https://example.com/book");
+  assert.equal(await buttonText().textContent(), "TextLearn More");
+  assert.match(await linkDestination().getAttribute("aria-label"), /External link$/);
+  assert.equal(await buttonUrl().inputValue(), "http://yourwebsite.com");
 
   // Versions 1–3 retain their existing editors and do not receive the V4 control.
   for (const version of ["Version 1", "Version 2", "Version 3"]) {

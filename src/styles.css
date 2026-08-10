@@ -65,6 +65,7 @@ button {
   height: 60px;
   align-items: center;
   justify-content: space-between;
+  gap: 16px;
   padding: 0 24px;
   color: white;
   background: #032b3a;
@@ -105,6 +106,44 @@ button {
 .version-switcher button:disabled {
   cursor: not-allowed;
   opacity: 0.42;
+}
+
+.v4-experiment-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.v4-prototype-switcher {
+  display: flex;
+  min-width: 0;
+  gap: 3px;
+  padding: 4px;
+  border: 1px solid rgb(255 255 255 / 18%);
+  border-radius: 8px;
+  margin: 0;
+  background: rgb(255 255 255 / 13%);
+}
+
+.v4-prototype-switcher button {
+  padding: 8px 11px;
+  border-radius: 5px;
+  color: #d9e3e6;
+  cursor: pointer;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.v4-prototype-switcher button.selected {
+  color: var(--ink);
+  background: white;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 14%);
+}
+
+.v4-prototype-switcher button:focus-visible {
+  outline: 3px solid #8ac9f0;
+  outline-offset: 2px;
 }
 
 .prototype-frame {
@@ -381,6 +420,372 @@ button {
   overflow: hidden;
   padding: 24px;
   background: white;
+}
+
+.v4-dashboard-page {
+  position: absolute;
+  top: 60px;
+  right: 0;
+  bottom: 0;
+  left: 56px;
+  overflow: hidden;
+  padding: 24px;
+  background: white;
+}
+
+.v4-dashboard-tabs {
+  display: flex;
+  width: max-content;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 9px;
+  margin-top: 20px;
+  background: #f1f0e9;
+}
+
+.v4-dashboard-tabs button {
+  height: 36px;
+  padding: 0 16px;
+  border-radius: 6px;
+  color: #52656c;
+  background: transparent;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.v4-dashboard-tabs button[aria-selected="true"] {
+  color: var(--ink);
+  background: white;
+  box-shadow: 0 1px 3px rgb(3 43 58 / 14%);
+}
+
+.v4-dashboard-content {
+  display: grid;
+  grid-template-columns: minmax(0, 800px) minmax(320px, 400px);
+  align-items: start;
+  gap: 48px;
+  margin-top: 24px;
+}
+
+.v4-dashboard-idea-panel {
+  display: flex;
+  width: 800px;
+  flex-direction: column;
+  gap: 24px;
+  padding: 48px 32px;
+  border-radius: 32px;
+  background: #f7f5f3;
+  box-shadow: 0 1px 1px rgb(0 0 0 / 5%);
+}
+
+.v4-dashboard-prompt-card {
+  display: flex;
+  width: 736px;
+  height: 320px;
+  flex-direction: column;
+  gap: 16px;
+  padding: 25px;
+  border: 1px solid #dadfe2;
+  border-radius: 16px;
+  background: white;
+  box-shadow: 0 1px 1px rgb(0 0 0 / 5%);
+}
+
+.v4-dashboard-prompt-card:focus-within {
+  border-color: #1676b9;
+  box-shadow: 0 0 0 3px rgb(22 118 185 / 16%);
+}
+
+.v4-dashboard-prompt-area {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  align-items: flex-start;
+}
+
+.v4-dashboard-ai-favicon {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  place-items: center;
+  border-radius: 50%;
+  color: #008b9b;
+  background: white;
+}
+
+.v4-dashboard-prompt-area textarea {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: 6px 0 0;
+  resize: none;
+  border: 0;
+  outline: 0;
+  color: #49646f;
+  background: transparent;
+  font-family: "Inter", sans-serif;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.3;
+}
+
+.v4-dashboard-prompt-area textarea::placeholder {
+  color: #49646f;
+  opacity: 1;
+}
+
+.v4-dashboard-card-divider {
+  width: 100%;
+  height: 1px;
+  flex: 0 0 1px;
+  background: #dadfe2;
+}
+
+.v4-dashboard-channel-row {
+  display: flex;
+  height: 73px;
+  flex: 0 0 73px;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.v4-dashboard-channels {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 16px;
+}
+
+.v4-dashboard-channels > span {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  color: #49646f;
+  font-family: "Inter", sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.v4-dashboard-channels .channel-progress-icon {
+  display: grid;
+  width: 16px;
+  min-width: 16px;
+  height: 16px;
+  place-items: center;
+}
+
+.v4-dashboard-channels .channel-progress-icon > * {
+  width: 16px;
+  height: 16px;
+  max-width: 16px;
+  max-height: 16px;
+}
+
+.v4-dashboard-generate {
+  min-width: 153px;
+  height: 40px;
+  align-self: flex-end;
+  padding: 0 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.v4-dashboard-generate:disabled {
+  cursor: not-allowed;
+  color: #999;
+  background: #e9e9e9;
+  opacity: 1;
+}
+
+.v4-dashboard-generate:disabled:hover {
+  background: #e9e9e9;
+}
+
+.v4-dashboard-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 9px;
+}
+
+.v4-dashboard-suggestions strong {
+  display: flex;
+  width: 31px;
+  height: 40px;
+  flex: 0 0 31px;
+  align-items: center;
+  color: #49646f;
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.v4-dashboard-suggestions button {
+  display: inline-flex;
+  height: 40px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+  border: 1px solid #dadfe2;
+  border-radius: 999px;
+  color: #032b3a;
+  cursor: pointer;
+  background: white;
+  box-shadow: 0 1px 1px rgb(0 0 0 / 5%);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.v4-dashboard-suggestions button > svg {
+  flex: 0 0 24px;
+  color: #008b9b;
+}
+
+.v4-dashboard-suggestions button:hover,
+.v4-dashboard-suggestions button:focus-visible {
+  border-color: #9cabb0;
+  background: #fbfcfb;
+}
+
+.v4-dashboard-tools {
+  display: flex;
+  width: 400px;
+  flex-direction: column;
+  gap: 40px;
+}
+
+.v4-dashboard-tool-section {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 24px;
+}
+
+.v4-dashboard-tool-section > header {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 16px;
+}
+
+.v4-dashboard-tool-section h2 {
+  flex: 0 0 auto;
+  margin: 0;
+  color: #233d48;
+  font-family: "Inter", sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.55px;
+  line-height: 16.5px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.v4-dashboard-tool-section > header > span {
+  height: 1px;
+  min-width: 1px;
+  flex: 1;
+  background: #e2e8f0;
+}
+
+.v4-dashboard-tool-list {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 24px;
+}
+
+.v4-dashboard-tool {
+  display: flex;
+  width: 100%;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.v4-dashboard-tool-icon {
+  display: flex;
+  width: 48px;
+  height: 48px;
+  flex: 0 0 48px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+}
+
+.v4-dashboard-tool-section--online .v4-dashboard-tool-icon {
+  background: #eff6ff;
+}
+
+.v4-dashboard-tool-section--trust .v4-dashboard-tool-icon {
+  background: #fef3c7;
+}
+
+.v4-dashboard-tool-section--win-job .v4-dashboard-tool-icon {
+  background: #ecfdf5;
+}
+
+.v4-dashboard-tool-icon > img {
+  display: block;
+  width: 24px;
+  height: 24px;
+}
+
+.v4-dashboard-tool-icon > strong {
+  color: #4285f4;
+  font-family: "Inter", sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 28px;
+}
+
+.v4-dashboard-tool-copy {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.v4-dashboard-tool-copy > strong {
+  width: 100%;
+  color: #233d48;
+  font-family: "Inter", sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.v4-dashboard-tool-copy > span {
+  width: 100%;
+  color: #49646f;
+  font-family: "Inter", sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.25;
+}
+
+.v4-dashboard-tool-arrow {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  place-items: center;
+}
+
+.v4-dashboard-tool-arrow > img {
+  display: block;
+  width: 7px;
+  height: 12px;
 }
 
 .calendar-modal-overlay {
@@ -977,6 +1382,87 @@ button {
   gap: 12px;
 }
 
+.v4-arrow-navigator {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 18px;
+}
+
+.v4-navigation--arrows {
+  position: relative;
+}
+
+.v4-navigation--arrows .v4-arrow-navigator {
+  display: contents;
+}
+
+.v4-arrow-navigator h2 {
+  flex: 0 0 auto;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1.14;
+  text-transform: uppercase;
+}
+
+.v4-arrow-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.v4-navigation--arrows .v4-arrow-controls {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.v4-arrow-controls button,
+.v4-context-navigation .v4-arrow-controls button {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid #dadfe2;
+  border-radius: 8px;
+  color: var(--ink);
+  cursor: pointer;
+  background: white;
+  box-shadow: 0 1px 2px rgb(3 43 58 / 5%);
+}
+
+.v4-arrow-controls button:hover:not(:disabled),
+.v4-arrow-controls button:focus-visible {
+  border-color: #b9c3c7;
+  background: #fbfcfb;
+}
+
+.v4-arrow-controls button:focus-visible {
+  outline: 3px solid #1676b9;
+  outline-offset: 2px;
+}
+
+.v4-arrow-controls button:disabled {
+  cursor: default;
+  opacity: 0.3;
+}
+
+.v4-arrow-controls span,
+.v4-context-navigation .v4-arrow-controls span {
+  min-width: 36px;
+  color: #4b5563;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 20px;
+  text-align: center;
+}
+
 .v4-context-navigation span {
   min-width: 58px;
   color: #526970;
@@ -1022,6 +1508,21 @@ button {
 
 .v4-five-channel-modal .context-progress-close {
   justify-self: end;
+}
+
+.v4-five-channel-modal .v4-context-navigation.v4-navigation--arrows {
+  grid-template-columns: minmax(0, 1fr) 40px;
+  gap: 10px;
+  justify-items: stretch;
+  padding: 24px 32px 16px 48px;
+  border-bottom-color: #dadfe2;
+  background: #f7f5f3;
+}
+
+.v4-five-channel-modal.v4-generated-review
+  .v4-context-navigation.v4-navigation--arrows {
+  grid-template-columns: 1fr;
+  justify-items: start;
 }
 
 .channel-progress-stepper {
@@ -2490,6 +2991,10 @@ button {
   background: white;
 }
 
+.marketing-calendar-card.target-card.generated-delivery-card {
+  min-height: 0;
+}
+
 .generated-suggestion-card .calendar-card-title {
   margin-bottom: 2px;
   font-size: 11px;
@@ -3839,6 +4344,14 @@ label {
   padding: 0 24px;
   border-bottom: 1px solid #dadfe2;
   background: white;
+}
+
+.review-navigation-header.v4-navigation--arrows {
+  min-height: 72px;
+  flex-basis: 72px;
+  justify-content: flex-start;
+  padding: 24px 32px 16px 48px;
+  border-bottom-color: #dadfe2;
 }
 
 .review-scroll {

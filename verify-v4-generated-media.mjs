@@ -21,6 +21,7 @@ Book before Christmas to take advantage of this limited-time offer and keep your
 📞 Contact us today for a free quote and reserve your spot before our schedule fills up.`;
 const hashtags = "#ChristmasSpecial #WinterLandscaping #LandscapeMaintenance #HolidaySavings";
 const imageRequirement = "Add at least 1 image before posting or scheduling to Instagram";
+const generatedMediaPath = "/assets/v4-generated-promotion.png";
 
 const flow = () => page.locator(".v4-generated-flow-shell");
 const summary = () => flow().locator(".v4-summary-modal--generated");
@@ -43,44 +44,51 @@ async function selectContextChannel(channel) {
     .click();
 }
 
-async function assertCollapsedMedia() {
-  assert.equal(await context().locator(".post-image").count(), 0);
-  assert.equal(await context().locator(".instagram-post-image").count(), 0);
-  assert.equal(await context().locator(".channel-image-grid").count(), 0);
-  assert.equal(await context().locator(".email-hero").count(), 0);
-  assert.equal(await context().locator(".empty-post-image").count(), 0);
+async function assertImageSource(locator) {
+  assert.equal(await locator.count(), 1);
+  assert.equal(new URL(await locator.getAttribute("src"), baseUrl).pathname, generatedMediaPath);
 }
 
 try {
   await page.goto(baseUrl, { waitUntil: "networkidle" });
   await page.getByRole("button", { name: "Version 4", exact: true }).click();
+  await page.getByRole("button", { name: "Progress button", exact: true }).click();
 
   // Generation and review alone never create calendar state.
   await generate("Christmas winter landscaping promotion");
   assert.equal(await generatedCards().count(), 0);
-  assert.equal(await summary().locator(".v4-summary-artwork").count(), 0);
+  const summaryArtwork = summary().locator(".v4-summary-artwork");
+  await assertImageSource(summaryArtwork);
+  assert.equal(await summary().locator(`img[src="${generatedMediaPath}"]`).count(), 1);
+  assert.deepEqual(
+    await summaryArtwork.evaluate((image) => {
+      const bounds = image.getBoundingClientRect();
+      return [Math.round(bounds.width), Math.round(bounds.height)];
+    }),
+    [430, 577],
+  );
   assert.equal(await summary().locator(".v4-summary-collage").count(), 0);
   assert.equal(await summary().locator(".v4-summary-image-placeholder").count(), 0);
-  assert.equal(await summary().locator(".v4-summary-body--text-only").count(), 1);
+  assert.equal(await summary().locator(".v4-summary-body--text-only").count(), 0);
   await summary().getByRole("button", { name: "Review Drafts", exact: true }).click();
 
-  await assertCollapsedMedia();
+  await assertImageSource(context().locator(".post-image"));
   assert.equal(await context().locator(".post-copy > p").textContent(), body);
 
   await selectContextChannel("Facebook");
-  await assertCollapsedMedia();
+  await assertImageSource(context().locator(".channel-image-grid img"));
   const facebookCopy = context().locator(".channel-post-copy > p");
   assert.equal(await facebookCopy.count(), 2);
   assert.equal(await facebookCopy.nth(0).textContent(), body);
   assert.equal(await facebookCopy.nth(1).textContent(), hashtags);
 
   await selectContextChannel("Instagram");
-  await assertCollapsedMedia();
+  await assertImageSource(context().locator(".instagram-post-image"));
   const instagramCopy = context().locator(".instagram-post-copy > p");
   assert.equal(await instagramCopy.count(), 2);
   assert.equal(await instagramCopy.nth(0).textContent(), body);
   assert.equal(await instagramCopy.nth(1).textContent(), hashtags);
-  await context().getByText(imageRequirement, { exact: true }).waitFor();
+  assert.equal(await context().getByText(imageRequirement, { exact: true }).count(), 0);
 
   const contextSchedule = context().getByRole("button", {
     name: "Schedule Instagram post",
@@ -92,10 +100,43 @@ try {
     1,
   );
   const contextSplit = context().getByRole("button", { name: "Show publishing options" });
+  assert.equal(await contextSchedule.isEnabled(), true);
+  assert.equal(await contextSplit.isEnabled(), true);
+
+  await selectContextChannel("Email");
+  await assertImageSource(context().locator(".email-hero"));
+  assert.equal(await context().locator(".propagated-body").textContent(), body);
+
+  // Removing Instagram's only image restores both the visible and handler guards.
+  await selectContextChannel("Instagram");
+  await context().locator(".v4-context-footer").getByRole("button", {
+    name: "Edit",
+    exact: true,
+  }).click();
+  const reviewFooter = page.locator(".v4-channel-review .review-footer");
+  assert.equal(
+    await reviewFooter.getByRole("button", { name: "Schedule Instagram post" }).isDisabled(),
+    false,
+  );
+  assert.equal(
+    await reviewFooter.getByRole("button", { name: "Delete", exact: true }).count(),
+    1,
+  );
+  await page.locator(".review-field").first().getByRole("button", { name: "Edit" }).click();
+  await assertImageSource(page.locator(".instagram-post-image"));
+  await page.getByRole("button", { name: "Remove image 1", exact: true }).click();
+  assert.equal(await page.locator(".instagram-post-image").count(), 0);
+  await page.getByRole("button", { name: "Save Edit", exact: true }).click();
+  assert.equal(
+    await reviewFooter.getByRole("button", { name: "Schedule Instagram post" }).isDisabled(),
+    true,
+  );
+  await reviewFooter.getByRole("button", { name: "Back", exact: true }).click();
+  await context().getByText(imageRequirement, { exact: true }).waitFor();
   assert.equal(await contextSchedule.isDisabled(), true);
   assert.equal(await contextSplit.isDisabled(), true);
 
-  // Removing the native disabled property cannot bypass the handler guard.
+  // Removing the native disabled property cannot bypass the lifecycle guard.
   await contextSchedule.evaluate((button) => {
     button.disabled = false;
     button.click();
@@ -105,40 +146,6 @@ try {
     "step",
   );
   assert.equal(await generatedCards().count(), 0);
-
-  await selectContextChannel("Email");
-  await assertCollapsedMedia();
-  assert.equal(await context().locator(".propagated-body").textContent(), body);
-
-  // Edit can add media from an empty Instagram draft; save enables publishing.
-  await selectContextChannel("Instagram");
-  await context().locator(".v4-context-footer").getByRole("button", {
-    name: "Edit",
-    exact: true,
-  }).click();
-  const reviewFooter = page.locator(".v4-channel-review .review-footer");
-  assert.equal(
-    await reviewFooter.getByRole("button", { name: "Schedule Instagram post" }).isDisabled(),
-    true,
-  );
-  assert.equal(
-    await reviewFooter.getByRole("button", { name: "Delete", exact: true }).count(),
-    1,
-  );
-  await page.locator(".review-field").first().getByRole("button", { name: "Edit" }).click();
-  const chooseImage = page.getByRole("button", { name: "Choose image", exact: true });
-  assert.equal(await chooseImage.isEnabled(), true);
-  assert.equal(await page.locator(".instagram-post-image").count(), 0);
-  await chooseImage.click();
-  assert.equal(await page.locator(".instagram-post-image").count(), 1);
-  await page.getByRole("button", { name: "Save Edit", exact: true }).click();
-  assert.equal(
-    await reviewFooter.getByRole("button", { name: "Schedule Instagram post" }).isEnabled(),
-    true,
-  );
-  await reviewFooter.getByRole("button", { name: "Back", exact: true }).click();
-  assert.equal(await context().getByText(imageRequirement, { exact: true }).count(), 0);
-  assert.equal(await contextSchedule.isEnabled(), true);
 
   // Generated content review deletion stays in review and opens the next available channel.
   await selectContextChannel("Facebook");
@@ -167,7 +174,7 @@ try {
   await generate("Second Christmas promotion");
   await summary().getByRole("button", { name: "Review Drafts", exact: true }).click();
   await selectContextChannel("Instagram");
-  await assertCollapsedMedia();
+  await assertImageSource(context().locator(".instagram-post-image"));
   await selectContextChannel("Google");
   await context().getByRole("button", {
     name: "Schedule Google post",
@@ -240,7 +247,7 @@ try {
   );
 
   console.log(
-    "Verified generated copy/media guards, delivery-only persistence, and neutral delivered calendar cards with dot-only success status.",
+    "Verified generated local media across four channels, Instagram removal guards, delivery-only persistence, and neutral delivered calendar cards.",
   );
 } finally {
   await browser.close();

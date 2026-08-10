@@ -38,6 +38,7 @@ try {
   await page.goto(baseUrl, { waitUntil: "networkidle" });
 
   await selectVersion("Version 4");
+  await page.getByRole("button", { name: "Progress button", exact: true }).click();
   await openSuggested("V4 suggested layout prompt", "v4");
   const horizontal = page.locator(".v4-generated-flow-shell");
   const generatedReview = horizontal.locator(".v4-generated-review");
@@ -59,16 +60,16 @@ try {
   );
   await regeneratedSummary.getByRole("button", { name: "Review Drafts" }).click();
   await generatedReview.waitFor();
-  for (const channel of channels) {
+  for (const channel of channels.slice(0, 4)) {
     const channelButton = generatedReview.getByRole("button", { name: new RegExp(`^${channel},`) });
     await channelButton.click();
     assert.equal(await channelButton.getAttribute("aria-current"), "step");
     assert.equal(await generatedReview.locator(".v4-context-preview-scroll > *").count(), 1);
   }
   await generatedReview.locator(".v4-context-footer").getByRole("button", { name: "Edit" }).click();
-  await page.getByRole("heading", { name: "Review Website Page", exact: true }).waitFor();
+  await page.getByRole("heading", { name: "Review Email Campaign", exact: true }).waitFor();
   await page.locator(".review-footer").getByRole("button", { name: "Back" }).click();
-  await generatedReview.getByRole("button", { name: /^Website,/ }).waitFor();
+  await generatedReview.getByRole("button", { name: /^Email,/ }).waitFor();
   await horizontal.getByLabel("Close suggested marketing content").click();
 
   await selectVersion("Version 5");

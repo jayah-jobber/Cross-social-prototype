@@ -111,6 +111,7 @@ try {
 
   await modal().getByRole("button", { name: "Close", exact: true }).click();
   await select("Version 4");
+  await page.getByRole("button", { name: "Progress button", exact: true }).click();
   await saturdayCard().click();
   await page.locator(".v4-summary-modal").getByRole("button", { name: "Review Drafts" }).click();
   assert.equal(await page.locator(".v4-five-channel-modal").count(), 1);

@@ -13,6 +13,7 @@ const stages = [
   ["Optimizing for channel visibility", "/assets/v4-loading-channel-visibility.svg"],
   ["Adding the finishing touches", "/assets/v4-loading-finishing-touches.svg"],
 ];
+const generatedMediaPath = "/assets/v4-generated-promotion.png";
 
 const flow = () => page.locator(".v4-generated-flow-shell");
 const loading = () => flow().locator(".v4-loading-surface");
@@ -26,6 +27,7 @@ async function resetV4() {
   if (await flow().count()) await outerClose().click();
   await page.getByRole("button", { name: "Version 1", exact: true }).click();
   await page.getByRole("button", { name: "Version 4", exact: true }).click();
+  await page.getByRole("button", { name: "Progress button", exact: true }).click();
 }
 
 async function submitFromCalendar(prompt, method = "enter") {
@@ -65,6 +67,7 @@ async function assertGeneratedStatusControlsAbsent() {
 try {
   await page.goto(baseUrl, { waitUntil: "networkidle" });
   await page.getByRole("button", { name: "Version 4", exact: true }).click();
+  await page.getByRole("button", { name: "Progress button", exact: true }).click();
 
   // Initial Enter submit runs all five local-asset stages into generated Summary.
   await submitFromCalendar("Promote fall cleanup", "enter");
@@ -95,10 +98,23 @@ try {
   }).count(), 1);
   assert.equal(await generatedSummary().locator(".v4-summary-status-list > li").count(), 4);
   assert.equal(await generatedSummary().getByText("Website", { exact: true }).count(), 0);
-  assert.equal(await generatedSummary().locator(".v4-summary-artwork").count(), 0);
+  const summaryArtwork = generatedSummary().locator(".v4-summary-artwork");
+  assert.equal(await summaryArtwork.count(), 1);
+  assert.equal(new URL(await summaryArtwork.getAttribute("src"), baseUrl).pathname, generatedMediaPath);
+  assert.equal(
+    await generatedSummary().locator(`img[src="${generatedMediaPath}"]`).count(),
+    1,
+  );
+  assert.deepEqual(
+    await summaryArtwork.evaluate((image) => {
+      const bounds = image.getBoundingClientRect();
+      return [Math.round(bounds.width), Math.round(bounds.height)];
+    }),
+    [430, 577],
+  );
   assert.equal(await generatedSummary().locator(".v4-summary-collage").count(), 0);
   assert.equal(await generatedSummary().locator(".v4-summary-image-placeholder").count(), 0);
-  assert.equal(await generatedSummary().locator(".v4-summary-body--text-only").count(), 1);
+  assert.equal(await generatedSummary().locator(".v4-summary-body--text-only").count(), 0);
   await page.screenshot({ path: "/tmp/v4-generated-summary.png" });
   assert.equal(await generatedSummary().getByRole("button", { name: /close/i }).count(), 0);
   assert.equal(await promptInput().inputValue(), "Promote fall cleanup");

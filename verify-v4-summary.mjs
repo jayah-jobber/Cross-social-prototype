@@ -20,10 +20,12 @@ const statusControls = () => page.getByRole("group", {
 });
 const revisedSummaryCopy = "Your recent Hamilton clean up and mulching project (Job ID xxx) is a great one to showcase on all your platforms. It talks about transforming a property with a seasonal clean up and fresh mulch, highlighting the visual impact and value of a well-maintained landscape.";
 const promotionSummaryCopy = "Promotional content is a great one to showcase on all your platforms. It talks about a limited-time opportunity for homeowners to save on landscaping services, creating urgency while encouraging potential customers to book before the promotion ends.";
+const generatedMediaPath = "/assets/v4-generated-promotion.png";
 
 async function resetV4() {
   await page.getByRole("button", { name: "Version 1", exact: true }).click();
   await page.getByRole("button", { name: "Version 4", exact: true }).click();
+  await page.getByRole("button", { name: "Progress button", exact: true }).click();
 }
 
 async function openSaturdaySummary() {
@@ -51,11 +53,17 @@ async function imageSources(scope) {
   ));
 }
 
+async function assertGeneratedImage(locator) {
+  assert.equal(await locator.count(), 1);
+  assert.equal(new URL(await locator.getAttribute("src"), baseUrl).pathname, generatedMediaPath);
+}
+
 try {
   await page.goto(baseUrl, { waitUntil: "networkidle" });
   await page.getByRole("button", { name: "Version 4", exact: true }).click();
+  await page.getByRole("button", { name: "Progress button", exact: true }).click();
 
-  // Every V4 campaign card enters the Figma summary before channel review.
+  // Multi-channel V4 campaign cards enter the Figma summary before channel review.
   await openSaturdaySummary();
   assert.equal(await contextModal().count(), 0);
   assert.equal(await summary().getByRole("heading", {
@@ -192,16 +200,20 @@ try {
   assert.equal(await summaryRow("Google").locator("[data-status='suggested']").count(), 1);
   await summary().getByRole("button", { name: "Close summary" }).click();
 
-  // Post now creates a scoped card whose Summary includes only that channel.
+  // Post now creates a scoped card that skips Summary when only one channel remains.
   await openSaturdaySummary();
   await startCardReview();
   await postCurrentNow();
   await contextModal().getByRole("button", { name: "Close", exact: true }).click();
   await campaignCard("Friday, Nov 6").click();
-  await summary().waitFor();
-  assert.equal(await summaryRows().count(), 1);
-  assert.equal(await summaryRow("Google").locator("[data-status='sent']").count(), 1);
-  await summary().getByRole("button", { name: "Close summary" }).click();
+  await contextModal().waitFor();
+  assert.equal(await summary().count(), 0);
+  assert.equal(
+    await contextModal().locator(".channel-progress-stepper--modal-v4").getByRole("button").count(),
+    1,
+  );
+  await contextModal().getByText("Sent", { exact: true }).waitFor();
+  await contextModal().getByRole("button", { name: "Close", exact: true }).click();
 
   // Demo overrides persist into Summary, while deleted channels disappear.
   await resetV4();
@@ -254,10 +266,19 @@ try {
     await summary().getByText("Schedule date: Nov 7th, 2026 9:00am", { exact: true }).count(),
     1,
   );
+  const generatedSummaryArtwork = summary().locator(".v4-summary-artwork");
+  await assertGeneratedImage(generatedSummaryArtwork);
+  assert.equal(await summary().locator(`img[src="${generatedMediaPath}"]`).count(), 1);
+  assert.deepEqual(
+    await generatedSummaryArtwork.evaluate((image) => {
+      const bounds = image.getBoundingClientRect();
+      return [Math.round(bounds.width), Math.round(bounds.height)];
+    }),
+    [430, 577],
+  );
   assert.equal(await summary().locator(".v4-summary-collage").count(), 0);
-  assert.equal(await summary().locator(".v4-summary-artwork").count(), 0);
   assert.equal(await summary().locator(".v4-summary-image-placeholder").count(), 0);
-  assert.equal(await summary().locator(".v4-summary-body--text-only").count(), 1);
+  assert.equal(await summary().locator(".v4-summary-body--text-only").count(), 0);
   assert.equal(await summary().getByRole("button", { name: /close/i }).count(), 0);
   assert.equal(
     await page.locator(".v4-generated-flow-shell").getByLabel("Edit marketing content prompt").inputValue(),
@@ -282,17 +303,20 @@ try {
     await generatedReview.getByText(/Christmas Special: Save 15% on Winter Landscaping Services/).count(),
     1,
   );
+  await assertGeneratedImage(generatedReview.locator(".post-image"));
   const generatedStepper = generatedReview.locator(".channel-progress-stepper--modal-v4");
   await generatedStepper.getByRole("button", { name: /^Facebook,/ }).click();
   assert.equal(
     await generatedReview.getByText(/Christmas Special: Save 15% on Winter Landscaping Services/).count(),
     1,
   );
+  await assertGeneratedImage(generatedReview.locator(".channel-image-grid img"));
   await generatedStepper.getByRole("button", { name: /^Instagram,/ }).click();
   assert.equal(
     await generatedReview.getByText(/Christmas Special: Save 15% on Winter Landscaping Services/).count(),
     1,
   );
+  await assertGeneratedImage(generatedReview.locator(".instagram-post-image"));
   await generatedStepper.getByRole("button", { name: /^Email,/ }).click();
   assert.equal(
     await generatedReview.getByText(/Subject: Save 15% on your next landscaping project/).count(),
@@ -302,6 +326,7 @@ try {
     await generatedReview.getByText(/reserve your spot before our schedule fills up/).count(),
     1,
   );
+  await assertGeneratedImage(generatedReview.locator(".email-hero"));
   await generatedStepper.getByRole("button", { name: /^Google,/ }).click();
   assert.equal(await generatedReview.getByRole("button", { name: "Close", exact: true }).count(), 0);
   assert.equal(await page.locator(".prototype-status-controls").count(), 0);

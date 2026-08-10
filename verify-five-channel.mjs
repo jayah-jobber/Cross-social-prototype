@@ -13,6 +13,7 @@ const channels = [
   { id: "email", review: "Review Email Campaign", editor: "Edit Email Campaign" },
   { id: "website", review: "Review Website Page", editor: "Edit Website Page" },
 ];
+const generatedChannels = channels.filter(({ id }) => id !== "website");
 
 const generatedReview = () => page.locator(".v4-generated-review");
 const generatedStepper = () => generatedReview().locator(".channel-progress-stepper--modal-v4");
@@ -37,7 +38,8 @@ async function assertSidebarFree() {
 async function editFields(channel, marker) {
   if (channel === "google") {
     await page.locator("#v2-message-google").fill(marker);
-    await page.getByLabel("Button URL").fill(`https://example.com/${marker}`);
+    const buttonUrl = page.getByLabel("Button URL");
+    if (await buttonUrl.count()) await buttonUrl.fill(`https://example.com/${marker}`);
   } else if (channel === "facebook" || channel === "instagram") {
     await page.locator("#v4-social-message").fill(`${marker}-body`);
     await page.locator("#v4-social-cta").fill(`${marker}-cta-line-1\n${marker}-cta-line-2`);
@@ -85,8 +87,11 @@ async function assertInitialSocialFields(channel) {
   assert.equal(body.includes("416-624-3188"), false);
   assert.equal(body.includes("mycompany@gmail.com"), false);
   assert.equal(body.includes("#HamiltonLandscaping"), false);
-  assert.equal(cta, "📞 416-624-3188\n💬 mycompany@gmail.com");
-  assert.equal(hashtags, "#HamiltonLandscaping #OutdoorLiving #HomeUpgrade");
+  assert.equal(cta, "");
+  assert.equal(
+    hashtags,
+    "#ChristmasSpecial #WinterLandscaping #LandscapeMaintenance #HolidaySavings",
+  );
 
   const editorFieldIds = await page.locator(
     ".v4-social-editor .field-block textarea, .v4-social-editor .field-block input",
@@ -108,8 +113,12 @@ async function assertInitialSocialFields(channel) {
     channel === "facebook" ? ".channel-post-copy" : ".instagram-post-copy",
   );
   const previewText = await previewCopy.textContent();
-  assert.ok(previewText.indexOf(body) < previewText.indexOf(cta));
-  assert.ok(previewText.indexOf(cta) < previewText.indexOf(hashtags));
+  if (cta) {
+    assert.ok(previewText.indexOf(body) < previewText.indexOf(cta));
+    assert.ok(previewText.indexOf(cta) < previewText.indexOf(hashtags));
+  } else {
+    assert.ok(previewText.indexOf(body) < previewText.indexOf(hashtags));
+  }
 
   if (channel === "instagram") {
     assert.deepEqual(
@@ -197,8 +206,10 @@ async function verifyChannel(channel, index) {
   if (channel.id === "google") {
     const preview = page.locator(".v4-facebook-preview");
     const learnMoreLink = preview.getByRole("link", { name: "Learn More" });
-    assert.equal(await learnMoreLink.getAttribute("href"), `https://example.com/${saveMarker}`);
-    assert.equal((await preview.textContent()).includes(`https://example.com/${saveMarker}`), false);
+    if (await learnMoreLink.count()) {
+      assert.equal(await learnMoreLink.getAttribute("href"), `https://example.com/${saveMarker}`);
+      assert.equal((await preview.textContent()).includes(`https://example.com/${saveMarker}`), false);
+    }
   }
 
   await reviewBack().click();
@@ -217,8 +228,8 @@ async function verifyChannel(channel, index) {
     await generatedStepper().getByRole("button", { name: /^Instagram,/ }).click();
   }
 
-  if (index < channels.length - 1) {
-    const next = channels[index + 1];
+  if (index < generatedChannels.length - 1) {
+    const next = generatedChannels[index + 1];
     await generatedStepper().getByRole("button", {
       name: new RegExp(`^${next.id[0].toUpperCase() + next.id.slice(1)},`),
     }).click();
@@ -229,12 +240,13 @@ try {
   await page.goto(baseUrl, { waitUntil: "networkidle" });
   const versionFourButton = page.getByRole("button", { name: "Version 4" });
   if (await versionFourButton.count()) await versionFourButton.click();
+  await page.getByRole("button", { name: "Progress button", exact: true }).click();
   await page.getByLabel("Add to your marketing calendar").fill("Five channel QA prompt");
   await page.getByRole("button", { name: "Generate suggested marketing content" }).click();
   await page.locator(".v4-summary-modal").getByRole("button", { name: "Review Drafts" }).click();
   await expectHeading("Suggested Marketing Content");
 
-  for (const [index, channel] of channels.entries()) {
+  for (const [index, channel] of generatedChannels.entries()) {
     await verifyChannel(channel, index);
   }
 
