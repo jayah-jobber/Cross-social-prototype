@@ -177,7 +177,9 @@ try {
     .getByRole("link", { name: "Learn More", exact: true }).waitFor();
   await page.getByRole("button", { name: "Close", exact: true }).click();
 
-  await page.locator(".target-card:not(.combined-target-card)").click();
+  await page.locator(
+    ".target-card:not(.combined-target-card):not(.generated-delivery-card)",
+  ).click();
   await page.locator(".calendar-modal-preview")
     .getByRole("link", { name: "Learn More", exact: true }).waitFor();
   await page.locator(".calendar-modal-actions").getByRole("button", { name: "Edit" }).click();

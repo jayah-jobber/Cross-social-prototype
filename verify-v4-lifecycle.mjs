@@ -186,19 +186,20 @@ try {
   );
   await scheduleDialog.getByRole("button", { name: "Close Schedule Date" }).click();
   await reviewFooter().getByRole("button", { name: "Schedule Google post", exact: true }).click();
-  await page.getByText("Your post is scheduled", { exact: true }).waitFor();
+  await page.getByText(
+    "Your Google post has been successfully scheduled.",
+    { exact: true },
+  ).waitFor();
   await page.getByRole("heading", { name: "Review Facebook Post" }).waitFor();
   await reviewFooter().getByRole("button", { name: "Back" }).click();
-  await expectProgress("1 of 4");
+  await expectProgress("2 of 5");
   await modal().getByRole("button", { name: "Close", exact: true }).click();
   assert.deepEqual(await cardChannels("Thursday, Nov 5"), ["GGoogle post"]);
   assert.equal((await cardChannels("Saturday, Nov 7")).length, 4);
 
-  // Rescheduling an already-delivered direct card stays in review and regroups immediately.
-  await campaignCard("Thursday, Nov 5").click();
-  await modal().waitFor();
-  assert.equal(await page.locator(".v4-summary-modal").count(), 0);
-  await expectProgress("1 of 1");
+  // Rescheduling from a one-channel split card still uses campaign-wide review.
+  await openCampaignReview("Thursday, Nov 5");
+  await expectProgress("1 of 5");
   assert.equal(
     await modal().locator(".v4-context-facts").getByRole("button", { name: "Edit" }).count(),
     0,
@@ -217,12 +218,12 @@ try {
   assert.equal(await campaignCard("Thursday, Nov 5").count(), 0);
   assert.equal((await cardChannels("Saturday, Nov 7")).length, 5);
 
-  // Contextual Post now moves Instagram to Nov 6 and keeps the remaining scope coherent.
+  // Contextual Post now moves Instagram to Nov 6 without pruning campaign scope.
   await openSaturday();
   await selectModalChannel("Instagram");
   await postCurrentNow();
   await page.getByText("Your Instagram post has been successfully posted.", { exact: true }).waitFor();
-  await expectProgress("3 of 4");
+  await expectProgress("4 of 5");
   await modal().getByRole("button", { name: "Close", exact: true }).click();
   assert.deepEqual(await cardChannels("Friday, Nov 6"), ["◎Instagram post"]);
   assert.match(
@@ -232,15 +233,23 @@ try {
   assert.equal(await campaignCard("Friday, Nov 6").locator(".status-sent").count(), 1);
   assert.equal((await cardChannels("Saturday, Nov 7")).length, 4);
 
-  // Single-channel date cards skip Summary and open scoped context directly.
+  // Single-channel date cards open Summary and retain full campaign scope.
   await campaignCard("Friday, Nov 6").click();
+  await page.locator(".v4-summary-modal").waitFor();
+  assert.equal(
+    await page.locator(".v4-summary-modal .v4-summary-status-list > li").count(),
+    5,
+  );
+  await page.locator(".v4-summary-modal")
+    .getByRole("button", { name: "Review Drafts", exact: true })
+    .click();
   await modal().waitFor();
-  assert.equal(await page.locator(".v4-summary-modal").count(), 0);
-  await expectProgress("1 of 1");
+  await expectProgress("1 of 5");
+  await selectModalChannel("Instagram");
   await modal().getByText("Sent", { exact: true }).waitFor();
   await modal().getByRole("button", { name: "Close", exact: true }).click();
   await openCampaignReview("Saturday, Nov 7");
-  await expectProgress("1 of 4");
+  await expectProgress("1 of 5");
 
   // Multiple Post now actions aggregate on one Nov 6 Sent card.
   await selectModalChannel("Facebook");
@@ -280,7 +289,10 @@ try {
   await selectVersionFour();
   await openSaturday();
   await modalFooter().getByRole("button", { name: "Schedule Google post", exact: true }).click();
-  await page.getByText("Your post is scheduled", { exact: true }).waitFor();
+  await page.getByText(
+    "Your Google post has been successfully scheduled.",
+    { exact: true },
+  ).waitFor();
   await expectProgress("2 of 5");
   await selectModalChannel("Google");
   await modalFooter().getByRole("button", { name: "Show scheduled post options" }).click();
@@ -315,10 +327,13 @@ try {
     1,
   );
   await reviewFooter().getByRole("button", { name: "Schedule Facebook post", exact: true }).click();
-  await page.getByText("Your post is scheduled", { exact: true }).waitFor();
+  await page.getByText(
+    "Your Facebook post has been successfully scheduled.",
+    { exact: true },
+  ).waitFor();
   await page.getByRole("heading", { name: "Review Instagram Post" }).waitFor();
-  assert.equal(await reviewStepper.getByRole("button", { name: /^Facebook,/ }).count(), 0);
-  assert.equal(await reviewStepper.getByRole("button").count(), 4);
+  assert.equal(await reviewStepper.getByRole("button", { name: "Facebook, scheduled" }).count(), 1);
+  assert.equal(await reviewStepper.getByRole("button").count(), 5);
   await reviewFooter().getByRole("button", { name: "Back" }).click();
   await modal().getByRole("button", { name: "Close", exact: true }).click();
   assert.equal(await campaignCard("Sunday, Nov 8").locator(".status-scheduled").count(), 1);
@@ -331,12 +346,12 @@ try {
   await page.getByRole("menuitem", { name: "Post now", exact: true }).click();
   await page.getByRole("heading", { name: "Review Instagram Post" }).waitFor();
   assert.equal(
-    await reviewStepper.getByRole("button", { name: /^Facebook,/ }).count(),
-    0,
+    await reviewStepper.getByRole("button", { name: "Facebook, sent" }).count(),
+    1,
   );
-  assert.equal(await reviewStepper.getByRole("button").count(), 4);
+  assert.equal(await reviewStepper.getByRole("button").count(), 5);
   await reviewFooter().getByRole("button", { name: "Back" }).click();
-  await expectProgress("2 of 4");
+  await expectProgress("3 of 5");
   await page.getByText("Your Facebook post has been successfully posted.", { exact: true }).waitFor();
   await modal().getByRole("button", { name: "Close", exact: true }).click();
   assert.deepEqual(await cardChannels("Friday, Nov 6"), ["fFacebook post"]);
@@ -382,7 +397,7 @@ try {
   assert.equal(await reviewStepper.getByRole("button", { name: /^Instagram,/ }).count(), 0);
   assert.equal(await page.getByText("Your post is rescheduled", { exact: true }).count(), 0);
 
-  // A delivered direct-card reschedule also stays in review before Back.
+  // A delivered split-card reschedule also stays in campaign-wide review before Back.
   await selectVersionFour();
   await openSaturday();
   assert.equal(
@@ -398,7 +413,7 @@ try {
   await page.getByRole("heading", { name: "Review Facebook Post" }).waitFor();
   await reviewFooter().getByRole("button", { name: "Back" }).click();
   await modal().getByRole("button", { name: "Close", exact: true }).click();
-  await campaignCard("Thursday, Nov 5").click();
+  await openCampaignReview("Thursday, Nov 5");
   await modalFooter().getByRole("button", { name: "Edit", exact: true }).click();
   await reviewSchedule.getByRole("button", { name: "Edit" }).click();
   await scheduleDialog.getByLabel("Schedule date for Google").fill("2026-11-04");
@@ -423,7 +438,7 @@ try {
   await openSaturday();
   await expectProgress("1 of 5");
 
-  console.log("Verified V4 dynamic dates, scoped cards, lifecycle moves, review parity, deletion, and reset.");
+  console.log("Verified V4 dynamic dates, linked split cards, lifecycle moves, review parity, deletion, and reset.");
 } finally {
   await browser.close();
 }

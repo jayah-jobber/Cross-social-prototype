@@ -263,10 +263,18 @@ try {
   await page.getByRole("heading", { name: "Review Google Post" }).waitFor();
   await reviewFooter().getByRole("button", { name: "Schedule Google post", exact: true }).click();
   await page.getByRole("heading", { name: "Review Facebook Post" }).waitFor();
-  await page.getByText("Your post is scheduled", { exact: true }).waitFor();
+  await page.getByText(
+    "Your Google post has been successfully scheduled.",
+    { exact: true },
+  ).waitFor();
   const scheduledGoogle = review().getByRole("button", { name: "Google, scheduled" });
   assert.equal(await scheduledGoogle.getAttribute("class"), "completed");
-  await page.waitForTimeout(200);
+  await page.waitForFunction(() => {
+    const button = document.querySelector(
+      '.v4-channel-review [aria-label="Google, scheduled"]',
+    );
+    return button && getComputedStyle(button).borderTopColor === "rgb(56, 133, 35)";
+  });
   assert.equal(
     await scheduledGoogle.evaluate((button) => getComputedStyle(button).borderTopColor),
     "rgb(56, 133, 35)",
@@ -280,7 +288,7 @@ try {
   assert.equal(await scheduledGoogle.getAttribute("aria-current"), "step");
   await review().getByRole("button", { name: "Facebook, unscheduled" }).click();
 
-  // V4 alternate Post now also advances directly and retains sent completion.
+  // V4 alternate Post now advances without removing campaign membership.
   await openPublishingMenu();
   await page.getByRole("menuitem", { name: "Post now", exact: true }).click();
   await page.getByRole("heading", { name: "Review Instagram Post" }).waitFor();
@@ -288,9 +296,12 @@ try {
     "Your Facebook post has been successfully posted.",
     { exact: true },
   ).waitFor();
+  assert.equal(await review().getByRole("button", { name: "Facebook, sent" }).count(), 1);
+  assert.equal(await review().locator(".channel-progress-stepper--review").getByRole("button").count(), 5);
   assert.equal(
-    await review().getByRole("button", { name: "Facebook, sent" }).getAttribute("class"),
-    "completed",
+    await review().getByRole("button", { name: "Instagram, unscheduled" })
+      .getAttribute("aria-current"),
+    "step",
   );
 
   // Deleted channels disappear and are skipped by V4 review progression.
@@ -316,7 +327,10 @@ try {
   await reviewFooter().getByRole("button", { name: "Publish Website page", exact: true }).click();
   await page.getByRole("heading", { name: "Marketing Plan" }).waitFor();
   assert.equal(await review().count(), 0);
-  await page.getByText("Your post is scheduled", { exact: true }).waitFor();
+  await page.getByText(
+    "Your website page has been successfully scheduled.",
+    { exact: true },
+  ).waitFor();
 
   // V5 retains its review-to-context-modal behavior.
   modal = await openCampaign("Version 5");

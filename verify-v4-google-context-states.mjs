@@ -10,6 +10,8 @@ const footer = () => modal().locator(".v4-context-footer");
 const controls = () => page.getByRole("group", {
   name: "Google contextual modal demo status",
 });
+const generatedFlow = () => page.locator(".v4-generated-flow-shell");
+const generatedReview = () => generatedFlow().locator(".v4-generated-review");
 const saturdayCard = () => page.locator(".calendar-day").filter({
   has: page.getByRole("heading", { name: "Saturday, Nov 7", exact: true }),
 }).locator(".combined-target-card");
@@ -24,6 +26,35 @@ async function expectFacts(dateLabel) {
   const facts = modal().locator(".v4-context-facts");
   await facts.getByText(dateLabel, { exact: true }).waitFor();
   await facts.getByText("Post to", { exact: true }).waitFor();
+}
+
+async function expectSentGoogleActionsRightAligned() {
+  const actionFooter = footer();
+  await actionFooter.getByRole("button", { name: "View post", exact: true }).waitFor();
+  assert.equal(
+    await actionFooter.getByRole("button", { name: "Duplicate Campaign", exact: true }).count(),
+    0,
+  );
+  const alignment = await actionFooter.evaluate((node) => {
+    const button = node.querySelector(".v4-view-performance");
+    const actionGroup = button?.parentElement;
+    const footerBounds = node.getBoundingClientRect();
+    const buttonBounds = button?.getBoundingClientRect();
+    return {
+      sentClass: node.classList.contains("v4-context-footer--sent-google"),
+      actionGroupIsLast: actionGroup === node.lastElementChild,
+      rightGap: buttonBounds ? Math.abs(footerBounds.right - buttonBounds.right) : Infinity,
+      leftGap: buttonBounds ? buttonBounds.left - footerBounds.left : 0,
+      actionGroupMarginLeft: actionGroup
+        ? Number.parseFloat(getComputedStyle(actionGroup).marginLeft)
+        : 0,
+    };
+  });
+  assert.equal(alignment.sentClass, true);
+  assert.equal(alignment.actionGroupIsLast, true);
+  assert.ok(alignment.rightGap <= 1, `View post right gap was ${alignment.rightGap}px`);
+  assert.ok(alignment.leftGap > alignment.rightGap);
+  assert.ok(alignment.actionGroupMarginLeft > 0);
 }
 
 async function selectState(label) {
@@ -81,8 +112,7 @@ try {
   await selectState("Sent");
   await modal().getByText("Sent", { exact: true }).waitFor();
   await expectFacts("Schedule date");
-  await footer().getByRole("button", { name: "Duplicate Campaign", exact: true }).waitFor();
-  await footer().getByRole("button", { name: "View Performance", exact: true }).waitFor();
+  await expectSentGoogleActionsRightAligned();
   assert.equal(await footer().getByRole("button", { name: /Delete|Edit/ }).count(), 0);
 
   await selectState("Missed");
@@ -94,7 +124,7 @@ try {
   await footer().getByRole("button", { name: "Send Now", exact: true }).waitFor();
 
   await selectState("Error");
-  await modal().getByText("Failed", { exact: true }).waitFor();
+  await modal().getByText("Error", { exact: true }).waitFor();
   await expectFacts("Original schedule date");
   await modal().getByRole("alert").getByText(
     "Posting failed due to a connection issue.",
@@ -121,7 +151,7 @@ try {
   assert.equal(await controls().count(), 0, "Controls must hide while the modal is closed");
   assert.equal(await saturdayCard().locator(".status-error").count(), 1);
   await openSaturdayReview();
-  await modal().getByText("Failed", { exact: true }).waitFor();
+  await modal().getByText("Error", { exact: true }).waitFor();
 
   await page.getByRole("button", { name: "Version 1" }).click();
   await page.getByRole("button", { name: "Version 4" }).click();
@@ -133,8 +163,39 @@ try {
   );
   assert.equal(await modal().locator(".v4-context-status").count(), 0);
   assert.equal(await saturdayCard().locator(".channel-status-dot").count(), 0);
+  await modal().getByRole("button", { name: "Close", exact: true }).click();
 
-  console.log("Verified all five Google contextual demo states, persistence, visibility, and reset.");
+  // The generated content preview/review uses the same Sent Google action set.
+  await page.getByLabel("Add to your marketing calendar").fill("Sent Google action QA");
+  await page.getByRole("button", { name: "Generate suggested marketing content" }).click();
+  const generatedSummary = generatedFlow().locator(".v4-summary-modal--generated");
+  await generatedSummary.waitFor({ timeout: 8000 });
+  await generatedSummary.getByRole("button", { name: "Review Drafts", exact: true }).click();
+  await generatedReview().waitFor();
+  const glimmer = generatedReview().locator(".v4-preview-glimmer");
+  if (await glimmer.count()) await glimmer.waitFor({ state: "detached", timeout: 4500 });
+  const generatedFooter = generatedReview().locator(".v4-context-footer");
+  await generatedFooter.getByRole("button", { name: "Show publishing options" }).click();
+  await generatedReview().getByRole("menuitem", {
+    name: "Post now and view next",
+    exact: true,
+  }).click();
+  await generatedFlow().getByRole("button", {
+    name: "Close suggested marketing content",
+    exact: true,
+  }).click();
+  const sentGoogleCard = page.locator(".calendar-day").filter({
+    has: page.getByRole("heading", { name: "Friday, Nov 6", exact: true }),
+  }).locator(".generated-delivery-card");
+  await sentGoogleCard.click();
+  await page.locator(".v4-summary-modal--calendar")
+    .getByRole("button", { name: "Review Drafts", exact: true })
+    .click();
+  await expectSentGoogleActionsRightAligned();
+
+  console.log(
+    "Verified all five Google contextual states and right-aligned V4 Sent Google actions in contextual and generated review surfaces.",
+  );
 } finally {
   await browser.close();
 }

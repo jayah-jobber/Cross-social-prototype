@@ -20,7 +20,8 @@ const statusControls = () => page.getByRole("group", {
 });
 const revisedSummaryCopy = "Your recent Hamilton clean up and mulching project (Job ID xxx) is a great one to showcase on all your platforms. It talks about transforming a property with a seasonal clean up and fresh mulch, highlighting the visual impact and value of a well-maintained landscape.";
 const promotionSummaryCopy = "Promotional content is a great one to showcase on all your platforms. It talks about a limited-time opportunity for homeowners to save on landscaping services, creating urgency while encouraging potential customers to book before the promotion ends.";
-const generatedMediaPath = "/assets/v4-generated-promotion.png";
+const summaryArtworkPath = "/assets/v4-15-percent-promotion.png";
+const instagramImageRequirement = "Add at least 1 image before posting to Instagram";
 
 async function resetV4() {
   await page.getByRole("button", { name: "Version 1", exact: true }).click();
@@ -53,9 +54,15 @@ async function imageSources(scope) {
   ));
 }
 
-async function assertGeneratedImage(locator) {
+async function assertSummaryArtwork(locator) {
   assert.equal(await locator.count(), 1);
-  assert.equal(new URL(await locator.getAttribute("src"), baseUrl).pathname, generatedMediaPath);
+  assert.equal(new URL(await locator.getAttribute("src"), baseUrl).pathname, summaryArtworkPath);
+}
+
+async function waitForGeneratedPreviewReady(review) {
+  await review.locator(
+    ".v4-context-preview[aria-busy='false']:not(:has(.v4-preview-glimmer))",
+  ).waitFor({ timeout: 4500 });
 }
 
 try {
@@ -200,17 +207,19 @@ try {
   assert.equal(await summaryRow("Google").locator("[data-status='suggested']").count(), 1);
   await summary().getByRole("button", { name: "Close summary" }).click();
 
-  // Post now creates a scoped card that skips Summary when only one channel remains.
+  // A one-channel split card still opens the campaign-wide Summary and review.
   await openSaturdaySummary();
   await startCardReview();
   await postCurrentNow();
   await contextModal().getByRole("button", { name: "Close", exact: true }).click();
   await campaignCard("Friday, Nov 6").click();
-  await contextModal().waitFor();
-  assert.equal(await summary().count(), 0);
+  await summary().waitFor();
+  assert.equal(await summaryRows().count(), 5);
+  await summary().getByText("Schedule date: Various dates", { exact: true }).waitFor();
+  await startCardReview();
   assert.equal(
     await contextModal().locator(".channel-progress-stepper--modal-v4").getByRole("button").count(),
-    1,
+    5,
   );
   await contextModal().getByText("Sent", { exact: true }).waitFor();
   await contextModal().getByRole("button", { name: "Close", exact: true }).click();
@@ -267,8 +276,8 @@ try {
     1,
   );
   const generatedSummaryArtwork = summary().locator(".v4-summary-artwork");
-  await assertGeneratedImage(generatedSummaryArtwork);
-  assert.equal(await summary().locator(`img[src="${generatedMediaPath}"]`).count(), 1);
+  await assertSummaryArtwork(generatedSummaryArtwork);
+  assert.equal(await summary().locator(`img[src="${summaryArtworkPath}"]`).count(), 1);
   assert.deepEqual(
     await generatedSummaryArtwork.evaluate((image) => {
       const bounds = image.getBoundingClientRect();
@@ -289,6 +298,7 @@ try {
   const suggested = page.locator(".v4-generated-flow-shell");
   const generatedReview = suggested.locator(".v4-generated-review");
   await generatedReview.waitFor();
+  await waitForGeneratedPreviewReady(generatedReview);
   assert.equal(await generatedReview.getByRole("heading", {
     name: "15% promotion",
     exact: true,
@@ -303,21 +313,36 @@ try {
     await generatedReview.getByText(/Christmas Special: Save 15% on Winter Landscaping Services/).count(),
     1,
   );
-  await assertGeneratedImage(generatedReview.locator(".post-image"));
+  assert.equal(await generatedReview.locator(".post-image, .empty-post-image").count(), 0);
   const generatedStepper = generatedReview.locator(".channel-progress-stepper--modal-v4");
   await generatedStepper.getByRole("button", { name: /^Facebook,/ }).click();
+  await waitForGeneratedPreviewReady(generatedReview);
   assert.equal(
     await generatedReview.getByText(/Christmas Special: Save 15% on Winter Landscaping Services/).count(),
     1,
   );
-  await assertGeneratedImage(generatedReview.locator(".channel-image-grid img"));
+  assert.equal(await generatedReview.locator(".channel-image-grid").count(), 0);
   await generatedStepper.getByRole("button", { name: /^Instagram,/ }).click();
+  await waitForGeneratedPreviewReady(generatedReview);
   assert.equal(
     await generatedReview.getByText(/Christmas Special: Save 15% on Winter Landscaping Services/).count(),
     1,
   );
-  await assertGeneratedImage(generatedReview.locator(".instagram-post-image"));
+  assert.equal(await generatedReview.locator(".instagram-post-image, .empty-post-image").count(), 0);
+  await generatedReview.getByText(instagramImageRequirement, { exact: true }).waitFor();
+  assert.equal(
+    await generatedReview.getByRole("button", {
+      name: "Schedule Instagram post",
+      exact: true,
+    }).isDisabled(),
+    true,
+  );
+  assert.equal(
+    await generatedReview.getByRole("button", { name: "Show publishing options" }).isDisabled(),
+    true,
+  );
   await generatedStepper.getByRole("button", { name: /^Email,/ }).click();
+  await waitForGeneratedPreviewReady(generatedReview);
   assert.equal(
     await generatedReview.getByText(/Subject: Save 15% on your next landscaping project/).count(),
     1,
@@ -326,8 +351,9 @@ try {
     await generatedReview.getByText(/reserve your spot before our schedule fills up/).count(),
     1,
   );
-  await assertGeneratedImage(generatedReview.locator(".email-hero"));
+  assert.equal(await generatedReview.locator(".email-hero").count(), 0);
   await generatedStepper.getByRole("button", { name: /^Google,/ }).click();
+  await waitForGeneratedPreviewReady(generatedReview);
   assert.equal(await generatedReview.getByRole("button", { name: "Close", exact: true }).count(), 0);
   assert.equal(await page.locator(".prototype-status-controls").count(), 0);
   await generatedReview.locator(".v4-context-footer")

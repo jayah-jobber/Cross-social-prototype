@@ -98,10 +98,10 @@ const INITIAL_IMAGES: GalleryImage[] = [
   { id: "garden-one", src: "/assets/gallery-1.png", alt: "Ornamental grass" },
 ];
 
-const GENERATED_V4_IMAGE: GalleryImage = {
-  id: "generated-promotion",
-  src: "/assets/v4-generated-promotion.png",
-  alt: "Colorful digital marketing illustration",
+const GENERATED_V4_PROMOTION_ARTWORK: GalleryImage = {
+  id: "v4-15-percent-promotion",
+  src: "/assets/v4-15-percent-promotion.png",
+  alt: "Marketing channels surrounding the Jobber logo",
 };
 
 const GENERATED_V4_BODY = `🎄 Christmas Special: Save 15% on Winter Landscaping Services
@@ -204,12 +204,12 @@ const createInitialV4Drafts = (): V2Drafts => ({
 const createGeneratedV4Drafts = (): V2Drafts => ({
   all: {
     message: GENERATED_V4_GOOGLE_MESSAGE,
-    images: [GENERATED_V4_IMAGE],
+    images: [],
     hashtags: "",
   },
   google: {
     message: GENERATED_V4_GOOGLE_MESSAGE,
-    images: [GENERATED_V4_IMAGE],
+    images: [],
     hashtags: "",
     externalLink: INITIAL_EXTERNAL_LINK,
     googleButtonEnabled: true,
@@ -218,13 +218,13 @@ const createGeneratedV4Drafts = (): V2Drafts => ({
   },
   facebook: {
     message: GENERATED_V4_FACEBOOK_MESSAGE,
-    images: [GENERATED_V4_IMAGE],
+    images: [],
     cta: "",
     hashtags: GENERATED_V4_HASHTAGS,
   },
   instagram: {
     message: GENERATED_V4_INSTAGRAM_MESSAGE,
-    images: [GENERATED_V4_IMAGE],
+    images: [],
     cta: "",
     hashtags: GENERATED_V4_HASHTAGS,
   },
@@ -982,7 +982,7 @@ function MarketingCalendarCard({
     : item.status;
   const isPublished = (item.target && targetPublished)
     || (item.combinedTarget && (combinedPublished || item.status === "Sent"))
-    || Boolean(item.generatedDelivery);
+    || Boolean(item.generatedDelivery && item.status !== "Needs review");
   const statusKey = calendarCardStatusKey(item);
   const cardStatuses = item.channelStatuses
     ?? (statusKey ? channelStatuses?.[statusKey] : undefined);
@@ -1592,6 +1592,7 @@ const V4_INITIAL_TIME = "09:00";
 const V4_TIMEZONE = "America/Toronto" as const;
 const V4_WEEK_MIN = "2026-11-02";
 const V4_WEEK_MAX = "2026-11-08";
+const V4_PREVIEW_LOADING_MS = 3000;
 const GENERATED_V4_CHANNELS: ContextualChannel[] = [
   "google",
   "facebook",
@@ -1641,6 +1642,23 @@ function formatV4DeliveryTime(time: string) {
 
 function formatV4DeliveryDateTime(delivery: V4ChannelDelivery) {
   return `${formatV4DeliveryDate(delivery.date)} · ${formatV4DeliveryTime(delivery.time)}`;
+}
+
+function v4CampaignScheduleText(
+  channels: ContextualChannel[],
+  deliveries: V4ChannelDeliveries,
+) {
+  const effectiveDateTimes = new Set(
+    channels.map((channel) => {
+      const delivery = deliveries[channel];
+      return `${delivery.date}T${delivery.time}`;
+    }),
+  );
+  if (effectiveDateTimes.size > 1) return "Various dates";
+  const firstDelivery = deliveries[channels[0]];
+  return firstDelivery
+    ? formatV4DeliveryDateTime(firstDelivery).replace(" · ", " ")
+    : "";
 }
 
 function v4CalendarStatus(delivery: V4ChannelDelivery): CalendarChannelStatus | undefined {
@@ -1950,7 +1968,7 @@ const V4_SUMMARY_COPY = "Your recent Hamilton clean up and mulching project (Job
 const GENERATED_V4_CAMPAIGN_TITLE = "15% promotion";
 const GENERATED_V4_SUMMARY_COPY = "Promotional content is a great one to showcase on all your platforms. It talks about a limited-time opportunity for homeowners to save on landscaping services, creating urgency while encouraging potential customers to book before the promotion ends.";
 const GENERATED_V4_SCHEDULE_TEXT = "Nov 7th, 2026 9:00am";
-const INSTAGRAM_IMAGE_REQUIRED_MESSAGE = "Add at least 1 image before posting or scheduling to Instagram";
+const INSTAGRAM_IMAGE_REQUIRED_MESSAGE = "Add at least 1 image before posting to Instagram";
 
 const V4_SUMMARY_STATUS_PRESENTATION: Record<
   VersionFourSummaryStatus,
@@ -1965,6 +1983,22 @@ const V4_SUMMARY_STATUS_PRESENTATION: Record<
 
 function versionFourSummaryStatus(status: ChannelProgressStatus): VersionFourSummaryStatus {
   return status === "unscheduled" ? "suggested" : status;
+}
+
+function VersionFourContentStatusBadge({ status }: { status: ChannelProgressStatus }) {
+  const normalizedStatus = versionFourSummaryStatus(status);
+  const presentation = V4_SUMMARY_STATUS_PRESENTATION[normalizedStatus];
+
+  return (
+    <span
+      className={`v4-summary-status v4-summary-status--${presentation.tone} v4-content-status`}
+      data-status={normalizedStatus}
+      aria-label={`Content status: ${presentation.label}`}
+    >
+      <span className="v4-status-dot" aria-hidden="true" />
+      {presentation.label}
+    </span>
+  );
 }
 
 function contextualProgressStatus(
@@ -2111,20 +2145,13 @@ function VersionFourSummaryModal({
             <ul className="v4-summary-status-list" aria-label="Channel statuses">
               {orderedChannels.map(({ id, label }) => {
                 const status = versionFourSummaryStatus(statuses[id] ?? "suggested");
-                const presentation = V4_SUMMARY_STATUS_PRESENTATION[status];
                 return (
                   <li key={id} data-channel={id}>
                     <span className="v4-summary-channel">
                       <StepperChannelIcon channel={id} iconStyle={iconStyle} />
                       <span>{label}</span>
                     </span>
-                    <span
-                      className={`v4-summary-status v4-summary-status--${presentation.tone}`}
-                      data-status={status}
-                    >
-                      <span aria-hidden="true" />
-                      {presentation.label}
-                    </span>
+                    <VersionFourContentStatusBadge status={status} />
                   </li>
                 );
               })}
@@ -3195,6 +3222,9 @@ function VersionFourContextModal({
   embedded = false,
   enforceInstagramImageRequirement = false,
   scopeDate,
+  previewLoadingDuration = 0,
+  loadedPreviewChannels = [],
+  onPreviewLoaded,
   onComplete,
 }: {
   drafts: V2Drafts;
@@ -3222,31 +3252,35 @@ function VersionFourContextModal({
   embedded?: boolean;
   enforceInstagramImageRequirement?: boolean;
   scopeDate?: string;
-  onComplete?: () => void;
+  previewLoadingDuration?: number;
+  loadedPreviewChannels?: ContextualChannel[];
+  onPreviewLoaded?: (channel: ContextualChannel) => void;
+  onComplete?: (deliveries?: V4ChannelDeliveries) => void;
 }) {
+  const channels = channelDefinitions.filter(({ id }) => availableChannels.includes(id));
+  const initialChannel = channels[Math.min(initialIndex, channels.length - 1)]?.id;
+  const shouldLoadPreview = (channel: ContextualChannel | undefined) => (
+    previewLoadingDuration > 0
+    && channel !== undefined
+    && !loadedPreviewChannels.includes(channel)
+  );
   const [activeIndex, setActiveIndex] = useState(initialIndex);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [splitMenuOpen, setSplitMenuOpen] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(() => shouldLoadPreview(initialChannel));
   const splitMenuRef = useRef<HTMLDivElement>(null);
   const splitToggleRef = useRef<HTMLButtonElement>(null);
   const splitOptionRef = useRef<HTMLButtonElement>(null);
-  const channels = channelDefinitions.filter(({ id }) => availableChannels.includes(id));
+  const onPreviewLoadedRef = useRef(onPreviewLoaded);
   const safeIndex = Math.min(activeIndex, channels.length - 1);
   const active = channels[safeIndex];
+  const activePreviewLoaded = loadedPreviewChannels.includes(active.id);
   const activeDelivery = channelDeliveries[active.id];
   const activeState = activeDelivery.lifecycle;
   const instagramPublishingBlocked = enforceInstagramImageRequirement
     && active.id === "instagram"
     && drafts.instagram.images.length === 0;
   const isGoogleDemo = active.id === "google";
-  const googleStatus = isGoogleDemo && googleDemoState !== "suggested"
-    ? {
-        scheduled: { label: "Scheduled", tone: "scheduled" },
-        sent: { label: "Sent", tone: "sent" },
-        missed: { label: "Missed", tone: "missed" },
-        error: { label: "Failed", tone: "failed" },
-      }[googleDemoState]
-    : null;
   const presentationState = isGoogleDemo
     ? googleDemoState
     : activeState;
@@ -3261,41 +3295,52 @@ function VersionFourContextModal({
     id,
     contextualProgressStatus(id, channelDeliveries, googleDemoState),
   ])) as Partial<Record<ContextualChannel, ChannelProgressStatus>>;
+  const showChannel = (index: number) => {
+    const nextIndex = Math.max(0, Math.min(channels.length - 1, index));
+    setPreviewLoading(shouldLoadPreview(channels[nextIndex]?.id));
+    setActiveIndex(nextIndex);
+  };
   const selectChannel = (channel: ContextualChannel) => {
+    if (previewLoading) return;
     setSplitMenuOpen(false);
-    setActiveIndex(channels.findIndex(({ id }) => id === channel));
+    showChannel(channels.findIndex(({ id }) => id === channel));
   };
   const goPrevious = () => {
+    if (previewLoading) return;
     setSplitMenuOpen(false);
-    setActiveIndex((current) => Math.max(0, current - 1));
+    showChannel(safeIndex - 1);
   };
   const goNext = () => {
+    if (previewLoading) return;
     setSplitMenuOpen(false);
-    setActiveIndex((current) => Math.min(channels.length - 1, current + 1));
+    showChannel(safeIndex + 1);
   };
   const scheduleCurrent = () => {
-    if (instagramPublishingBlocked) return;
+    if (previewLoading || instagramPublishingBlocked) return;
     setSplitMenuOpen(false);
-    if (onLifecycleAction(active.id, "schedule", true) === false) return;
+    const nextDeliveries = onLifecycleAction(active.id, "schedule", true);
+    if (nextDeliveries === false) return;
     if (embedded) {
       const movedOutOfScope = Boolean(scopeDate && activeDelivery.date !== scopeDate);
-      if (movedOutOfScope && safeIndex < channels.length - 1) setActiveIndex(safeIndex);
-      else if (!movedOutOfScope && safeIndex < channels.length - 1) setActiveIndex(safeIndex + 1);
-      else onComplete?.();
+      if (movedOutOfScope && safeIndex < channels.length - 1) showChannel(safeIndex);
+      else if (!movedOutOfScope && safeIndex < channels.length - 1) showChannel(safeIndex + 1);
+      else onComplete?.(nextDeliveries as V4ChannelDeliveries);
     }
   };
   const sendCurrentNow = () => {
-    if (instagramPublishingBlocked) return;
+    if (previewLoading || instagramPublishingBlocked) return;
     setSplitMenuOpen(false);
-    if (onLifecycleAction(active.id, "send", true) === false) return;
+    const nextDeliveries = onLifecycleAction(active.id, "send", true);
+    if (nextDeliveries === false) return;
     if (embedded) {
       const movedOutOfScope = Boolean(scopeDate && V4_TODAY_DATE !== scopeDate);
-      if (movedOutOfScope && safeIndex < channels.length - 1) setActiveIndex(safeIndex);
-      else if (!movedOutOfScope && safeIndex < channels.length - 1) setActiveIndex(safeIndex + 1);
-      else onComplete?.();
+      if (movedOutOfScope && safeIndex < channels.length - 1) showChannel(safeIndex);
+      else if (!movedOutOfScope && safeIndex < channels.length - 1) showChannel(safeIndex + 1);
+      else onComplete?.(nextDeliveries as V4ChannelDeliveries);
     }
   };
   const editCurrent = () => {
+    if (previewLoading) return;
     setSplitMenuOpen(false);
     onEdit(active.id);
   };
@@ -3307,6 +3352,23 @@ function VersionFourContextModal({
     onActiveChannelChange(active.id);
     return () => onActiveChannelChange(null);
   }, [active.id, onActiveChannelChange]);
+
+  useEffect(() => {
+    onPreviewLoadedRef.current = onPreviewLoaded;
+  }, [onPreviewLoaded]);
+
+  useEffect(() => {
+    if (previewLoadingDuration <= 0 || activePreviewLoaded) {
+      setPreviewLoading(false);
+      return;
+    }
+    setPreviewLoading(true);
+    const timeout = window.setTimeout(() => {
+      setPreviewLoading(false);
+      onPreviewLoadedRef.current?.(active.id);
+    }, previewLoadingDuration);
+    return () => window.clearTimeout(timeout);
+  }, [active.id, activePreviewLoaded, previewLoadingDuration]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -3321,6 +3383,7 @@ function VersionFourContextModal({
         splitToggleRef.current?.focus();
         return;
       }
+      if (previewLoading) return;
       if (event.key === "Escape" && !embedded) onClose();
       if (deleteDialogOpen) return;
       if (event.key === "ArrowLeft") goPrevious();
@@ -3328,7 +3391,7 @@ function VersionFourContextModal({
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [deleteDialogOpen, embedded, onClose, splitMenuOpen]);
+  }, [deleteDialogOpen, embedded, onClose, previewLoading, splitMenuOpen]);
 
   useEffect(() => {
     if (!splitMenuOpen) return;
@@ -3342,7 +3405,7 @@ function VersionFourContextModal({
 
   const modal = (
     <section
-      className={`v4-context-modal v4-five-channel-modal${embedded ? " v4-generated-review" : ""}${deleteDialogOpen ? " delete-dialog-open" : ""}`}
+      className={`v4-context-modal v4-five-channel-modal${embedded ? " v4-generated-review" : ""}${deleteDialogOpen ? " delete-dialog-open" : ""}${previewLoading ? " preview-loading" : ""}`}
       {...(!embedded
         ? {
             role: "dialog",
@@ -3353,7 +3416,7 @@ function VersionFourContextModal({
     >
         <header
           className={`context-progress-header v4-context-navigation v4-navigation--${navigationStyle}`}
-          inert={deleteDialogOpen ? true : undefined}
+          inert={deleteDialogOpen || previewLoading ? true : undefined}
         >
           {navigationStyle === "arrows" ? (
             <V4ArrowNavigator
@@ -3389,35 +3452,19 @@ function VersionFourContextModal({
         <div className="v4-context-body" inert={deleteDialogOpen ? true : undefined}>
           <section className="v4-context-details">
             <div>
-              <h1 id="v4-context-title">
-                {campaignTitle ?? (embedded
-                  ? GENERATED_V4_CAMPAIGN_TITLE
-                  : "Seasonal property clean up in Hamilton")}
-              </h1>
+              <div className="v4-content-title-row">
+                <h1 id="v4-context-title">
+                  {campaignTitle ?? (embedded
+                    ? GENERATED_V4_CAMPAIGN_TITLE
+                    : "Seasonal property clean up in Hamilton")}
+                </h1>
+              </div>
               <section className="v4-about-copy">
-                <div className="v4-about-heading">
+                <div className="v4-about-heading v4-status-heading-row">
                   <h2>{active.about}</h2>
-                  {isGoogleDemo ? googleStatus && (
-                    <span className={`v4-context-status status-${googleStatus.tone}`}>
-                      <span
-                        className={`channel-status-dot status-${
-                          googleDemoState === "error" ? "error" : googleDemoState
-                        }`}
-                        aria-hidden="true"
-                      />
-                      {googleStatus.label}
-                    </span>
-                  ) : activeState === "scheduled" && (
-                    <span className="v4-context-status status-scheduled">
-                      <span className="channel-status-dot status-scheduled" aria-hidden="true" />
-                      Scheduled
-                    </span>
-                  ) || activeState === "sent" && (
-                    <span className="v4-context-status status-sent">
-                      <span className="channel-status-dot status-sent" aria-hidden="true" />
-                      Sent
-                    </span>
-                  )}
+                  <VersionFourContentStatusBadge
+                    status={progressStatuses[active.id] ?? "suggested"}
+                  />
                 </div>
                 <p>{active.rationale}</p>
               </section>
@@ -3445,12 +3492,14 @@ function VersionFourContextModal({
                   <span>Posting failed due to a connection issue.</span>
                 </div>
               )}
-              <footer className="v4-context-footer" inert={deleteDialogOpen ? true : undefined}>
-                {isGoogleDemo && googleDemoState === "sent" ? (
-                  <button type="button" className="v4-duplicate-campaign">
-                    Duplicate Campaign
-                  </button>
-                ) : (
+              <footer
+                className={`v4-context-footer${isGoogleDemo && googleDemoState === "sent"
+                  ? " v4-context-footer--sent-google"
+                  : ""}${previewLoading ? " is-loading" : ""}`}
+                aria-busy={previewLoading}
+                inert={deleteDialogOpen || previewLoading ? true : undefined}
+              >
+                {!(isGoogleDemo && googleDemoState === "sent") && (
                   <button
                     type="button"
                     className="delete-post"
@@ -3465,7 +3514,7 @@ function VersionFourContextModal({
                 <div>
                   {isGoogleDemo && googleDemoState === "sent" ? (
                     <button type="button" className="primary-button v4-view-performance">
-                      View Performance
+                      View post
                       <ExternalLink size={17} aria-hidden="true" />
                     </button>
                   ) : isGoogleDemo
@@ -3573,22 +3622,39 @@ function VersionFourContextModal({
             </div>
           </section>
 
-          <section className="v4-context-preview" aria-label={`${active.label} content preview`}>
+          <section
+            className="v4-context-preview"
+            aria-label={`${active.label} content preview`}
+            aria-busy={previewLoading}
+          >
             <header>
               <StepperChannelIcon channel={active.id} iconStyle={iconStyle} previewTitle />
               <strong>{previewTitle}</strong>
             </header>
             <div className="v4-context-preview-scroll">
-              <ContextualPreviewContent
-                channel={active.id}
-                drafts={drafts}
-                emailMessage={emailMessage}
-                emailSubject={emailSubject}
-                websiteMessage={websiteMessage}
-                websiteTitle={websiteTitle}
-                campaignTitle={campaignTitle}
-                collapseEmptyMedia={enforceInstagramImageRequirement}
-              />
+              {previewLoading ? (
+                <div
+                  className="v4-preview-glimmer"
+                  role="status"
+                  aria-live="polite"
+                  aria-label={`Loading ${active.label} preview`}
+                >
+                  <span className="sr-only">Loading {active.label} preview</span>
+                  <span className="v4-preview-glimmer-block" aria-hidden="true" />
+                  <span className="v4-preview-glimmer-block" aria-hidden="true" />
+                </div>
+              ) : (
+                <ContextualPreviewContent
+                  channel={active.id}
+                  drafts={drafts}
+                  emailMessage={emailMessage}
+                  emailSubject={emailSubject}
+                  websiteMessage={websiteMessage}
+                  websiteTitle={websiteTitle}
+                  campaignTitle={campaignTitle}
+                  collapseEmptyMedia={enforceInstagramImageRequirement}
+                />
+              )}
             </div>
           </section>
         </div>
@@ -4150,6 +4216,7 @@ function VersionFourChannelReview({
   publishingDisabled = false,
   collapseEmptyMedia = false,
   versionFourActionLabels = false,
+  showContentStatus = false,
 }: {
   channel: ContextualChannel;
   socialDraft?: ChannelDraft;
@@ -4177,6 +4244,7 @@ function VersionFourChannelReview({
   publishingDisabled?: boolean;
   collapseEmptyMedia?: boolean;
   versionFourActionLabels?: boolean;
+  showContentStatus?: boolean;
 }) {
   const [splitMenuOpen, setSplitMenuOpen] = useState(false);
   const splitMenuRef = useRef<HTMLDivElement>(null);
@@ -4289,11 +4357,18 @@ function VersionFourChannelReview({
           )}
         </header>
         <div className="review-scroll">
-          <h1 id="v4-channel-review-title">{reviewTitle}</h1>
-          <div className="about-content-row">
+          <div className="v4-content-title-row">
+            <h1 id="v4-channel-review-title">{reviewTitle}</h1>
+          </div>
+          <div className={`about-content-row${showContentStatus ? " v4-status-heading-row v4-review-about-heading" : ""}`}>
             <Sparkles size={21} />
             <strong>{channelConfig.about}</strong>
             <ChevronDown size={19} />
+            {showContentStatus && (
+              <VersionFourContentStatusBadge
+                status={progressStatuses[channel] ?? "suggested"}
+              />
+            )}
           </div>
           <div className="review-fields">
             <section className="review-field">
@@ -5881,6 +5956,7 @@ type GeneratedV4State = {
   emailSubject: string;
   channelDeliveries: V4ChannelDeliveries;
   googleDemoState: GoogleContextDemoState;
+  loadedPreviewChannels: ContextualChannel[];
 };
 
 type GeneratedV4CalendarDeliveries =
@@ -5892,6 +5968,7 @@ const createInitialGeneratedV4State = (): GeneratedV4State => ({
   emailSubject: GENERATED_V4_EMAIL_SUBJECT,
   channelDeliveries: createGeneratedV4ChannelDeliveries(),
   googleDemoState: "suggested",
+  loadedPreviewChannels: [],
 });
 
 export default function App() {
@@ -6058,8 +6135,11 @@ export default function App() {
         (channel) => v4CalendarDeliveries[channel].date === activeV4GroupDate,
       )
     : availableV4Channels;
-  const reviewScopedV4Channels = (v4ReviewScopedChannels ?? scopedV4Channels)
-    .filter((channel) => !v4ChannelDeliveries[channel].deleted);
+  const reviewScopedV4Channels = (
+    version === "v4"
+      ? availableV4Channels
+      : (v4ReviewScopedChannels ?? scopedV4Channels)
+  ).filter((channel) => !v4ChannelDeliveries[channel].deleted);
   const v4ProgressStatuses = Object.fromEntries(CONTEXTUAL_CHANNELS.map(({ id }) => [
     id,
     contextualProgressStatus(id, v4ChannelDeliveries, googleContextDemoState),
@@ -6088,10 +6168,20 @@ export default function App() {
   ).sort().map((date) => {
     const channels = GENERATED_V4_CHANNELS.filter((channel) => (
       generatedV4CalendarDeliveries[channel]?.date === date
+      && !generatedV4State.channelDeliveries[channel].deleted
     ));
     const allSent = channels.every((channel) => (
       generatedV4CalendarDeliveries[channel]?.lifecycle === "sent"
     ));
+    const allScheduledOrSent = channels.every((channel) => {
+      const lifecycle = generatedV4CalendarDeliveries[channel]?.lifecycle;
+      return lifecycle === "scheduled" || lifecycle === "sent";
+    });
+    const status: CalendarItem["status"] = allSent
+      ? "Sent"
+      : allScheduledOrSent
+        ? "Scheduled"
+        : "Needs review";
     return {
       date,
       source: "generated",
@@ -6099,16 +6189,19 @@ export default function App() {
       item: {
         title: GENERATED_V4_CAMPAIGN_TITLE,
         channels: channels.map((channel) => CONTEXTUAL_TO_CALENDAR_CHANNEL[channel]),
-        status: allSent ? "Sent" : "Scheduled",
+        status,
+        tone: status === "Needs review" ? "review" : undefined,
         generatedSuggestion: true,
         generatedDelivery: true,
         showDate: false,
         campaignDate: date,
         campaignSource: "generated",
-        channelStatuses: Object.fromEntries(channels.map((channel) => [
-          CONTEXTUAL_TO_CALENDAR_CHANNEL[channel],
-          generatedV4CalendarDeliveries[channel]!.lifecycle,
-        ])),
+        channelStatuses: Object.fromEntries(channels.flatMap((channel) => {
+          const calendarStatus = v4CalendarStatus(generatedV4CalendarDeliveries[channel]!);
+          return calendarStatus
+            ? [[CONTEXTUAL_TO_CALENDAR_CHANNEL[channel], calendarStatus]]
+            : [];
+        })),
       },
     };
   });
@@ -6155,25 +6248,21 @@ export default function App() {
       },
     };
   });
-  const activeGeneratedV4Channels = activeV4GroupDate
-    ? GENERATED_V4_CHANNELS.filter((channel) => (
-        generatedV4CalendarDeliveries[channel]?.date === activeV4GroupDate
-        && !generatedV4State.channelDeliveries[channel].deleted
-      ))
-    : [];
-  const activeCalendarV4Channels = activeV4CampaignSource === "generated"
-    ? activeGeneratedV4Channels
+  const activeCalendarV4Channels = version === "v4"
+    ? activeV4CampaignSource === "generated"
+      ? availableGeneratedV4Channels
+      : availableV4Channels
     : scopedV4Channels;
   const activeCalendarV4ProgressStatuses = activeV4CampaignSource === "generated"
-    ? Object.fromEntries(activeGeneratedV4Channels.map((channel) => [
-        channel,
-        contextualProgressStatus(
-          channel,
-          generatedCalendarV4Deliveries,
-          generatedV4State.googleDemoState,
-        ),
-      ])) as Partial<Record<ContextualChannel, ChannelProgressStatus>>
+    ? generatedV4ProgressStatuses
     : v4ProgressStatuses;
+  const activeV4CampaignDeliveries = activeV4CampaignSource === "generated"
+    ? generatedV4State.channelDeliveries
+    : v4ChannelDeliveries;
+  const activeV4CampaignScheduleText = v4CampaignScheduleText(
+    activeCalendarV4Channels,
+    activeV4CampaignDeliveries,
+  );
   const activeV4CampaignTitle = activeV4CampaignSource === "generated"
     ? GENERATED_V4_CAMPAIGN_TITLE
     : "Seasonal property cleanup in Hamilton";
@@ -6188,15 +6277,10 @@ export default function App() {
     ? generatedV4State.emailSubject
     : v4EmailSubject;
   const suggestedFlowChannels = isV4GeneratedEditor
-    ? v4ReviewScopedChannels
-      ?? (isReopenedGeneratedV4Editor
-        ? activeGeneratedV4Channels
-        : availableGeneratedV4Channels)
+    ? availableGeneratedV4Channels
     : CONTEXTUAL_CHANNELS.map(({ id }) => id);
   const suggestedFlowProgressStatuses = isV4GeneratedEditor
-    ? isReopenedGeneratedV4Editor
-      ? activeCalendarV4ProgressStatuses
-      : generatedV4ProgressStatuses
+    ? generatedV4ProgressStatuses
     : suggestedProgressStatuses;
   const showContextualToast = (message: string, dark = false) => {
     setScheduleToastVisible(false);
@@ -6243,6 +6327,32 @@ export default function App() {
     originDate: string,
     deliveries: V4ChannelDeliveries,
   ) => {
+    if (version === "v4") {
+      const campaignOrder = CONTEXTUAL_CHANNELS.map(({ id }) => id);
+      const campaignChannels = campaignOrder.filter(
+        (candidate) => !deliveries[candidate].deleted,
+      );
+      const nextChannel = nextScopedReviewChannel(
+        channel,
+        campaignOrder,
+        deliveries,
+        campaignChannels,
+      );
+      if (!nextChannel) {
+        setCombinedWorkflow(null);
+        setV4ReviewOrigin(null);
+        setActiveV4GroupDate(null);
+        setActiveV4CampaignSource(null);
+        setV4ReviewScopedChannels(null);
+        setCombinedModalStartIndex(0);
+        return;
+      }
+      setCombinedModalStartIndex(campaignChannels.indexOf(nextChannel));
+      setSocialWorkflowChannel(nextChannel);
+      setCombinedWorkflow("modal");
+      setV4ReviewOrigin("saturday");
+      return;
+    }
     const availableChannels = CONTEXTUAL_CHANNELS
       .map(({ id }) => id)
       .filter((candidate) => (
@@ -6297,7 +6407,14 @@ export default function App() {
         [channel]: nextDelivery,
       });
     }
-    if (action === "schedule") showContextualToast("Your post is scheduled", true);
+    if (action === "schedule") {
+      showContextualToast(
+        version === "v4"
+          ? contextualSuccessMessage(channel, "schedule")
+          : "Your post is scheduled",
+        true,
+      );
+    }
     if (action === "send") {
       showContextualToast(contextualSuccessMessage(channel, "post"), true);
     }
@@ -6307,16 +6424,12 @@ export default function App() {
   const advanceV4Review = (
     channel: ContextualChannel,
     nextDeliveries: V4ChannelDeliveries,
-    regroupAfterDelivery = false,
+    _regroupAfterDelivery = false,
   ) => {
-    const reviewScope = v4ReviewScopedChannels ?? scopedV4Channels;
-    const resultingScope = regroupAfterDelivery && activeV4GroupDate
-      ? reviewScope.filter((candidate) => (
-          !nextDeliveries[candidate].deleted
-          && nextDeliveries[candidate].date === activeV4GroupDate
-        ))
-      : reviewScope.filter((candidate) => !nextDeliveries[candidate].deleted);
-    if (regroupAfterDelivery) setV4ReviewScopedChannels(resultingScope);
+    const reviewScope = CONTEXTUAL_CHANNELS.map(({ id }) => id);
+    const resultingScope = reviewScope.filter(
+      (candidate) => !nextDeliveries[candidate].deleted,
+    );
     const nextChannel = nextScopedReviewChannel(
       channel,
       reviewScope,
@@ -6374,6 +6487,27 @@ export default function App() {
     const nextDeliveries = deleteV4Channel(channel, false);
     advanceV4Review(channel, nextDeliveries, true);
   };
+  const acceptGeneratedV4Campaign = () => {
+    const acceptedDeliveries = Object.fromEntries(
+      availableGeneratedV4Channels.map((channel) => [
+        channel,
+        { ...generatedV4State.channelDeliveries[channel] },
+      ]),
+    ) as GeneratedV4CalendarDeliveries;
+    setGeneratedV4CalendarDeliveries((current) => ({
+      ...current,
+      ...acceptedDeliveries,
+    }));
+    return acceptedDeliveries;
+  };
+  const markGeneratedV4PreviewLoaded = (channel: ContextualChannel) => {
+    setGeneratedV4State((current) => current.loadedPreviewChannels.includes(channel)
+      ? current
+      : {
+          ...current,
+          loadedPreviewChannels: [...current.loadedPreviewChannels, channel],
+        });
+  };
   const performGeneratedV4LifecycleAction = (
     channel: ContextualChannel,
     action: V4LifecycleAction,
@@ -6411,20 +6545,8 @@ export default function App() {
       channelDeliveries: nextDeliveries,
     }));
     const nextCalendarDeliveries = { ...generatedV4CalendarDeliveries };
-    if (action !== "cancel") nextCalendarDeliveries[channel] = nextDelivery;
-    else delete nextCalendarDeliveries[channel];
+    nextCalendarDeliveries[channel] = nextDelivery;
     setGeneratedV4CalendarDeliveries(nextCalendarDeliveries);
-    if (
-      activeV4CampaignSource === "generated"
-      && activeV4GroupDate
-      && action !== "cancel"
-    ) {
-      const reviewScope = v4ReviewScopedChannels ?? availableGeneratedV4Channels;
-      setV4ReviewScopedChannels(reviewScope.filter((candidate) => (
-        !nextDeliveries[candidate].deleted
-        && nextDeliveries[candidate].date === activeV4GroupDate
-      )));
-    }
     if (action !== "cancel") {
       showContextualToast(contextualSuccessMessage(
         channel,
@@ -6436,13 +6558,15 @@ export default function App() {
       && combinedWorkflow === "modal"
       && (returnToContext || action === "cancel")
     ) {
-      const originDate = activeV4GroupDate ?? generatedV4State.channelDeliveries[channel].date;
-      const remainingChannels = GENERATED_V4_CHANNELS.filter((candidate) => (
-        candidate !== channel
-        && nextCalendarDeliveries[candidate]?.date === originDate
-        && !nextDeliveries[candidate].deleted
-      ));
-      const nextChannel = nextAvailableChannel(channel, remainingChannels, nextDeliveries);
+      const remainingChannels = GENERATED_V4_CHANNELS.filter(
+        (candidate) => !nextDeliveries[candidate].deleted,
+      );
+      const nextChannel = nextScopedReviewChannel(
+        channel,
+        GENERATED_V4_CHANNELS,
+        nextDeliveries,
+        remainingChannels,
+      );
       if (nextChannel) {
         setCombinedModalStartIndex(remainingChannels.indexOf(nextChannel));
         setSocialWorkflowChannel(nextChannel);
@@ -6471,6 +6595,9 @@ export default function App() {
       ...current,
       googleDemoState: channel === "google" ? "suggested" : current.googleDemoState,
       channelDeliveries: nextDeliveries,
+      loadedPreviewChannels: current.loadedPreviewChannels.filter(
+        (loadedChannel) => loadedChannel !== channel,
+      ),
     }));
     const nextCalendarDeliveries = { ...generatedV4CalendarDeliveries };
     delete nextCalendarDeliveries[channel];
@@ -6483,15 +6610,26 @@ export default function App() {
     );
     setReviewDeleteChannel(null);
     showContextualToast(contextualDeletionMessage(channel), true);
+    const hasRemainingChannels = GENERATED_V4_CHANNELS.some(
+      (candidate) => !nextDeliveries[candidate].deleted,
+    );
+    if (!hasRemainingChannels) {
+      closeGeneratedV4Session(nextCalendarDeliveries, nextDeliveries);
+      return nextDeliveries;
+    }
     if (activeV4CampaignSource === "generated" && combinedWorkflow === "modal") {
-      const originDate = activeV4GroupDate ?? generatedV4State.channelDeliveries[channel].date;
-      const remainingChannels = GENERATED_V4_CHANNELS.filter((candidate) => (
-        nextCalendarDeliveries[candidate]?.date === originDate
-        && !nextDeliveries[candidate].deleted
-      ));
-      if (remainingChannels.length > 0) {
-        setCombinedModalStartIndex(0);
-        setSocialWorkflowChannel(remainingChannels[0]);
+      const remainingChannels = GENERATED_V4_CHANNELS.filter(
+        (candidate) => !nextDeliveries[candidate].deleted,
+      );
+      const nextChannel = nextScopedReviewChannel(
+        channel,
+        GENERATED_V4_CHANNELS,
+        nextDeliveries,
+        remainingChannels,
+      );
+      if (nextChannel) {
+        setCombinedModalStartIndex(remainingChannels.indexOf(nextChannel));
+        setSocialWorkflowChannel(nextChannel);
       } else {
         setCombinedWorkflow(null);
         setV4ReviewOrigin(null);
@@ -6511,22 +6649,35 @@ export default function App() {
     setV4Generating(false);
     setV4LoadingStage(0);
   };
-  const closeGeneratedV4Session = () => {
+  const closeGeneratedV4Session = (
+    calendarDeliveries: GeneratedV4CalendarDeliveries = generatedV4CalendarDeliveries,
+    channelDeliveriesOverride?: V4ChannelDeliveries,
+  ) => {
     cancelSuggestionGeneration();
     setGeneratedV4State((current) => {
       const initial = createInitialGeneratedV4State();
+      const channelDeliveries = channelDeliveriesOverride ?? current.channelDeliveries;
       const deliveredEntries = GENERATED_V4_CHANNELS.flatMap((channel) => {
-        const delivery = generatedV4CalendarDeliveries[channel]
-          ?? (current.channelDeliveries[channel].lifecycle !== "unscheduled"
-            ? current.channelDeliveries[channel]
+        const delivery = calendarDeliveries[channel]
+          ?? (channelDeliveries[channel].lifecycle !== "unscheduled"
+            ? channelDeliveries[channel]
             : null);
         return delivery ? [[channel, delivery] as const] : [];
       });
       if (deliveredEntries.length === 0) return initial;
       const delivered = Object.fromEntries(deliveredEntries);
+      const persistedDeliveries = {
+        ...initial.channelDeliveries,
+        ...delivered,
+      };
+      GENERATED_V4_CHANNELS.forEach((channel) => {
+        if (channelDeliveries[channel].deleted) {
+          persistedDeliveries[channel] = channelDeliveries[channel];
+        }
+      });
       return {
         ...current,
-        channelDeliveries: { ...initial.channelDeliveries, ...delivered },
+        channelDeliveries: persistedDeliveries,
         googleDemoState: delivered.google?.lifecycle === "scheduled"
           ? "scheduled"
           : delivered.google?.lifecycle === "sent"
@@ -6554,16 +6705,12 @@ export default function App() {
   const advanceGeneratedV4Review = (
     channel: ContextualChannel,
     nextDeliveries: V4ChannelDeliveries,
-    regroupAfterDelivery = false,
+    _regroupAfterDelivery = false,
   ) => {
-    const reviewScope = v4ReviewScopedChannels ?? GENERATED_V4_CHANNELS;
-    const resultingScope = regroupAfterDelivery && activeV4GroupDate
-      ? reviewScope.filter((candidate) => (
-          !nextDeliveries[candidate].deleted
-          && nextDeliveries[candidate].date === activeV4GroupDate
-        ))
-      : reviewScope.filter((candidate) => !nextDeliveries[candidate].deleted);
-    if (regroupAfterDelivery) setV4ReviewScopedChannels(resultingScope);
+    const reviewScope = GENERATED_V4_CHANNELS;
+    const resultingScope = GENERATED_V4_CHANNELS.filter(
+      (candidate) => !nextDeliveries[candidate].deleted,
+    );
     const nextChannel = nextScopedReviewChannel(
       channel,
       reviewScope,
@@ -6596,6 +6743,7 @@ export default function App() {
   };
   const deleteGeneratedV4ReviewChannel = (channel: ContextualChannel) => {
     const nextDeliveries = deleteGeneratedV4Channel(channel);
+    if (GENERATED_V4_CHANNELS.every((candidate) => nextDeliveries[candidate].deleted)) return;
     advanceGeneratedV4Review(channel, nextDeliveries, true);
   };
   const saveScheduleEdits = (
@@ -6680,6 +6828,10 @@ export default function App() {
     setSuggestedDialogOpen(false);
     setSuggestedPreviewIndex(0);
     setV4ReviewOrigin(null);
+    setGeneratedV4State((current) => ({
+      ...current,
+      loadedPreviewChannels: [],
+    }));
     setV4LoadingStage(0);
     setV4Generating(true);
   };
@@ -6782,17 +6934,9 @@ export default function App() {
     setSuggestedTextDraft(null);
     setSocialEditDraft(null);
     if (v4ReviewOrigin === "generated-calendar") {
-      const delivery = generatedV4CalendarDeliveries[suggestedReviewChannel];
-      const destinationChannels = delivery && delivery.date !== activeV4GroupDate
-        ? GENERATED_V4_CHANNELS.filter((channel) => (
-            generatedV4CalendarDeliveries[channel]?.date === delivery.date
-            && !generatedV4State.channelDeliveries[channel].deleted
-          ))
-        : activeGeneratedV4Channels;
-      if (delivery && delivery.date !== activeV4GroupDate) {
-        setActiveV4GroupDate(delivery.date);
-      }
-      setCombinedModalStartIndex(destinationChannels.indexOf(suggestedReviewChannel));
+      setCombinedModalStartIndex(
+        availableGeneratedV4Channels.indexOf(suggestedReviewChannel),
+      );
       setSuggestedReviewChannel(null);
       setV4ReviewScopedChannels(null);
       setCombinedWorkflow("modal");
@@ -7079,6 +7223,7 @@ export default function App() {
                 progressStatuses={suggestedFlowProgressStatuses}
                 onChannelChange={setSuggestedReviewChannel}
                 navigationStyle={version === "v4" ? v4NavigationStyle : "progress"}
+                showContentStatus={version === "v4"}
                 onBack={returnFromSuggestedReview}
                 onEditSchedule={isV4GeneratedEditor
                   ? () => setScheduleEditorChannel(suggestedReviewChannel)
@@ -7155,6 +7300,7 @@ export default function App() {
                 navigationStyle={version === "v4" ? v4NavigationStyle : "progress"}
                 iconStyle={version === "v4" ? "jobber" : "brand"}
                 versionFourActionLabels={version === "v4"}
+                showContentStatus={version === "v4"}
                 onEditSchedule={() => setScheduleEditorChannel(socialWorkflowChannel)}
                 onDelete={() => setReviewDeleteChannel(socialWorkflowChannel)}
                 onSchedule={() => performReviewDeliveryAction(
@@ -7174,17 +7320,10 @@ export default function App() {
                     setCombinedWorkflow(null);
                     return;
                   }
-                  const delivery = v4ChannelDeliveries[socialWorkflowChannel];
-                  if (
-                    version === "v4"
-                    && delivery.lifecycle !== "unscheduled"
-                    && delivery.date !== activeV4GroupDate
-                  ) {
-                    const destinationChannels = availableV4Channels.filter((channel) => (
-                      v4CalendarDeliveries[channel].date === delivery.date
-                    ));
-                    setActiveV4GroupDate(delivery.date);
-                    setCombinedModalStartIndex(destinationChannels.indexOf(socialWorkflowChannel));
+                  if (version === "v4") {
+                    setCombinedModalStartIndex(
+                      availableV4Channels.indexOf(socialWorkflowChannel),
+                    );
                     setV4ReviewScopedChannels(null);
                     setCombinedWorkflow("modal");
                     return;
@@ -7279,30 +7418,30 @@ export default function App() {
                     setV3CombinedModalOpen(true);
                   } else if (isDaisyVersion) {
                     if (!campaignDate) return;
-                    const groupChannels = campaignSource === "generated"
+                    const dateGroupChannels = campaignSource === "generated"
                       ? GENERATED_V4_CHANNELS.filter((channel) => (
                           generatedV4CalendarDeliveries[channel]?.date === campaignDate
                         ))
                       : availableV4Channels.filter(
                           (channel) => v4CalendarDeliveries[channel].date === campaignDate,
                         );
-                    if (groupChannels.length === 0) return;
+                    if (dateGroupChannels.length === 0) return;
+                    const campaignChannels = version === "v4"
+                      ? campaignSource === "generated"
+                        ? availableGeneratedV4Channels
+                        : availableV4Channels
+                      : dateGroupChannels;
                     setActiveV4GroupDate(campaignDate);
                     setActiveV4CampaignSource(campaignSource);
                     setV4ReviewScopedChannels(null);
                     setCombinedModalStartIndex(0);
-                    setSocialWorkflowChannel(groupChannels[0]);
+                    setSocialWorkflowChannel(campaignChannels[0]);
                     setV4ReviewOrigin(campaignSource === "generated"
                       ? "generated-calendar"
                       : "saturday");
                     if (version === "v4") {
-                      if (groupChannels.length === 1) {
-                        setCombinedWorkflow("modal");
-                        setV4CardSummaryOpen(false);
-                      } else {
-                        setCombinedWorkflow(null);
-                        setV4CardSummaryOpen(true);
-                      }
+                      setCombinedWorkflow(null);
+                      setV4CardSummaryOpen(true);
                     } else {
                       setCombinedWorkflow("modal");
                     }
@@ -7328,18 +7467,19 @@ export default function App() {
                     : v4Drafts.all.images}
                   channels={activeCalendarV4Channels}
                   statuses={activeCalendarV4ProgressStatuses}
-                  delivery={(activeV4CampaignSource === "generated"
-                    ? generatedCalendarV4Deliveries
-                    : v4ChannelDeliveries)[activeCalendarV4Channels[0] ?? "google"]}
+                  delivery={activeV4CampaignDeliveries[activeCalendarV4Channels[0] ?? "google"]}
+                  scheduleText={activeV4CampaignScheduleText}
                   description={activeV4CampaignSource === "generated"
                     ? GENERATED_V4_SUMMARY_COPY
                     : undefined}
                   artwork={activeV4CampaignSource === "generated"
-                    ? generatedV4State.drafts.all.images[0]
+                    ? GENERATED_V4_PROMOTION_ARTWORK
                     : undefined}
                   iconStyle="jobber"
                   onStartReview={() => {
                     setV4CardSummaryOpen(false);
+                    setCombinedModalStartIndex(0);
+                    setSocialWorkflowChannel(activeCalendarV4Channels[0]);
                     setCombinedWorkflow("modal");
                   }}
                   onClose={() => {
@@ -7375,17 +7515,15 @@ export default function App() {
                       delivery={generatedV4State.channelDeliveries.google}
                       description={GENERATED_V4_SUMMARY_COPY}
                       scheduleText={GENERATED_V4_SCHEDULE_TEXT}
-                      artwork={generatedV4State.drafts.all.images[0]}
+                      artwork={GENERATED_V4_PROMOTION_ARTWORK}
                       origin="generated"
                       iconStyle="jobber"
                       onStartReview={() => {
+                        acceptGeneratedV4Campaign();
                         const groupDate = V4_INITIAL_DATE;
-                        const groupChannels = availableGeneratedV4Channels.filter((channel) => (
-                          generatedV4State.channelDeliveries[channel].date === groupDate
-                        ));
                         setActiveV4GroupDate(groupDate);
                         setActiveV4CampaignSource("generated");
-                        setV4ReviewScopedChannels(groupChannels);
+                        setV4ReviewScopedChannels(null);
                         setV4SuggestedSummaryOpen(false);
                         setSuggestedPreviewIndex(0);
                         setSuggestedDialogOpen(true);
@@ -7403,14 +7541,16 @@ export default function App() {
                       campaignTitle={GENERATED_V4_CAMPAIGN_TITLE}
                       channelDefinitions={GENERATED_V4_CONTEXTUAL_CHANNELS}
                       initialIndex={suggestedPreviewIndex}
-                      availableChannels={v4ReviewScopedChannels ?? availableGeneratedV4Channels}
+                      availableChannels={availableGeneratedV4Channels}
                       channelDeliveries={generatedV4State.channelDeliveries}
                       googleDemoState={generatedV4State.googleDemoState}
                       navigationStyle={v4NavigationStyle}
                       iconStyle="jobber"
                       embedded
                       enforceInstagramImageRequirement
-                      scopeDate={activeV4GroupDate ?? undefined}
+                      previewLoadingDuration={V4_PREVIEW_LOADING_MS}
+                      loadedPreviewChannels={generatedV4State.loadedPreviewChannels}
+                      onPreviewLoaded={markGeneratedV4PreviewLoaded}
                       onActiveChannelChange={setActiveV4ContextChannel}
                       onClose={() => undefined}
                       onEdit={(channel) => {
@@ -7425,8 +7565,18 @@ export default function App() {
                       onLifecycleAction={(channel, action) => {
                         return performGeneratedV4LifecycleAction(channel, action);
                       }}
-                      onComplete={() => {
-                        closeGeneratedV4Session();
+                      onComplete={(nextDeliveries) => {
+                        if (!nextDeliveries) {
+                          closeGeneratedV4Session();
+                          return;
+                        }
+                        closeGeneratedV4Session(
+                          Object.fromEntries(availableGeneratedV4Channels.map((channel) => [
+                            channel,
+                            nextDeliveries[channel],
+                          ])) as GeneratedV4CalendarDeliveries,
+                          nextDeliveries,
+                        );
                       }}
                     />
                   )}
@@ -7574,7 +7724,19 @@ export default function App() {
                     : googleContextDemoState}
                   navigationStyle={version === "v4" ? v4NavigationStyle : "progress"}
                   iconStyle={version === "v4" ? "jobber" : "brand"}
-                  scopeDate={activeV4GroupDate ?? undefined}
+                  scopeDate={version === "v5" ? activeV4GroupDate ?? undefined : undefined}
+                  previewLoadingDuration={version === "v4" && activeV4CampaignSource === "generated"
+                    ? V4_PREVIEW_LOADING_MS
+                    : 0}
+                  loadedPreviewChannels={activeV4CampaignSource === "generated"
+                    ? generatedV4State.loadedPreviewChannels
+                    : []}
+                  onPreviewLoaded={activeV4CampaignSource === "generated"
+                    ? markGeneratedV4PreviewLoaded
+                    : undefined}
+                  enforceInstagramImageRequirement={
+                    version === "v4" && activeV4CampaignSource === "generated"
+                  }
                   onActiveChannelChange={setActiveV4ContextChannel}
                   onClose={() => {
                     setActiveV4ContextChannel(null);
@@ -7587,7 +7749,9 @@ export default function App() {
                   }}
                   onEdit={(channel) => {
                     setCombinedModalStartIndex(activeCalendarV4Channels.indexOf(channel));
-                    setV4ReviewScopedChannels(activeCalendarV4Channels);
+                    setV4ReviewScopedChannels(
+                      version === "v4" ? null : activeCalendarV4Channels,
+                    );
                     if (activeV4CampaignSource === "generated") {
                       setSuggestedReviewChannel(channel);
                       setV4ReviewOrigin("generated-calendar");

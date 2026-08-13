@@ -13,7 +13,7 @@ const stages = [
   ["Optimizing for channel visibility", "/assets/v4-loading-channel-visibility.svg"],
   ["Adding the finishing touches", "/assets/v4-loading-finishing-touches.svg"],
 ];
-const generatedMediaPath = "/assets/v4-generated-promotion.png";
+const summaryArtworkPath = "/assets/v4-15-percent-promotion.png";
 
 const flow = () => page.locator(".v4-generated-flow-shell");
 const loading = () => flow().locator(".v4-loading-surface");
@@ -64,6 +64,13 @@ async function assertGeneratedStatusControlsAbsent() {
   assert.equal(await page.locator(".prototype-status-controls").count(), 0);
 }
 
+async function waitForGeneratedPreview() {
+  const glimmer = generatedReview().locator(".v4-preview-glimmer");
+  if (await glimmer.count()) {
+    await glimmer.waitFor({ state: "detached", timeout: 4500 });
+  }
+}
+
 try {
   await page.goto(baseUrl, { waitUntil: "networkidle" });
   await page.getByRole("button", { name: "Version 4", exact: true }).click();
@@ -100,9 +107,12 @@ try {
   assert.equal(await generatedSummary().getByText("Website", { exact: true }).count(), 0);
   const summaryArtwork = generatedSummary().locator(".v4-summary-artwork");
   assert.equal(await summaryArtwork.count(), 1);
-  assert.equal(new URL(await summaryArtwork.getAttribute("src"), baseUrl).pathname, generatedMediaPath);
   assert.equal(
-    await generatedSummary().locator(`img[src="${generatedMediaPath}"]`).count(),
+    new URL(await summaryArtwork.getAttribute("src"), baseUrl).pathname,
+    summaryArtworkPath,
+  );
+  assert.equal(
+    await generatedSummary().locator(`img[src="${summaryArtworkPath}"]`).count(),
     1,
   );
   assert.deepEqual(
@@ -158,6 +168,7 @@ try {
   await assertSingleGeneratedDialog();
 
   // Lifecycle state survives button regeneration from generated review.
+  await waitForGeneratedPreview();
   await generatedReview().locator(".v4-context-footer")
     .getByRole("button", { name: "Schedule Google post", exact: true }).click();
   await generatedReview().getByRole("button", { name: /^Facebook,/ }).waitFor();
@@ -224,6 +235,19 @@ try {
   await reducedStatus.waitFor();
   assert.equal(await reducedStatus.evaluate((node) => getComputedStyle(node).animationName), "none");
   await verifyLoadingSequence();
+  await generatedSummary().getByRole("button", { name: "Review Drafts", exact: true }).click();
+  const reducedGlimmer = generatedReview().locator(".v4-preview-glimmer");
+  await reducedGlimmer.waitFor();
+  assert.equal(
+    await reducedGlimmer.locator(".v4-preview-glimmer-block").first()
+      .evaluate((node) => getComputedStyle(node, "::after").animationName),
+    "none",
+  );
+  assert.equal(
+    await generatedReview().locator(".v4-context-footer")
+      .evaluate((node) => getComputedStyle(node, "::after").animationName),
+    "none",
+  );
   await outerClose().click();
   await page.emulateMedia({ reducedMotion: "no-preference" });
 

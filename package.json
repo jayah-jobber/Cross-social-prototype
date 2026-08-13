@@ -16,7 +16,10 @@
     "verify:v4-review-typography": "node verify-v4-review-typography.mjs",
     "verify:v4-social-editor": "node verify-v4-social-editor.mjs",
     "verify:v4-loading": "node verify-v4-loading.mjs",
+    "verify:v4-suggested-persistence": "node verify-v4-suggested-persistence.mjs",
+    "verify:v4-review-status": "node verify-v4-review-status.mjs",
     "verify:v4-lifecycle": "node verify-v4-lifecycle.mjs",
+    "verify:v4-linked-split": "node verify-v4-linked-split.mjs",
     "verify:research": "node verify-research-mode.mjs"
   },
   "dependencies": {
