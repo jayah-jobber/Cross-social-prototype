@@ -7023,7 +7023,7 @@ export default function App() {
         className="prototype-page"
         style={{ "--prototype-scale": scale, height: totalHeight } as React.CSSProperties}
       >
-        {!prototypeEnv.researchMode && (
+        {!prototypeEnv.researchMode && !LOCKED_PROTOTYPE_VERSION && (
           <div className="ab-toolbar">
             <span>
               {version === "v3"
