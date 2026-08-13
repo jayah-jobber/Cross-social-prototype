@@ -123,6 +123,14 @@ try {
   assert.equal(await page.getByText("Your post is rescheduled", { exact: true }).count(), 0);
 
   await review.locator(".review-footer").getByRole("button", { name: "Back", exact: true }).click();
+  await modal().waitFor();
+  await assertArrowNavigation(modal(), 3, 4);
+  await modal().getByText("Nov 8, 2026 · 9:00 AM", { exact: true }).waitFor();
+  await arrowNavigator(modal()).getByRole("button", { name: "Previous channel" }).click();
+  await assertArrowNavigation(modal(), 2, 4);
+  await arrowNavigator(modal()).getByRole("button", { name: "Previous channel" }).click();
+  await assertArrowNavigation(modal(), 1, 4);
+  await modal().getByText("Nov 7, 2026 · 9:00 AM", { exact: true }).waitFor();
   await modal().getByRole("button", { name: "Close", exact: true }).click();
 
   // Generated review uses its four-channel scope with matching arrow behavior.

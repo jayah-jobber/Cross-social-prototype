@@ -4496,6 +4496,7 @@ label {
 .v4-content-title-row {
   display: flex;
   align-items: baseline;
+  flex-wrap: wrap;
   gap: 10px;
   margin-bottom: 31px;
 }
@@ -4521,18 +4522,6 @@ label {
 
 .about-content-row strong {
   font-size: 14px;
-}
-
-.v4-review-about-heading {
-  display: flex;
-  min-height: 40px;
-  height: auto;
-  flex-wrap: wrap;
-}
-
-.v4-review-about-heading > strong {
-  min-width: min(160px, 100%);
-  flex: 1 1 160px;
 }
 
 .review-fields {

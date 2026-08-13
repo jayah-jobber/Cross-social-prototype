@@ -4359,16 +4359,16 @@ function VersionFourChannelReview({
         <div className="review-scroll">
           <div className="v4-content-title-row">
             <h1 id="v4-channel-review-title">{reviewTitle}</h1>
-          </div>
-          <div className={`about-content-row${showContentStatus ? " v4-status-heading-row v4-review-about-heading" : ""}`}>
-            <Sparkles size={21} />
-            <strong>{channelConfig.about}</strong>
-            <ChevronDown size={19} />
             {showContentStatus && (
               <VersionFourContentStatusBadge
                 status={progressStatuses[channel] ?? "suggested"}
               />
             )}
+          </div>
+          <div className="about-content-row">
+            <Sparkles size={21} />
+            <strong>{channelConfig.about}</strong>
+            <ChevronDown size={19} />
           </div>
           <div className="review-fields">
             <section className="review-field">

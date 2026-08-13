@@ -27,6 +27,23 @@ async function openSummary(card, expectedChannels, scheduleText) {
   await summary().waitFor();
   assert.equal(await summaryRows().count(), expectedChannels);
   await summary().getByText(`Schedule date: ${scheduleText}`, { exact: true }).waitFor();
+  assert.equal(
+    await summary().locator(".v4-summary-schedule").getByText("Schedule date:", { exact: true }).count(),
+    1,
+  );
+  assert.equal(await summary().locator(".v4-summary-schedule > p").count(), 2);
+  assert.ok(
+    (await summaryRows().allTextContents()).every((row) => (
+      !/\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}\b/.test(row)
+    )),
+    "Summary channel rows must contain statuses, not per-channel dates.",
+  );
+  assert.ok(
+    await summaryRows().evaluateAll((rows) => rows.every(
+      (row) => row.querySelectorAll(".v4-content-status").length === 1,
+    )),
+    "Every Summary channel row must have exactly one status badge.",
+  );
 }
 
 async function startCampaignReview(expectedChannels) {
@@ -200,6 +217,10 @@ try {
   for (const day of ["Saturday, Nov 7", "Sunday, Nov 8"]) {
     await openSummary(generatedCard(day), 4, "Various dates");
     assert.equal(await summary().locator("[data-channel='website']").count(), 0);
+    assert.equal(
+      await summary().locator("[data-channel='facebook'] [data-status='scheduled']").count(),
+      1,
+    );
     await startCampaignReview(4);
     assert.equal(await context().locator(".v4-preview-glimmer").count(), 0);
     await selectContextChannel("Facebook");
