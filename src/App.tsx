@@ -7463,8 +7463,10 @@ export default function App() {
         className="prototype-page"
         style={{ "--prototype-scale": scale, height: totalHeight } as React.CSSProperties}
       >
-        {!prototypeEnv.researchMode && !LOCKED_PROTOTYPE_VERSION && (
+        {!prototypeEnv.researchMode && (
           <div className="ab-toolbar">
+            {!LOCKED_PROTOTYPE_VERSION && (
+              <>
             <span>
               {version === "v3"
                 ? "Daisy chain social, email and website"
@@ -7516,6 +7518,8 @@ export default function App() {
               Version 5
             </button>
             </div>
+              </>
+            )}
             {version === "v4" && (
               <div className="v4-experiment-controls">
               <fieldset
