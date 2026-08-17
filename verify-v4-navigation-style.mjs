@@ -9,9 +9,10 @@ const page = await browser.newPage({ viewport: { width: 1440, height: 1100 } });
 const navigationToggle = () => page.getByRole("group", {
   name: "Version 4 navigation style",
 });
-const saturdayCard = () => page.locator(".calendar-day")
-  .filter({ has: page.getByRole("heading", { name: "Saturday, Nov 7", exact: true }) })
+const campaignCard = (day) => page.locator(".calendar-day")
+  .filter({ has: page.getByRole("heading", { name: day, exact: true }) })
   .locator(".combined-target-card");
+const saturdayCard = () => campaignCard("Saturday, Nov 7");
 const modal = () => page.locator(".v4-five-channel-modal");
 const arrowNavigator = (scope) => scope.locator(".v4-arrow-navigator");
 
@@ -126,6 +127,27 @@ try {
   await modal().waitFor();
   await assertArrowNavigation(modal(), 3, 4);
   await modal().getByText("Nov 8, 2026 · 9:00 AM", { exact: true }).waitFor();
+  await modal().locator(".v4-context-footer")
+    .getByRole("button", { name: "Schedule Email", exact: true })
+    .click();
+  await assertArrowNavigation(modal(), 4, 4);
+  await modal().getByRole("heading", { name: "About this website page", exact: true }).waitFor();
+  await modal().getByRole("button", { name: "Close", exact: true }).click();
+
+  // Split-card entry honors the represented Email channel in both navigation styles.
+  await navigationToggle().getByRole("button", { name: "Progress button", exact: true }).click();
+  await campaignCard("Sunday, Nov 8").click();
+  await page.locator(".v4-summary-modal").getByRole("button", {
+    name: "Review Drafts",
+    exact: true,
+  }).click();
+  await modal().waitFor();
+  assert.equal(
+    await modal().getByRole("button", { name: /^Email,/ }).getAttribute("aria-current"),
+    "step",
+  );
+  await navigationToggle().getByRole("button", { name: "Arrow button", exact: true }).click();
+  await assertArrowNavigation(modal(), 3, 4);
   await arrowNavigator(modal()).getByRole("button", { name: "Previous channel" }).click();
   await assertArrowNavigation(modal(), 2, 4);
   await arrowNavigator(modal()).getByRole("button", { name: "Previous channel" }).click();

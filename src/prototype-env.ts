@@ -1,4 +1,4 @@
-export type ResearchEntrySurface = "calendar" | "dashboard";
+export type ResearchEntrySurface = "calendar" | "dashboard" | "adhoc";
 export type ResearchNavigationStyle = "arrows" | "progress";
 export type LockedPrototypeVersion = "v4" | "v5";
 
@@ -46,7 +46,7 @@ export const prototypeEnv = {
     ? parseEnum(
         "VITE_ENTRY_SURFACE",
         import.meta.env.VITE_ENTRY_SURFACE,
-        ["calendar", "dashboard"] as const,
+        ["calendar", "dashboard", "adhoc"] as const,
         "calendar",
       )
     : "calendar",

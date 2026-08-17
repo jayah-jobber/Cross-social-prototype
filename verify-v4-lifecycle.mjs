@@ -244,8 +244,7 @@ try {
     .getByRole("button", { name: "Review Drafts", exact: true })
     .click();
   await modal().waitFor();
-  await expectProgress("1 of 5");
-  await selectModalChannel("Instagram");
+  await expectProgress("3 of 5");
   await modal().getByText("Sent", { exact: true }).waitFor();
   await modal().getByRole("button", { name: "Close", exact: true }).click();
   await openCampaignReview("Saturday, Nov 7");

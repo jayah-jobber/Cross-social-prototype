@@ -14,6 +14,9 @@ const calendarDay = (name) => page.locator(".calendar-day").filter({
 });
 const originalCard = (day) => calendarDay(day).locator(".combined-target-card");
 const generatedCard = (day) => calendarDay(day).locator(".generated-delivery-card");
+const inertFridayCard = () => calendarDay("Friday, Nov 6")
+  .locator(".marketing-calendar-card")
+  .filter({ has: page.getByText("Post title 1", { exact: true }) });
 const summaryRows = () => summary().locator(".v4-summary-status-list > li");
 
 async function resetV4() {
@@ -46,13 +49,15 @@ async function openSummary(card, expectedChannels, scheduleText) {
   );
 }
 
-async function startCampaignReview(expectedChannels) {
+async function startCampaignReview(expectedChannels, expectedStart = "Google") {
   await summary().getByRole("button", { name: "Review Drafts", exact: true }).click();
   await context().waitFor();
   const stepper = context().locator(".channel-progress-stepper--modal-v4");
   assert.equal(await stepper.getByRole("button").count(), expectedChannels);
   assert.equal(
-    await stepper.getByRole("button", { name: /^Google,/ }).getAttribute("aria-current"),
+    await stepper.getByRole("button", {
+      name: new RegExp(`^${expectedStart},`),
+    }).getAttribute("aria-current"),
     "step",
   );
 }
@@ -90,7 +95,34 @@ try {
   await page.getByRole("button", { name: "Version 4", exact: true }).click();
   await page.getByRole("button", { name: "Progress button", exact: true }).click();
 
+  // Only the original Friday social card is presentational in V4.
+  assert.equal(await inertFridayCard().count(), 1);
+  assert.equal(await inertFridayCard().evaluate((card) => card.tagName), "DIV");
+  assert.equal(await inertFridayCard().getAttribute("role"), null);
+  assert.equal(await inertFridayCard().getAttribute("tabindex"), null);
+  await inertFridayCard().hover();
+  assert.deepEqual(
+    await inertFridayCard().evaluate((card) => {
+      const style = getComputedStyle(card);
+      return {
+        cursor: style.cursor,
+        boxShadow: style.boxShadow,
+        transform: style.transform,
+      };
+    }),
+    { cursor: "auto", boxShadow: "none", transform: "none" },
+  );
+  await inertFridayCard().getByText("Post title 1", { exact: true }).click();
+  await page.waitForTimeout(50);
+  assert.equal(await summary().count(), 0);
+  assert.equal(await context().count(), 0);
+  assert.equal(await review().count(), 0);
+
   // The intact original campaign has one effective schedule.
+  assert.equal(
+    await originalCard("Saturday, Nov 7").evaluate((card) => card.tagName),
+    "BUTTON",
+  );
   await openSummary(originalCard("Saturday, Nov 7"), 5, "Nov 7, 2026 9:00 AM");
   await startCampaignReview(5);
   await editSchedule("Google", "2026-11-05", "14:30");
@@ -110,7 +142,7 @@ try {
   await context().getByRole("button", { name: "Close", exact: true }).click();
 
   await openSummary(originalCard("Saturday, Nov 7"), 5, "Various dates");
-  await startCampaignReview(5);
+  await startCampaignReview(5, "Facebook");
   await selectContextChannel("Instagram");
   await context().locator(".v4-context-footer")
     .getByRole("button", { name: "Show publishing options" })
@@ -140,12 +172,16 @@ try {
   );
 
   // Every split card, including one-channel groups, re-enters the campaign-wide summary.
-  for (const day of ["Thursday, Nov 5", "Friday, Nov 6", "Saturday, Nov 7"]) {
+  for (const [day, expectedStart] of [
+    ["Thursday, Nov 5", "Google"],
+    ["Friday, Nov 6", "Instagram"],
+    ["Saturday, Nov 7", "Facebook"],
+  ]) {
     await openSummary(originalCard(day), 5, "Various dates");
     const statuses = await summaryRows().allTextContents();
     assert.ok(statuses.some((row) => row.includes("Google") && row.includes("Scheduled")));
     assert.ok(statuses.some((row) => row.includes("Instagram") && row.includes("Sent")));
-    await startCampaignReview(5);
+    await startCampaignReview(5, expectedStart);
     await selectContextChannel("Google");
     await context().getByText("Nov 5, 2026 · 2:30 PM", { exact: true }).waitFor();
     await selectContextChannel("Instagram");
@@ -155,8 +191,68 @@ try {
     await context().getByRole("button", { name: "Close", exact: true }).click();
   }
 
-  // Deletion removes only membership; deleting the remaining campaign removes every card.
+  // A mixed split card starts at its first represented channel in canonical order.
   await openSummary(originalCard("Saturday, Nov 7"), 5, "Various dates");
+  await startCampaignReview(5, "Facebook");
+  await context().locator(".v4-context-footer")
+    .getByRole("button", { name: "Show publishing options" })
+    .click();
+  await context().getByRole("menuitem", { name: "Post now and view next", exact: true }).click();
+  await context().getByRole("button", { name: "Close", exact: true }).click();
+  await openSummary(originalCard("Friday, Nov 6"), 5, "Various dates");
+  await startCampaignReview(5, "Facebook");
+  assert.equal(
+    await context().getByRole("button", { name: /^Facebook,/ }).getAttribute("aria-current"),
+    "step",
+  );
+  await context().getByRole("button", { name: "Close", exact: true }).click();
+
+  // A Facebook-only split card still enters the full campaign at channel 2 of 5.
+  await resetV4();
+  await openSummary(originalCard("Saturday, Nov 7"), 5, "Nov 7, 2026 9:00 AM");
+  await startCampaignReview(5);
+  await editSchedule("Google", "2026-11-05", "09:00");
+  await review().locator(".review-footer")
+    .getByRole("button", { name: "Schedule Google post", exact: true })
+    .click();
+  await review().locator(".review-footer").getByRole("button", { name: "Back" }).click();
+  await selectContextChannel("Instagram");
+  await context().locator(".v4-context-footer")
+    .getByRole("button", { name: "Show publishing options" })
+    .click();
+  await context().getByRole("menuitem", { name: "Post now and view next", exact: true }).click();
+  await editSchedule("Email", "2026-11-08", "09:00");
+  await review().locator(".review-footer")
+    .getByRole("button", { name: "Schedule Email", exact: true })
+    .click();
+  await review().locator(".review-footer").getByRole("button", { name: "Back" }).click();
+  await context().locator(".v4-context-footer")
+    .getByRole("button", { name: "Show publishing options" })
+    .click();
+  await context().getByRole("menuitem", { name: "Post now and view next", exact: true }).click();
+  assert.deepEqual(
+    await originalCard("Saturday, Nov 7").locator(".calendar-channel-label").allTextContents(),
+    ["fFacebook post"],
+  );
+  await openSummary(originalCard("Saturday, Nov 7"), 5, "Various dates");
+  await startCampaignReview(5, "Facebook");
+  assert.equal(
+    await context().locator(".channel-progress-stepper--modal-v4").getByRole("button")
+      .evaluateAll((buttons) => (
+        buttons.findIndex((button) => button.getAttribute("aria-current") === "step") + 1
+      )),
+    2,
+  );
+  await selectContextChannel("Google");
+  assert.equal(
+    await context().getByRole("button", { name: /^Google,/ }).getAttribute("aria-current"),
+    "step",
+  );
+  await context().getByRole("button", { name: "Close", exact: true }).click();
+
+  // Deletion removes only membership; deleting the remaining campaign removes every card.
+  await resetV4();
+  await openSummary(originalCard("Saturday, Nov 7"), 5, "Nov 7, 2026 9:00 AM");
   await startCampaignReview(5);
   await selectContextChannel("Facebook");
   await deleteCurrent();
@@ -165,7 +261,7 @@ try {
     4,
   );
   await context().getByRole("button", { name: "Close", exact: true }).click();
-  await openSummary(originalCard("Thursday, Nov 5"), 4, "Various dates");
+  await openSummary(originalCard("Saturday, Nov 7"), 4, "Nov 7, 2026 9:00 AM");
   assert.equal(await summary().locator("[data-channel='facebook']").count(), 0);
   await summary().getByRole("button", { name: "Close summary" }).click();
 
@@ -196,32 +292,49 @@ try {
   await generatedReview.getByRole("button", { name: /^Facebook,/ }).click();
   await generatedReview.getByRole("status", { name: "Loading Facebook preview" }).waitFor();
   await generatedReview.locator(".v4-preview-glimmer").waitFor({ state: "detached", timeout: 4500 });
+  await generatedReview.getByRole("button", { name: /^Email,/ }).click();
+  await generatedReview.getByRole("status", { name: "Loading Email preview" }).waitFor();
+  await generatedReview.locator(".v4-preview-glimmer").waitFor({ state: "detached", timeout: 4500 });
   await generatedReview.locator(".v4-context-footer").getByRole("button", { name: "Edit" }).click();
-  const generatedSchedule = review().locator(".review-field").filter({ hasText: "Schedule Post" });
-  await generatedSchedule.getByRole("button", { name: "Edit" }).click();
+  const generatedCampaignSchedule = review().locator(".review-field").filter({
+    hasText: "Schedule Campaign",
+  });
+  await generatedCampaignSchedule.getByRole("button", { name: "Edit" }).click();
   const generatedDialog = page.getByRole("dialog", { name: "Schedule Date" });
-  await generatedDialog.getByLabel("Schedule date for Facebook").fill("2026-11-08");
+  await generatedDialog.getByLabel("Schedule date for Email").fill("2026-11-08");
   await generatedDialog.getByRole("button", { name: "Save Edits" }).click();
-  await review().locator(".review-footer")
-    .getByRole("button", { name: "Schedule Facebook post", exact: true })
-    .click();
+  await review().locator(".review-footer").getByRole("button", { name: "Back" }).click();
+  await generatedReview.waitFor();
   assert.equal(
-    await review().locator(".channel-progress-stepper--review").getByRole("button").count(),
+    await generatedReview.locator(".channel-progress-stepper--modal-v4").getByRole("button").count(),
     4,
   );
-  await review().locator(".review-footer").getByRole("button", { name: "Back" }).click();
-  await page.getByLabel("Close suggested marketing content").click();
+  await generatedReview.locator(".v4-context-footer")
+    .getByRole("button", { name: "Schedule Email", exact: true })
+    .click();
+  await page.locator(".v4-generated-flow-shell").waitFor({ state: "detached" });
 
   assert.equal(await generatedCard("Saturday, Nov 7").count(), 1);
   assert.equal(await generatedCard("Sunday, Nov 8").count(), 1);
-  for (const day of ["Saturday, Nov 7", "Sunday, Nov 8"]) {
+  assert.equal(
+    await generatedCard("Saturday, Nov 7").evaluate((card) => card.tagName),
+    "BUTTON",
+  );
+  assert.equal(
+    await generatedCard("Sunday, Nov 8").evaluate((card) => card.tagName),
+    "BUTTON",
+  );
+  for (const [day, expectedStart] of [
+    ["Saturday, Nov 7", "Google"],
+    ["Sunday, Nov 8", "Email"],
+  ]) {
     await openSummary(generatedCard(day), 4, "Various dates");
     assert.equal(await summary().locator("[data-channel='website']").count(), 0);
     assert.equal(
-      await summary().locator("[data-channel='facebook'] [data-status='scheduled']").count(),
+      await summary().locator("[data-channel='email'] [data-status='scheduled']").count(),
       1,
     );
-    await startCampaignReview(4);
+    await startCampaignReview(4, expectedStart);
     assert.equal(await context().locator(".v4-preview-glimmer").count(), 0);
     await selectContextChannel("Facebook");
     assert.equal(await context().locator(".v4-preview-glimmer").count(), 0);
@@ -238,7 +351,7 @@ try {
   }
 
   console.log(
-    "Verified V4 campaign-wide linked summaries, split-card entry, dates, delivery progression, deletion, generated scope, loader persistence, and Instagram guard.",
+    "Verified the inert V4 Friday social card plus clickable linked/generated campaigns, split-card entry, dates, delivery progression, deletion, generated scope, loader persistence, and Instagram guard.",
   );
 } finally {
   await browser.close();

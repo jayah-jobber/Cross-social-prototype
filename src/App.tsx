@@ -69,6 +69,18 @@ import {
   type ResearchEntrySurface,
   type ResearchNavigationStyle,
 } from "./prototype-env";
+import {
+  VersionFourAdHoc,
+  type AdHocCampaignChannel,
+  type AdHocCreatedCampaign,
+} from "./AdHocScreen";
+import {
+  AdHocCreationDialog,
+  AdHocGenerationOverlay,
+  type AdHocChannelId,
+  type AdHocCreationStep,
+  type AdHocJobId,
+} from "./AdHocCreationFlow";
 
 const INITIAL_MESSAGE = `This Hamilton property needed a seasonal refresh, starting with a clean up and mulching to bring the landscape back to a maintained state. 🌿
 
@@ -138,8 +150,8 @@ type V2Tab = "all" | "google" | "facebook" | "instagram";
 type PreviewChannel = Exclude<V2Tab, "all">;
 type SocialIconStyle = "jobber" | "brand";
 type V4NavigationStyle = ResearchNavigationStyle;
-type V4EntrySurface = ResearchEntrySurface;
-type V4GeneratedFlowOrigin = V4EntrySurface;
+type V4EntrySurface = ResearchEntrySurface | "adhoc";
+type V4GeneratedFlowOrigin = ResearchEntrySurface;
 type GoogleButtonAction = "learn-more" | "book" | "call-now";
 type GoogleLinkDestination = "external" | "booking" | "default-form" | "other-form";
 type EnabledChannels = Record<PreviewChannel, boolean>;
@@ -954,6 +966,7 @@ function ChannelIcon({ channel }: { channel: CalendarChannel }) {
 function MarketingCalendarCard({
   item,
   onOpen,
+  inert = false,
   combinedInteractive = false,
   updated = false,
   targetPublished = false,
@@ -964,6 +977,7 @@ function MarketingCalendarCard({
 }: {
   item: CalendarItem;
   onOpen: () => void;
+  inert?: boolean;
   combinedInteractive?: boolean;
   updated?: boolean;
   targetPublished?: boolean;
@@ -1009,26 +1023,33 @@ function MarketingCalendarCard({
     </>
   );
 
-  const isInteractive = item.target
-    || (item.combinedTarget && combinedInteractive)
-    || Boolean(item.generatedDelivery);
+  const isInteractive = !inert && (
+    item.target
+      || (item.combinedTarget && combinedInteractive)
+      || Boolean(item.generatedDelivery)
+  );
+  const interactiveClasses = [
+    "marketing-calendar-card target-card",
+    isPublished ? "" : "review",
+    item.combinedTarget ? "combined-target-card" : "",
+    updated ? "updated-card" : "",
+    isPublished ? "published-card" : "",
+    item.generatedSuggestion ? "generated-suggestion-card" : "",
+    item.generatedDelivery ? "generated-delivery-card" : "",
+  ].filter(Boolean).join(" ");
 
   return isInteractive ? (
     <button
-      className={[
-        "marketing-calendar-card target-card",
-        isPublished ? "" : "review",
-        item.combinedTarget ? "combined-target-card" : "",
-        updated ? "updated-card" : "",
-        isPublished ? "published-card" : "",
-        item.generatedSuggestion ? "generated-suggestion-card" : "",
-        item.generatedDelivery ? "generated-delivery-card" : "",
-      ].filter(Boolean).join(" ")}
+      className={interactiveClasses}
       type="button"
       onClick={onOpen}
     >
       {content}
     </button>
+  ) : inert ? (
+    <div className={interactiveClasses}>
+      {content}
+    </div>
   ) : (
     <div className={[
       "marketing-calendar-card",
@@ -1058,11 +1079,13 @@ function CalendarScreen({
   generatedSuggestionCard,
   channelStatuses,
   v4CampaignCards,
+  inertPostTitleOne = false,
 }: {
   onOpenPost: () => void;
   onOpenCombinedPost: (
     campaignDate?: string,
     campaignSource?: V4CampaignSource,
+    representedChannels?: CalendarChannel[],
   ) => void;
   v4Prompt?: string;
   v4Generating?: boolean;
@@ -1077,6 +1100,7 @@ function CalendarScreen({
   generatedSuggestionCard?: CalendarItem;
   channelStatuses?: CalendarCardStatuses;
   v4CampaignCards?: V4CampaignCalendarCard[];
+  inertPostTitleOne?: boolean;
 }) {
   const baseColumns = v4CampaignCards
     ? [
@@ -1214,8 +1238,13 @@ function CalendarScreen({
                     <MarketingCalendarCard
                       key={`${item.title}-${index}`}
                       item={item}
+                      inert={inertPostTitleOne && item.title === "Post title 1"}
                       onOpen={item.combinedTarget || item.generatedDelivery
-                        ? () => onOpenCombinedPost(item.campaignDate, item.campaignSource)
+                        ? () => onOpenCombinedPost(
+                            item.campaignDate,
+                            item.campaignSource,
+                            item.channels,
+                          )
                         : onOpenPost}
                       combinedInteractive={combinedInteractive}
                       updated={updated}
@@ -1985,18 +2014,27 @@ function versionFourSummaryStatus(status: ChannelProgressStatus): VersionFourSum
   return status === "unscheduled" ? "suggested" : status;
 }
 
-function VersionFourContentStatusBadge({ status }: { status: ChannelProgressStatus }) {
+function VersionFourContentStatusBadge({
+  status,
+  suggestedAsDraft = false,
+}: {
+  status: ChannelProgressStatus;
+  suggestedAsDraft?: boolean;
+}) {
   const normalizedStatus = versionFourSummaryStatus(status);
   const presentation = V4_SUMMARY_STATUS_PRESENTATION[normalizedStatus];
+  const showDraft = suggestedAsDraft && normalizedStatus === "suggested";
 
   return (
     <span
-      className={`v4-summary-status v4-summary-status--${presentation.tone} v4-content-status`}
+      className={`v4-summary-status ${
+        showDraft ? "adhoc-campaign-status--neutral" : `v4-summary-status--${presentation.tone}`
+      } v4-content-status`}
       data-status={normalizedStatus}
-      aria-label={`Content status: ${presentation.label}`}
+      aria-label={`Content status: ${showDraft ? "Draft" : presentation.label}`}
     >
       <span className="v4-status-dot" aria-hidden="true" />
-      {presentation.label}
+      {showDraft ? "Draft" : presentation.label}
     </span>
   );
 }
@@ -2065,6 +2103,8 @@ function VersionFourSummaryModal({
   artwork,
   origin = "calendar",
   iconStyle = "jobber",
+  suggestedAsDraft = false,
+  primaryActionLabel = "Review Drafts",
   onStartReview,
   onClose,
 }: {
@@ -2078,6 +2118,8 @@ function VersionFourSummaryModal({
   artwork?: GalleryImage;
   origin?: "calendar" | "generated";
   iconStyle?: SocialIconStyle;
+  suggestedAsDraft?: boolean;
+  primaryActionLabel?: string;
   onStartReview: () => void;
   onClose: () => void;
 }) {
@@ -2151,7 +2193,10 @@ function VersionFourSummaryModal({
                       <StepperChannelIcon channel={id} iconStyle={iconStyle} />
                       <span>{label}</span>
                     </span>
-                    <VersionFourContentStatusBadge status={status} />
+                    <VersionFourContentStatusBadge
+                      status={status}
+                      suggestedAsDraft={suggestedAsDraft}
+                    />
                   </li>
                 );
               })}
@@ -2162,7 +2207,7 @@ function VersionFourSummaryModal({
             className="primary-button v4-summary-start"
             onClick={onStartReview}
           >
-            Review Drafts
+            {primaryActionLabel}
           </button>
         </section>
         {artwork ? (
@@ -5962,6 +6007,60 @@ type GeneratedV4State = {
 type GeneratedV4CalendarDeliveries =
   Partial<Record<ContextualChannel, V4ChannelDelivery>>;
 
+type AdHocShowcaseState = {
+  id: string;
+  jobId: AdHocJobId;
+  title: string;
+  channels: ContextualChannel[];
+  drafts: V2Drafts;
+  emailMessage: string;
+  emailSubject: string;
+  websiteMessage: string;
+  websiteTitle: string;
+  deliveries: V4ChannelDeliveries;
+  googleDemoState: GoogleContextDemoState;
+};
+
+type PendingAdHocShowcase = {
+  id: string;
+  jobId: AdHocJobId;
+  channels: ContextualChannel[];
+};
+
+type AdHocContextState = {
+  showcaseId: string;
+  startIndex: number;
+  returnToSummary: boolean;
+};
+
+const createAdHocShowcase = ({
+  id,
+  jobId,
+  channels,
+}: PendingAdHocShowcase): AdHocShowcaseState => {
+  const selected = new Set(channels);
+  const deliveries = createInitialV4ChannelDeliveries();
+  CONTEXTUAL_CHANNELS.forEach(({ id: channel }) => {
+    deliveries[channel] = {
+      ...deliveries[channel],
+      deleted: !selected.has(channel),
+    };
+  });
+  return {
+    id,
+    jobId,
+    title: "Seasonal Property Clean Up in Hamilton",
+    channels: [...channels],
+    drafts: createInitialV4Drafts(),
+    emailMessage: INITIAL_EMAIL_MESSAGE,
+    emailSubject: INITIAL_EMAIL_SUBJECT,
+    websiteMessage: INITIAL_WEBSITE_MESSAGE,
+    websiteTitle: INITIAL_WEBSITE_TITLE,
+    deliveries,
+    googleDemoState: "suggested",
+  };
+};
+
 const createInitialGeneratedV4State = (): GeneratedV4State => ({
   drafts: createGeneratedV4Drafts(),
   emailMessage: GENERATED_V4_EMAIL_MESSAGE,
@@ -5988,6 +6087,23 @@ export default function App() {
   const [generatedV4State, setGeneratedV4State] = useState(createInitialGeneratedV4State);
   const [generatedV4CalendarDeliveries, setGeneratedV4CalendarDeliveries] =
     useState<GeneratedV4CalendarDeliveries>({});
+  const [adHocShowcases, setAdHocShowcases] = useState<AdHocShowcaseState[]>([]);
+  const [adHocCreationStep, setAdHocCreationStep] =
+    useState<AdHocCreationStep | null>(null);
+  const [adHocSelectedJob, setAdHocSelectedJob] =
+    useState<AdHocJobId>("property-cleanup");
+  const [adHocSelectedChannels, setAdHocSelectedChannels] =
+    useState<ContextualChannel[]>([]);
+  const [pendingAdHocShowcase, setPendingAdHocShowcase] =
+    useState<PendingAdHocShowcase | null>(null);
+  const [adHocGenerating, setAdHocGenerating] = useState(false);
+  const [adHocLoadingStage, setAdHocLoadingStage] = useState(0);
+  const [adHocSummaryId, setAdHocSummaryId] = useState<string | null>(null);
+  const [adHocContext, setAdHocContext] = useState<AdHocContextState | null>(null);
+  const [adHocActiveContextChannel, setAdHocActiveContextChannel] =
+    useState<ContextualChannel | null>(null);
+  const adHocTimerRef = useRef<number | null>(null);
+  const adHocIdRef = useRef(0);
   const activeDaisyVersion: DaisyPrototypeVersion = version === "v5" ? "v5" : "v4";
   const activeDaisyState = daisyVersionStates[activeDaisyVersion];
   const updateActiveDaisyState = (update: Partial<DaisyVersionState>) => {
@@ -6087,6 +6203,8 @@ export default function App() {
   const [activeV4GroupDate, setActiveV4GroupDate] = useState<string | null>(null);
   const [activeV4CampaignSource, setActiveV4CampaignSource] =
     useState<V4CampaignSource | null>(null);
+  const [preferredV4EntryChannel, setPreferredV4EntryChannel] =
+    useState<ContextualChannel | null>(null);
   const [v4ReviewScopedChannels, setV4ReviewScopedChannels] =
     useState<ContextualChannel[] | null>(null);
   const [scheduleEditorChannel, setScheduleEditorChannel] = useState<ContextualChannel | null>(null);
@@ -6144,6 +6262,81 @@ export default function App() {
     id,
     contextualProgressStatus(id, v4ChannelDeliveries, googleContextDemoState),
   ])) as Partial<Record<ContextualChannel, ChannelProgressStatus>>;
+  const v4AdHocCampaignChannels: AdHocCampaignChannel[] = CONTEXTUAL_CHANNELS
+    .filter(({ id }) => availableV4Channels.includes(id))
+    .map(({ id, label }) => {
+      const status = versionFourSummaryStatus(v4ProgressStatuses[id] ?? "suggested");
+      const presentation = V4_SUMMARY_STATUS_PRESENTATION[status];
+      const adHocPresentation = status === "suggested"
+        ? { label: "Draft", tone: "neutral" as const }
+        : presentation;
+      return {
+        id,
+        label,
+        status: {
+          value: status,
+          label: adHocPresentation.label,
+          tone: adHocPresentation.tone,
+        },
+      };
+    });
+  const adHocCreatedCampaigns: AdHocCreatedCampaign[] = adHocShowcases.flatMap(
+    (showcase) => {
+      const channels = CONTEXTUAL_CHANNELS
+        .filter(({ id }) => (
+          showcase.channels.includes(id) && !showcase.deliveries[id].deleted
+        ))
+        .map(({ id, label }) => {
+          const status = versionFourSummaryStatus(contextualProgressStatus(
+            id,
+            showcase.deliveries,
+            showcase.googleDemoState,
+          ));
+          const presentation = V4_SUMMARY_STATUS_PRESENTATION[status];
+          const adHocPresentation = status === "suggested"
+            ? { label: "Draft", tone: "neutral" as const }
+            : presentation;
+          return {
+            id,
+            label,
+            status: {
+              value: status,
+              label: adHocPresentation.label,
+              tone: adHocPresentation.tone,
+            },
+          };
+        });
+      return channels.length > 0
+        ? [{ id: showcase.id, title: showcase.title, channels }]
+        : [];
+    },
+  );
+  const activeAdHocSummary = adHocSummaryId
+    ? adHocShowcases.find(({ id }) => id === adHocSummaryId) ?? null
+    : null;
+  const activeAdHocContext = adHocContext
+    ? adHocShowcases.find(({ id }) => id === adHocContext.showcaseId) ?? null
+    : null;
+  const activeAdHocSummaryChannels = activeAdHocSummary
+    ? activeAdHocSummary.channels.filter(
+        (channel) => !activeAdHocSummary.deliveries[channel].deleted,
+      )
+    : [];
+  const activeAdHocContextChannels = activeAdHocContext
+    ? activeAdHocContext.channels.filter(
+        (channel) => !activeAdHocContext.deliveries[channel].deleted,
+      )
+    : [];
+  const activeAdHocSummaryStatuses = activeAdHocSummary
+    ? Object.fromEntries(activeAdHocSummaryChannels.map((channel) => [
+        channel,
+        contextualProgressStatus(
+          channel,
+          activeAdHocSummary.deliveries,
+          activeAdHocSummary.googleDemoState,
+        ),
+      ])) as Partial<Record<ContextualChannel, ChannelProgressStatus>>
+    : {};
   const suggestedProgressStatuses = Object.fromEntries(CONTEXTUAL_CHANNELS.map(({ id }) => [
     id,
     calendarStatuses[activeDaisyVersion].suggested?.[CONTEXTUAL_TO_CALENDAR_CHANNEL[id]]
@@ -6447,6 +6640,7 @@ export default function App() {
     setV4ReviewOrigin(null);
     setActiveV4GroupDate(null);
     setActiveV4CampaignSource(null);
+    setPreferredV4EntryChannel(null);
     setV4ReviewScopedChannels(null);
     setCombinedModalStartIndex(0);
   };
@@ -6464,6 +6658,7 @@ export default function App() {
   };
   const deleteV4Channel = (channel: ContextualChannel, returnToContext = true) => {
     if (channel === "google") setGoogleContextDemoState("suggested");
+    setPreferredV4EntryChannel((preferred) => preferred === channel ? null : preferred);
     const originDate = activeV4GroupDate ?? v4ChannelDeliveries[channel].date;
     const nextDeliveries: V4ChannelDeliveries = {
       ...v4ChannelDeliveries,
@@ -6582,6 +6777,7 @@ export default function App() {
     return nextDeliveries;
   };
   const deleteGeneratedV4Channel = (channel: ContextualChannel) => {
+    setPreferredV4EntryChannel((preferred) => preferred === channel ? null : preferred);
     const nextDeliveries: V4ChannelDeliveries = {
       ...generatedV4State.channelDeliveries,
       [channel]: {
@@ -6697,6 +6893,7 @@ export default function App() {
     setV4ReviewOrigin(null);
     setActiveV4GroupDate(null);
     setActiveV4CampaignSource(null);
+    setPreferredV4EntryChannel(null);
     setV4ReviewScopedChannels(null);
     setSuggestedPrompt("");
     setCalendarPrompt("");
@@ -6727,6 +6924,7 @@ export default function App() {
       setV4ReviewOrigin(null);
       setActiveV4GroupDate(null);
       setActiveV4CampaignSource(null);
+      setPreferredV4EntryChannel(null);
       setV4ReviewScopedChannels(null);
       setCombinedModalStartIndex(0);
       return;
@@ -6828,12 +7026,46 @@ export default function App() {
     setSuggestedDialogOpen(false);
     setSuggestedPreviewIndex(0);
     setV4ReviewOrigin(null);
+    setPreferredV4EntryChannel(null);
     setGeneratedV4State((current) => ({
       ...current,
       loadedPreviewChannels: [],
     }));
     setV4LoadingStage(0);
     setV4Generating(true);
+  };
+  const closeAdHocTransient = () => {
+    if (adHocTimerRef.current !== null) {
+      window.clearInterval(adHocTimerRef.current);
+      adHocTimerRef.current = null;
+    }
+    setAdHocCreationStep(null);
+    setAdHocSelectedJob("property-cleanup");
+    setAdHocSelectedChannels([]);
+    setPendingAdHocShowcase(null);
+    setAdHocGenerating(false);
+    setAdHocLoadingStage(0);
+    setAdHocSummaryId(null);
+    setAdHocContext(null);
+    setAdHocActiveContextChannel(null);
+  };
+  const startAdHocCreation = () => {
+    closeAdHocTransient();
+    setAdHocCreationStep("job");
+  };
+  const startAdHocGeneration = () => {
+    if (adHocSelectedChannels.length === 0) return;
+    adHocIdRef.current += 1;
+    setPendingAdHocShowcase({
+      id: `adhoc-showcase-${adHocIdRef.current}`,
+      jobId: adHocSelectedJob,
+      channels: CONTEXTUAL_CHANNELS
+        .map(({ id }) => id)
+        .filter((channel) => adHocSelectedChannels.includes(channel)),
+    });
+    setAdHocCreationStep(null);
+    setAdHocLoadingStage(0);
+    setAdHocGenerating(true);
   };
   const switchV4EntrySurface = (nextSurface: V4EntrySurface) => {
     if (nextSurface === v4EntrySurface) return;
@@ -6851,9 +7083,184 @@ export default function App() {
     setActiveV4ContextChannel(null);
     setActiveV4GroupDate(null);
     setActiveV4CampaignSource(null);
+    setPreferredV4EntryChannel(null);
     setV4ReviewScopedChannels(null);
+    closeAdHocTransient();
     setScreen("calendar");
     setV4EntrySurface(nextSurface);
+  };
+  const openV4AdHocCampaignSummary = () => {
+    const entryChannel = availableV4Channels[0];
+    if (!entryChannel) return;
+    setActiveV4GroupDate(null);
+    setActiveV4CampaignSource("original");
+    setPreferredV4EntryChannel(entryChannel);
+    setV4ReviewScopedChannels(null);
+    setCombinedModalStartIndex(0);
+    setSocialWorkflowChannel(entryChannel);
+    setV4ReviewOrigin("saturday");
+    setCombinedWorkflow(null);
+    setV4CardSummaryOpen(true);
+  };
+  const openV4AdHocChannel = (channel: ContextualChannel) => {
+    const channelIndex = availableV4Channels.indexOf(channel);
+    if (channelIndex < 0) return;
+    setV4CardSummaryOpen(false);
+    setActiveV4GroupDate(null);
+    setActiveV4CampaignSource("original");
+    setPreferredV4EntryChannel(channel);
+    setV4ReviewScopedChannels(null);
+    setCombinedModalStartIndex(channelIndex);
+    setSocialWorkflowChannel(channel);
+    setV4ReviewOrigin("saturday");
+    setCombinedWorkflow("modal");
+  };
+  const openCreatedAdHocSummary = (showcaseId: string) => {
+    const showcase = adHocShowcases.find(({ id }) => id === showcaseId);
+    if (!showcase) return;
+    const channels = showcase.channels.filter(
+      (channel) => !showcase.deliveries[channel].deleted,
+    );
+    if (channels.length === 0) return;
+    setAdHocContext(null);
+    setAdHocSummaryId(showcaseId);
+  };
+  const openCreatedAdHocChannel = (
+    showcaseId: string,
+    channel: ContextualChannel,
+    returnToSummary = false,
+  ) => {
+    const showcase = adHocShowcases.find(({ id }) => id === showcaseId);
+    if (!showcase) return;
+    const channels = showcase.channels.filter(
+      (candidate) => !showcase.deliveries[candidate].deleted,
+    );
+    const startIndex = channels.indexOf(channel);
+    if (startIndex < 0) return;
+    setAdHocSummaryId(null);
+    setAdHocContext({ showcaseId, startIndex, returnToSummary });
+  };
+  const closeCreatedAdHocContext = () => {
+    if (adHocContext?.returnToSummary) {
+      setAdHocSummaryId(adHocContext.showcaseId);
+    }
+    setAdHocContext(null);
+    setAdHocActiveContextChannel(null);
+  };
+  const performCreatedAdHocLifecycleAction = (
+    showcaseId: string,
+    channel: ContextualChannel,
+    action: V4LifecycleAction,
+    advance = false,
+  ) => {
+    const showcase = adHocShowcases.find(({ id }) => id === showcaseId);
+    if (!showcase) return false;
+    const lifecycle: V4ChannelState = action === "schedule"
+      ? "scheduled"
+      : action === "send"
+        ? "sent"
+        : "unscheduled";
+    const nextDelivery: V4ChannelDelivery = {
+      ...showcase.deliveries[channel],
+      lifecycle,
+      date: action === "send" ? V4_TODAY_DATE : showcase.deliveries[channel].date,
+      statusOverride: null,
+    };
+    const nextDeliveries = {
+      ...showcase.deliveries,
+      [channel]: nextDelivery,
+    };
+    setAdHocShowcases((current) => current.map((candidate) => (
+      candidate.id === showcaseId
+        ? {
+            ...candidate,
+            deliveries: nextDeliveries,
+            googleDemoState: channel === "google"
+              ? action === "schedule"
+                ? "scheduled"
+                : action === "send"
+                  ? "sent"
+                  : "suggested"
+              : candidate.googleDemoState,
+          }
+        : candidate
+    )));
+    if (action === "schedule") {
+      showContextualToast(contextualSuccessMessage(channel, "schedule"), true);
+    } else if (action === "send") {
+      showContextualToast(contextualSuccessMessage(channel, "post"), true);
+    }
+    if (advance) {
+      const available = showcase.channels.filter(
+        (candidate) => !nextDeliveries[candidate].deleted,
+      );
+      const nextChannel = nextScopedReviewChannel(
+        channel,
+        showcase.channels,
+        nextDeliveries,
+        available,
+      );
+      if (nextChannel) {
+        setAdHocContext((current) => current && current.showcaseId === showcaseId
+          ? { ...current, startIndex: available.indexOf(nextChannel) }
+          : current);
+      } else {
+        closeCreatedAdHocContext();
+      }
+    }
+    return nextDeliveries;
+  };
+  const deleteCreatedAdHocChannel = (
+    showcaseId: string,
+    channel: ContextualChannel,
+  ) => {
+    const showcase = adHocShowcases.find(({ id }) => id === showcaseId);
+    if (!showcase) return;
+    const nextDeliveries = {
+      ...showcase.deliveries,
+      [channel]: {
+        ...showcase.deliveries[channel],
+        lifecycle: "unscheduled" as const,
+        deleted: true,
+        statusOverride: null,
+      },
+    };
+    const remaining = showcase.channels.filter(
+      (candidate) => !nextDeliveries[candidate].deleted,
+    );
+    setAdHocShowcases((current) => remaining.length === 0
+      ? current.filter(({ id }) => id !== showcaseId)
+      : current.map((candidate) => candidate.id === showcaseId
+        ? {
+            ...candidate,
+            deliveries: nextDeliveries,
+            googleDemoState: channel === "google"
+              ? "suggested"
+              : candidate.googleDemoState,
+          }
+        : candidate));
+    showContextualToast(contextualDeletionMessage(channel), true);
+    if (remaining.length === 0) {
+      setAdHocContext(null);
+      setAdHocSummaryId(null);
+      setAdHocActiveContextChannel(null);
+      return;
+    }
+    const nextChannel = nextAvailableChannel(channel, remaining, nextDeliveries)
+      ?? remaining[0];
+    setAdHocContext((current) => current && current.showcaseId === showcaseId
+      ? { ...current, startIndex: remaining.indexOf(nextChannel) }
+      : current);
+  };
+  const setCreatedAdHocGoogleState = (
+    showcaseId: string,
+    state: GoogleContextDemoState,
+  ) => {
+    setAdHocShowcases((current) => current.map((showcase) => (
+      showcase.id === showcaseId
+        ? { ...showcase, googleDemoState: state }
+        : showcase
+    )));
   };
   const switchVersion = (nextVersion: PrototypeVersion) => {
     if (
@@ -6869,6 +7276,8 @@ export default function App() {
     setDaisyVersionStates(createInitialDaisyVersionStates());
     setGeneratedV4State(createInitialGeneratedV4State());
     setGeneratedV4CalendarDeliveries({});
+    closeAdHocTransient();
+    setAdHocShowcases([]);
     setEnabledChannels({
       google: true,
       facebook: true,
@@ -6906,6 +7315,7 @@ export default function App() {
     setActiveV4ContextChannel(null);
     setActiveV4GroupDate(null);
     setActiveV4CampaignSource(null);
+    setPreferredV4EntryChannel(null);
     setV4ReviewScopedChannels(null);
     setScheduleEditorChannel(null);
     setReviewDeleteChannel(null);
@@ -6979,9 +7389,39 @@ export default function App() {
     };
   }, [version, v4Generating]);
 
+  useEffect(() => {
+    if (version !== "v4" || !adHocGenerating || !pendingAdHocShowcase) return;
+    let elapsedStages = 0;
+    const interval = window.setInterval(() => {
+      elapsedStages += 1;
+      if (elapsedStages < V4_LOADING_STAGES.length) {
+        setAdHocLoadingStage(elapsedStages);
+        return;
+      }
+      window.clearInterval(interval);
+      if (adHocTimerRef.current === interval) adHocTimerRef.current = null;
+      const completed = createAdHocShowcase(pendingAdHocShowcase);
+      setAdHocShowcases((current) => current.some(({ id }) => id === completed.id)
+        ? current
+        : [...current, completed]);
+      setAdHocGenerating(false);
+      setAdHocLoadingStage(0);
+      setPendingAdHocShowcase(null);
+      setAdHocSummaryId(completed.id);
+    }, 1000);
+    adHocTimerRef.current = interval;
+    return () => {
+      window.clearInterval(interval);
+      if (adHocTimerRef.current === interval) adHocTimerRef.current = null;
+    };
+  }, [adHocGenerating, pendingAdHocShowcase, version]);
+
   useEffect(() => () => {
     if (suggestionTimerRef.current !== null) {
       window.clearInterval(suggestionTimerRef.current);
+    }
+    if (adHocTimerRef.current !== null) {
+      window.clearInterval(adHocTimerRef.current);
     }
   }, []);
 
@@ -7098,6 +7538,14 @@ export default function App() {
                   onClick={() => switchV4EntrySurface("dashboard")}
                 >
                   Dashboard
+                </button>
+                <button
+                  className={v4EntrySurface === "adhoc" ? "selected" : ""}
+                  type="button"
+                  aria-pressed={v4EntrySurface === "adhoc"}
+                  onClick={() => switchV4EntrySurface("adhoc")}
+                >
+                  Ad-hoc
                 </button>
               </fieldset>
               <fieldset
@@ -7365,9 +7813,25 @@ export default function App() {
             </>
           ) : screen === "calendar" ? (
             <>
-              <CompactSideNavigation />
-              <TopBar compact staticControls marketingEssentials />
-              {version === "v4" && v4EntrySurface === "dashboard" ? (
+              {version === "v4" && v4EntrySurface === "adhoc"
+                ? <SideNavigation />
+                : <CompactSideNavigation />}
+              <TopBar
+                compact={version !== "v4" || v4EntrySurface !== "adhoc"}
+                staticControls
+                marketingEssentials
+              />
+              {version === "v4" && v4EntrySurface === "adhoc" ? (
+                <VersionFourAdHoc
+                  campaignChannels={v4AdHocCampaignChannels}
+                  createdCampaigns={adHocCreatedCampaigns}
+                  onNewShowcase={startAdHocCreation}
+                  onOpenCampaign={openV4AdHocCampaignSummary}
+                  onOpenChannel={openV4AdHocChannel}
+                  onOpenCreatedCampaign={openCreatedAdHocSummary}
+                  onOpenCreatedChannel={openCreatedAdHocChannel}
+                />
+              ) : version === "v4" && v4EntrySurface === "dashboard" ? (
                 <VersionFourDashboard
                   prompt={v4DashboardPrompt}
                   onPromptChange={setV4DashboardPrompt}
@@ -7411,7 +7875,11 @@ export default function App() {
                   setV3ReviewOrigin(null);
                   setCalendarModalOpen(true);
                 }}
-                onOpenCombinedPost={(campaignDate, campaignSource = "original") => {
+                onOpenCombinedPost={(
+                  campaignDate,
+                  campaignSource = "original",
+                  representedCalendarChannels = [],
+                ) => {
                   if (version === "v3") {
                     setV3ContextPreviewChannel("google");
                     setV3ReviewOrigin(null);
@@ -7431,8 +7899,19 @@ export default function App() {
                         ? availableGeneratedV4Channels
                         : availableV4Channels
                       : dateGroupChannels;
+                    const representedChannels = CONTEXTUAL_CHANNELS
+                      .map(({ id }) => id)
+                      .filter((channel) => representedCalendarChannels.includes(
+                        CONTEXTUAL_TO_CALENDAR_CHANNEL[channel],
+                      ));
                     setActiveV4GroupDate(campaignDate);
                     setActiveV4CampaignSource(campaignSource);
+                    setPreferredV4EntryChannel(
+                      representedChannels.find((channel) => campaignChannels.includes(channel))
+                        ?? dateGroupChannels.find((channel) => campaignChannels.includes(channel))
+                        ?? campaignChannels[0]
+                        ?? null,
+                    );
                     setV4ReviewScopedChannels(null);
                     setCombinedModalStartIndex(0);
                     setSocialWorkflowChannel(campaignChannels[0]);
@@ -7448,6 +7927,7 @@ export default function App() {
                   }
                 }}
                 combinedInteractive={version === "v3" || isDaisyVersion}
+                inertPostTitleOne={version === "v4"}
                 combinedChannels={currentSaturdayCompletion ?? undefined}
                 generatedSuggestionCard={version === "v5" ? suggestedCompletion?.card : undefined}
                 channelStatuses={calendarStatuses[version]}
@@ -7457,6 +7937,97 @@ export default function App() {
                       ...(version === "v4" ? generatedV4CampaignCards : []),
                     ]
                   : undefined}
+                />
+              )}
+              {version === "v4" && v4EntrySurface === "adhoc" && adHocCreationStep && (
+                <AdHocCreationDialog
+                  step={adHocCreationStep}
+                  selectedJob={adHocSelectedJob}
+                  selectedChannels={adHocSelectedChannels}
+                  onSelectJob={setAdHocSelectedJob}
+                  onToggleChannel={(channel) => {
+                    setAdHocSelectedChannels((current) => {
+                      const next = current.includes(channel)
+                        ? current.filter((candidate) => candidate !== channel)
+                        : [...current, channel];
+                      return CONTEXTUAL_CHANNELS
+                        .map(({ id }) => id)
+                        .filter((candidate) => next.includes(candidate));
+                    });
+                  }}
+                  onNext={() => setAdHocCreationStep("channels")}
+                  onBack={() => setAdHocCreationStep("job")}
+                  onCreate={startAdHocGeneration}
+                  onCancel={closeAdHocTransient}
+                />
+              )}
+              {version === "v4" && v4EntrySurface === "adhoc" && adHocGenerating && (
+                <AdHocGenerationOverlay onClose={closeAdHocTransient}>
+                  <VersionFourLoadingContent stage={adHocLoadingStage} />
+                </AdHocGenerationOverlay>
+              )}
+              {version === "v4"
+                && v4EntrySurface === "adhoc"
+                && activeAdHocSummary
+                && activeAdHocSummaryChannels.length > 0 && (
+                <VersionFourSummaryModal
+                  title={activeAdHocSummary.title}
+                  images={activeAdHocSummary.drafts.all.images}
+                  channels={activeAdHocSummaryChannels}
+                  statuses={activeAdHocSummaryStatuses}
+                  delivery={
+                    activeAdHocSummary.deliveries[activeAdHocSummaryChannels[0]]
+                  }
+                  scheduleText={v4CampaignScheduleText(
+                    activeAdHocSummaryChannels,
+                    activeAdHocSummary.deliveries,
+                  )}
+                  description={V4_SUMMARY_COPY}
+                  iconStyle="jobber"
+                  suggestedAsDraft
+                  primaryActionLabel="Start Review"
+                  onStartReview={() => openCreatedAdHocChannel(
+                    activeAdHocSummary.id,
+                    activeAdHocSummaryChannels[0],
+                    true,
+                  )}
+                  onClose={() => setAdHocSummaryId(null)}
+                />
+              )}
+              {version === "v4"
+                && v4EntrySurface === "adhoc"
+                && activeAdHocContext
+                && adHocContext
+                && activeAdHocContextChannels.length > 0 && (
+                <VersionFourContextModal
+                  key={`adhoc-${activeAdHocContext.id}-${adHocContext.startIndex}-${activeAdHocContextChannels.join("-")}`}
+                  drafts={activeAdHocContext.drafts}
+                  emailMessage={activeAdHocContext.emailMessage}
+                  emailSubject={activeAdHocContext.emailSubject}
+                  websiteMessage={activeAdHocContext.websiteMessage}
+                  websiteTitle={activeAdHocContext.websiteTitle}
+                  campaignTitle={activeAdHocContext.title}
+                  initialIndex={adHocContext.startIndex}
+                  availableChannels={activeAdHocContextChannels}
+                  channelDeliveries={activeAdHocContext.deliveries}
+                  googleDemoState={activeAdHocContext.googleDemoState}
+                  navigationStyle={v4NavigationStyle}
+                  iconStyle="jobber"
+                  onActiveChannelChange={setAdHocActiveContextChannel}
+                  onClose={closeCreatedAdHocContext}
+                  onEdit={() => undefined}
+                  onDelete={(channel) => deleteCreatedAdHocChannel(
+                    activeAdHocContext.id,
+                    channel,
+                  )}
+                  onLifecycleAction={(channel, action, advance) => (
+                    performCreatedAdHocLifecycleAction(
+                      activeAdHocContext.id,
+                      channel,
+                      action,
+                      advance,
+                    )
+                  )}
                 />
               )}
               {v4CardSummaryOpen && version === "v4" && (
@@ -7477,9 +8048,17 @@ export default function App() {
                     : undefined}
                   iconStyle="jobber"
                   onStartReview={() => {
+                    const entryChannel = preferredV4EntryChannel
+                      && activeCalendarV4Channels.includes(preferredV4EntryChannel)
+                      ? preferredV4EntryChannel
+                      : activeCalendarV4Channels[0];
                     setV4CardSummaryOpen(false);
-                    setCombinedModalStartIndex(0);
-                    setSocialWorkflowChannel(activeCalendarV4Channels[0]);
+                    setCombinedModalStartIndex(Math.max(
+                      0,
+                      activeCalendarV4Channels.indexOf(entryChannel),
+                    ));
+                    setSocialWorkflowChannel(entryChannel);
+                    setPreferredV4EntryChannel(null);
                     setCombinedWorkflow("modal");
                   }}
                   onClose={() => {
@@ -7487,6 +8066,7 @@ export default function App() {
                     setV4ReviewOrigin(null);
                     setActiveV4GroupDate(null);
                     setActiveV4CampaignSource(null);
+                    setPreferredV4EntryChannel(null);
                     setV4ReviewScopedChannels(null);
                     setCombinedModalStartIndex(0);
                   }}
@@ -7523,6 +8103,7 @@ export default function App() {
                         const groupDate = V4_INITIAL_DATE;
                         setActiveV4GroupDate(groupDate);
                         setActiveV4CampaignSource("generated");
+                        setPreferredV4EntryChannel(null);
                         setV4ReviewScopedChannels(null);
                         setV4SuggestedSummaryOpen(false);
                         setSuggestedPreviewIndex(0);
@@ -7744,6 +8325,7 @@ export default function App() {
                     setV4ReviewOrigin(null);
                     setActiveV4GroupDate(null);
                     setActiveV4CampaignSource(null);
+                    setPreferredV4EntryChannel(null);
                     setV4ReviewScopedChannels(null);
                     setCombinedWorkflow(null);
                   }}
@@ -7777,6 +8359,18 @@ export default function App() {
                 <GooglePrototypeStatusControls
                   state={googleContextDemoState}
                   onChange={setGoogleContextDemoState}
+                />
+              )}
+              {activeAdHocContext
+                && adHocContext
+                && adHocActiveContextChannel === "google"
+                && !prototypeEnv.researchMode && (
+                <GooglePrototypeStatusControls
+                  state={activeAdHocContext.googleDemoState}
+                  onChange={(state) => setCreatedAdHocGoogleState(
+                    activeAdHocContext.id,
+                    state,
+                  )}
                 />
               )}
             </>

@@ -79,8 +79,11 @@ try {
   await summary().getByRole("button", { name: "Review Drafts", exact: true }).click();
   await context().waitFor();
   await waitForPreviewReady(context());
+  assert.equal(
+    await context().getByRole("button", { name: /^Facebook,/ }).getAttribute("aria-current"),
+    "step",
+  );
   assert.ok(await context().getByText(/Christmas Special: Save 15%/).count() >= 1);
-  await selectChannel(context(), "Facebook");
   await context().locator(".v4-context-footer").getByRole("button", { name: "Edit" }).click();
   await scheduleField.getByRole("button", { name: "Edit", exact: true }).click();
   await scheduleDialog.getByLabel("Schedule date for Facebook").fill("2026-11-07");
@@ -97,6 +100,10 @@ try {
   await summary().getByRole("button", { name: "Review Drafts", exact: true }).click();
   await context().waitFor();
   await waitForPreviewReady(context());
+  assert.equal(
+    await context().getByRole("button", { name: /^Google,/ }).getAttribute("aria-current"),
+    "step",
+  );
   await selectChannel(context(), "Email");
   await context().locator(".v4-context-footer")
     .getByRole("button", { name: "Show publishing options" })
