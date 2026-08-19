@@ -43,10 +43,10 @@ async function selectVersion(label) {
   await button.click();
 }
 
-async function verifyModal({ version, modalSelector, stepperSelector, copySelector, headingSelector }) {
+async function verifyModal({ version, modalSelector, switcherSelector, copySelector, headingSelector }) {
   await selectVersion(version);
   if (version === "Version 4") {
-    await page.getByRole("button", { name: "Progress button", exact: true }).click();
+    await page.getByRole("button", { name: "Icon button", exact: true }).click();
   }
   await saturdayCard().click();
   if (version === "Version 4") {
@@ -54,10 +54,10 @@ async function verifyModal({ version, modalSelector, stepperSelector, copySelect
   }
   const modal = page.locator(modalSelector);
   await modal.waitFor();
-  const stepper = modal.locator(stepperSelector);
+  const switcher = modal.locator(switcherSelector);
 
   for (const channel of channels) {
-    await stepper.getByRole("button", { name: new RegExp(`^${channel.label},`) }).click();
+    await switcher.getByRole("radio", { name: channel.label, exact: true }).click();
     assert.equal(
       (await modal.locator(copySelector).textContent())?.trim(),
       channel.rationale,
@@ -80,7 +80,7 @@ try {
   await verifyModal({
     version: "Version 4",
     modalSelector: ".v4-five-channel-modal",
-    stepperSelector: ".channel-progress-stepper--modal-v4",
+    switcherSelector: ".channel-icon-switcher--modal-v4",
     copySelector: ".v4-about-copy > p",
     headingSelector: ".v4-about-heading h2",
   });
@@ -89,7 +89,7 @@ try {
     await verifyModal({
       version: "Version 5",
       modalSelector: ".v5-context-modal",
-      stepperSelector: ".channel-progress-stepper--modal-v5",
+      switcherSelector: ".channel-icon-switcher--modal-v5",
       copySelector: ".v5-context-campaign-intro > p",
     });
   }

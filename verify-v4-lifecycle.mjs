@@ -23,7 +23,7 @@ const v4ActionLabels = [
 async function selectVersionFour() {
   await page.getByRole("button", { name: "Version 1" }).click();
   await page.getByRole("button", { name: "Version 4" }).click();
-  await page.getByRole("button", { name: "Progress button", exact: true }).click();
+  await page.getByRole("button", { name: "Icon button", exact: true }).click();
 }
 
 async function openSaturday() {
@@ -41,13 +41,13 @@ async function openCampaignReview(day) {
   await modal().waitFor();
 }
 
-async function expectProgress(value) {
+async function expectSelection(value) {
   const [expectedIndex, expectedCount] = value.split(" of ").map(Number);
-  const buttons = modal().locator(".channel-progress-stepper--modal-v4").getByRole("button");
-  assert.equal(await buttons.count(), expectedCount);
+  const options = modal().locator(".channel-icon-switcher--modal-v4").getByRole("radio");
+  assert.equal(await options.count(), expectedCount);
   assert.equal(
-    await buttons.evaluateAll((items) => (
-      items.findIndex((button) => button.getAttribute("aria-current") === "step") + 1
+    await options.evaluateAll((items) => (
+      items.findIndex((option) => option.getAttribute("aria-checked") === "true") + 1
     )),
     expectedIndex,
   );
@@ -55,8 +55,8 @@ async function expectProgress(value) {
 }
 
 async function selectModalChannel(channel) {
-  await modal().locator(".channel-progress-stepper--modal-v4")
-    .getByRole("button", { name: new RegExp(`^${channel},`) })
+  await modal().locator(".channel-icon-switcher--modal-v4")
+    .getByRole("radio", { name: channel, exact: true })
     .click();
 }
 
@@ -90,7 +90,7 @@ async function cardChannels(day) {
 try {
   await page.goto(baseUrl, { waitUntil: "networkidle" });
   await page.getByRole("button", { name: "Version 4" }).click();
-  await page.getByRole("button", { name: "Progress button", exact: true }).click();
+  await page.getByRole("button", { name: "Icon button", exact: true }).click();
 
   // V4 alone uses the selected Nov 2–8 week and starts with one Nov 7 campaign card.
   assert.equal(await calendarDay("Sunday, Nov 1").count(), 0);
@@ -126,9 +126,9 @@ try {
   );
   await modalFooter().getByRole("button", { name: "Edit", exact: true }).click();
   await page.getByRole("heading", { name: "Review Google Post" }).waitFor();
-  const reviewStepper = page.locator(".v4-channel-review .channel-progress-stepper--review");
+  const reviewSwitcher = page.locator(".v4-channel-review .channel-icon-switcher--review");
   for (const [channel, actionLabel] of v4ActionLabels) {
-    await reviewStepper.getByRole("button", { name: new RegExp(`^${channel},`) }).click();
+    await reviewSwitcher.getByRole("radio", { name: channel, exact: true }).click();
     assert.equal(
       await reviewFooter().getByRole("button", { name: actionLabel, exact: true }).count(),
       1,
@@ -138,7 +138,7 @@ try {
       1,
     );
   }
-  await reviewStepper.getByRole("button", { name: /^Google,/ }).click();
+  await reviewSwitcher.getByRole("radio", { name: "Google", exact: true }).click();
   const reviewSchedule = page.locator(".review-field").filter({ hasText: "Schedule Post" });
   await reviewSchedule.getByRole("button", { name: "Edit" }).click();
   const scheduleDialog = page.getByRole("dialog", { name: "Schedule Date" });
@@ -171,10 +171,11 @@ try {
   await scheduleDialog.getByRole("button", { name: "Save Edits" }).click();
   await page.getByRole("heading", { name: "Review Google Post" }).waitFor();
   await reviewSchedule.getByText("Nov 5, 2026 2:30 PM", { exact: true }).waitFor();
-  assert.equal(await reviewStepper.getByRole("button").count(), 5);
+  assert.equal(await reviewSwitcher.getByRole("radio").count(), 5);
   assert.equal(
-    await reviewStepper.getByRole("button", { name: /^Google,/ }).getAttribute("aria-current"),
-    "step",
+    await reviewSwitcher.getByRole("radio", { name: "Google", exact: true })
+      .getAttribute("aria-checked"),
+    "true",
   );
   assert.equal(await page.getByText("Your post is rescheduled", { exact: true }).count(), 0);
   assert.equal(await page.getByRole("status").count(), 0);
@@ -192,14 +193,14 @@ try {
   ).waitFor();
   await page.getByRole("heading", { name: "Review Facebook Post" }).waitFor();
   await reviewFooter().getByRole("button", { name: "Back" }).click();
-  await expectProgress("2 of 5");
+  await expectSelection("2 of 5");
   await modal().getByRole("button", { name: "Close", exact: true }).click();
   assert.deepEqual(await cardChannels("Thursday, Nov 5"), ["GGoogle post"]);
   assert.equal((await cardChannels("Saturday, Nov 7")).length, 4);
 
   // Rescheduling from a one-channel split card still uses campaign-wide review.
   await openCampaignReview("Thursday, Nov 5");
-  await expectProgress("1 of 5");
+  await expectSelection("1 of 5");
   assert.equal(
     await modal().locator(".v4-context-facts").getByRole("button", { name: "Edit" }).count(),
     0,
@@ -223,7 +224,7 @@ try {
   await selectModalChannel("Instagram");
   await postCurrentNow();
   await page.getByText("Your Instagram post has been successfully posted.", { exact: true }).waitFor();
-  await expectProgress("4 of 5");
+  await expectSelection("4 of 5");
   await modal().getByRole("button", { name: "Close", exact: true }).click();
   assert.deepEqual(await cardChannels("Friday, Nov 6"), ["◎Instagram post"]);
   assert.match(
@@ -244,11 +245,11 @@ try {
     .getByRole("button", { name: "Review Drafts", exact: true })
     .click();
   await modal().waitFor();
-  await expectProgress("3 of 5");
+  await expectSelection("3 of 5");
   await modal().getByText("Sent", { exact: true }).waitFor();
   await modal().getByRole("button", { name: "Close", exact: true }).click();
   await openCampaignReview("Saturday, Nov 7");
-  await expectProgress("1 of 5");
+  await expectSelection("1 of 5");
 
   // Multiple Post now actions aggregate on one Nov 6 Sent card.
   await selectModalChannel("Facebook");
@@ -292,7 +293,7 @@ try {
     "Your Google post has been successfully scheduled.",
     { exact: true },
   ).waitFor();
-  await expectProgress("2 of 5");
+  await expectSelection("2 of 5");
   await selectModalChannel("Google");
   await modalFooter().getByRole("button", { name: "Show scheduled post options" }).click();
   await modal().getByRole("menuitem", { name: "Send now", exact: true }).click();
@@ -315,10 +316,11 @@ try {
   await scheduleDialog.getByRole("button", { name: "Save Edits" }).click();
   await page.getByRole("heading", { name: "Review Facebook Post" }).waitFor();
   await reviewSchedule.getByText("Nov 8, 2026 9:00 AM", { exact: true }).waitFor();
-  assert.equal(await reviewStepper.getByRole("button").count(), 5);
+  assert.equal(await reviewSwitcher.getByRole("radio").count(), 5);
   assert.equal(
-    await reviewStepper.getByRole("button", { name: /^Facebook,/ }).getAttribute("aria-current"),
-    "step",
+    await reviewSwitcher.getByRole("radio", { name: "Facebook", exact: true })
+      .getAttribute("aria-checked"),
+    "true",
   );
   assert.equal(await page.getByText("Your post is rescheduled", { exact: true }).count(), 0);
   assert.equal(
@@ -331,8 +333,8 @@ try {
     { exact: true },
   ).waitFor();
   await page.getByRole("heading", { name: "Review Instagram Post" }).waitFor();
-  assert.equal(await reviewStepper.getByRole("button", { name: "Facebook, scheduled" }).count(), 1);
-  assert.equal(await reviewStepper.getByRole("button").count(), 5);
+  assert.equal(await reviewSwitcher.getByRole("radio", { name: "Facebook", exact: true }).count(), 1);
+  assert.equal(await reviewSwitcher.getByRole("radio").count(), 5);
   await reviewFooter().getByRole("button", { name: "Back" }).click();
   await modal().getByRole("button", { name: "Close", exact: true }).click();
   assert.equal(await campaignCard("Sunday, Nov 8").locator(".status-scheduled").count(), 1);
@@ -345,12 +347,12 @@ try {
   await page.getByRole("menuitem", { name: "Post now", exact: true }).click();
   await page.getByRole("heading", { name: "Review Instagram Post" }).waitFor();
   assert.equal(
-    await reviewStepper.getByRole("button", { name: "Facebook, sent" }).count(),
+    await reviewSwitcher.getByRole("radio", { name: "Facebook", exact: true }).count(),
     1,
   );
-  assert.equal(await reviewStepper.getByRole("button").count(), 5);
+  assert.equal(await reviewSwitcher.getByRole("radio").count(), 5);
   await reviewFooter().getByRole("button", { name: "Back" }).click();
-  await expectProgress("3 of 5");
+  await expectSelection("3 of 5");
   await page.getByText("Your Facebook post has been successfully posted.", { exact: true }).waitFor();
   await modal().getByRole("button", { name: "Close", exact: true }).click();
   assert.deepEqual(await cardChannels("Friday, Nov 6"), ["fFacebook post"]);
@@ -376,7 +378,7 @@ try {
   await modalFooter().getByRole("button", { name: "Edit", exact: true }).click();
   await deleteCurrentFromReview();
   await page.getByRole("heading", { name: "Review Instagram Post" }).waitFor();
-  assert.equal(await reviewStepper.getByRole("button", { name: /^Facebook,/ }).count(), 0);
+  assert.equal(await reviewSwitcher.getByRole("radio", { name: "Facebook", exact: true }).count(), 0);
   await page.getByText("Facebook post is deleted", { exact: true }).waitFor();
 
   // Delivery progression after a draft date edit skips channels already deleted ahead.
@@ -390,10 +392,10 @@ try {
   await scheduleDialog.getByLabel("Schedule date for Facebook").fill("2026-11-08");
   await scheduleDialog.getByRole("button", { name: "Save Edits" }).click();
   await page.getByRole("heading", { name: "Review Facebook Post" }).waitFor();
-  assert.equal(await reviewStepper.getByRole("button", { name: /^Instagram,/ }).count(), 0);
+  assert.equal(await reviewSwitcher.getByRole("radio", { name: "Instagram", exact: true }).count(), 0);
   await reviewFooter().getByRole("button", { name: "Schedule Facebook post", exact: true }).click();
   await page.getByRole("heading", { name: "Review Email Campaign" }).waitFor();
-  assert.equal(await reviewStepper.getByRole("button", { name: /^Instagram,/ }).count(), 0);
+  assert.equal(await reviewSwitcher.getByRole("radio", { name: "Instagram", exact: true }).count(), 0);
   assert.equal(await page.getByText("Your post is rescheduled", { exact: true }).count(), 0);
 
   // A delivered split-card reschedule also stays in campaign-wide review before Back.
@@ -431,11 +433,11 @@ try {
   assert.equal(await calendarDay("Sunday, Nov 1").count(), 1);
   assert.equal(await calendarDay("Sunday, Nov 8").count(), 0);
   await page.getByRole("button", { name: "Version 4" }).click();
-  await page.getByRole("button", { name: "Progress button", exact: true }).click();
+  await page.getByRole("button", { name: "Icon button", exact: true }).click();
   assert.equal(await campaignCard("Friday, Nov 6").count(), 0);
   assert.equal((await cardChannels("Saturday, Nov 7")).length, 5);
   await openSaturday();
-  await expectProgress("1 of 5");
+  await expectSelection("1 of 5");
 
   console.log("Verified V4 dynamic dates, linked split cards, lifecycle moves, review parity, deletion, and reset.");
 } finally {

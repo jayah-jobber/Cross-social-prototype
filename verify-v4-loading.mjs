@@ -27,7 +27,7 @@ async function resetV4() {
   if (await flow().count()) await outerClose().click();
   await page.getByRole("button", { name: "Version 1", exact: true }).click();
   await page.getByRole("button", { name: "Version 4", exact: true }).click();
-  await page.getByRole("button", { name: "Progress button", exact: true }).click();
+  await page.getByRole("button", { name: "Icon button", exact: true }).click();
 }
 
 async function submitFromCalendar(prompt, method = "enter") {
@@ -74,7 +74,7 @@ async function waitForGeneratedPreview() {
 try {
   await page.goto(baseUrl, { waitUntil: "networkidle" });
   await page.getByRole("button", { name: "Version 4", exact: true }).click();
-  await page.getByRole("button", { name: "Progress button", exact: true }).click();
+  await page.getByRole("button", { name: "Icon button", exact: true }).click();
 
   // Initial Enter submit runs all five local-asset stages into generated Summary.
   await submitFromCalendar("Promote fall cleanup", "enter");
@@ -151,19 +151,30 @@ try {
   }).count(), 0);
   const generatedHeaderGeometry = await generatedReview().evaluate((review) => {
     const modal = review.getBoundingClientRect();
-    const stepper = review.querySelector(".channel-progress-stepper")?.getBoundingClientRect();
-    return Math.abs(
-      (stepper?.left ?? 0) + (stepper?.width ?? 0) / 2 - (modal.left + modal.width / 2),
-    );
+    const switcher = review.querySelector(".channel-icon-switcher")?.getBoundingClientRect();
+    const details = review.querySelector(".v4-context-details")?.getBoundingClientRect();
+    return {
+      leftDelta: Math.abs((switcher?.left ?? 0) - (details?.left ?? 0)),
+      centerDelta: Math.abs(
+        (switcher?.left ?? 0) + (switcher?.width ?? 0) / 2 - (modal.left + modal.width / 2),
+      ),
+      closeCount: review.querySelectorAll(".context-navigation-close").length,
+    };
   });
-  assert.ok(generatedHeaderGeometry <= 1);
+  assert.ok(generatedHeaderGeometry.leftDelta <= 1, JSON.stringify(generatedHeaderGeometry));
+  assert.ok(generatedHeaderGeometry.centerDelta >= 40, JSON.stringify(generatedHeaderGeometry));
+  assert.equal(generatedHeaderGeometry.closeCount, 0);
   await page.screenshot({ path: "/tmp/v4-generated-review.png" });
-  assert.equal(await generatedReview().getByRole("button", { name: /^Google,/ }).getAttribute("aria-current"), "step");
   assert.equal(
-    await generatedReview().locator(".channel-progress-stepper--modal-v4").getByRole("button").count(),
+    await generatedReview().getByRole("radio", { name: "Google", exact: true })
+      .getAttribute("aria-checked"),
+    "true",
+  );
+  assert.equal(
+    await generatedReview().locator(".channel-icon-switcher--modal-v4").getByRole("radio").count(),
     4,
   );
-  assert.equal(await generatedReview().getByRole("button", { name: /^Website,/ }).count(), 0);
+  assert.equal(await generatedReview().getByRole("radio", { name: "Website", exact: true }).count(), 0);
   assert.equal(await generatedReview().getByRole("button", { name: "Close", exact: true }).count(), 0);
   await assertSingleGeneratedDialog();
 
@@ -171,7 +182,7 @@ try {
   await waitForGeneratedPreview();
   await generatedReview().locator(".v4-context-footer")
     .getByRole("button", { name: "Schedule Google post", exact: true }).click();
-  await generatedReview().getByRole("button", { name: /^Facebook,/ }).waitFor();
+  await generatedReview().getByRole("radio", { name: "Facebook", exact: true }).waitFor();
   await promptInput().fill("Promote updated cleanup");
   await regenerate().click();
   await loading().getByRole("status", { name: stages[0][0] }).waitFor();

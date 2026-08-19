@@ -38,7 +38,7 @@ async function chooseChannels(labels) {
   }
 }
 
-async function waitForGeneratedSummary() {
+async function waitForGeneratedContext() {
   await page.getByRole("dialog", { name: "Generating job showcase" }).waitFor();
   assert.equal(await page.getByText("Suggested Marketing Content", { exact: true }).count(), 0);
   assert.equal(await page.locator(".suggested-prompt-section, textarea").count(), 0);
@@ -46,7 +46,8 @@ async function waitForGeneratedSummary() {
     await page.getByRole("status", { name: "Understanding your marketing plan" }).count(),
     1,
   );
-  await summary().waitFor({ timeout: 8_000 });
+  await context().waitFor({ timeout: 8_000 });
+  assert.equal(await page.locator(".v4-summary-modal").count(), 0);
 }
 
 try {
@@ -190,45 +191,30 @@ try {
   await creation().getByRole("button", { name: /^Next/ }).click();
   assert.equal(await creation().getByRole("checkbox", { checked: true }).count(), 0);
 
-  await chooseChannels(["Facebook", "Email"]);
+  await chooseChannels(["Email", "Facebook"]);
   await createButton.click();
-  await waitForGeneratedSummary();
+  await waitForGeneratedContext();
   assert.equal(await createdRows().count(), 1);
-  assert.equal(
-    await summary().getByRole("heading", {
-      name: "Seasonal Property Clean Up in Hamilton",
-      exact: true,
-    }).count(),
-    1,
-  );
-  assert.deepEqual(
-    await summary().locator(".v4-summary-status-list li").evaluateAll((items) => (
-      items.map((item) => ({
-        channel: item.getAttribute("data-channel"),
-        status: item.querySelector(".v4-summary-status")?.textContent?.trim(),
-        underlying: item.querySelector(".v4-summary-status")?.getAttribute("data-status"),
-      }))
-    )),
-    [
-      { channel: "facebook", status: "Draft", underlying: "suggested" },
-      { channel: "email", status: "Draft", underlying: "suggested" },
-    ],
-  );
-  assert.equal(
-    await summary().getByRole("button", { name: "Start Review", exact: true }).count(),
-    1,
-  );
-  assert.equal(await page.locator(".suggested-prompt-section").count(), 0);
-
-  await summary().getByRole("button", { name: "Start Review", exact: true }).click();
   await context().getByRole("heading", {
     name: "About this Facebook post",
     exact: true,
   }).waitFor();
   assert.equal(await context().locator(".v4-arrow-navigator").getByText("1 of 2").count(), 1);
+  await context().getByRole("button", { name: "Next channel", exact: true }).click();
+  await context().getByRole("heading", {
+    name: "About this email campaign",
+    exact: true,
+  }).waitFor();
+  assert.equal(await context().locator(".v4-arrow-navigator").getByText("2 of 2").count(), 1);
+  assert.equal(
+    await context().getByRole("button", { name: "Next channel", exact: true }).isDisabled(),
+    true,
+  );
   await context().getByRole("button", { name: "Close", exact: true }).click();
-  await summary().waitFor();
-  await summary().getByRole("button", { name: "Close summary" }).click();
+  assert.equal(await page.locator(".calendar-modal-overlay").count(), 0);
+  assert.equal(await summary().count(), 0);
+  await adhoc().waitFor();
+  assert.equal(await createdRows().count(), 1);
 
   const firstId = await createdRow().getAttribute("data-campaign-id");
   assert.ok(firstId);
@@ -264,6 +250,31 @@ try {
 
   await createdRow().click({ position: { x: 450, y: 34 } });
   await summary().waitFor();
+  assert.equal(
+    await summary().getByRole("heading", {
+      name: "Seasonal Property Clean Up in Hamilton",
+      exact: true,
+    }).count(),
+    1,
+  );
+  assert.deepEqual(
+    await summary().locator(".v4-summary-status-list li").evaluateAll((items) => (
+      items.map((item) => ({
+        channel: item.getAttribute("data-channel"),
+        status: item.querySelector(".v4-summary-status")?.textContent?.trim(),
+        underlying: item.querySelector(".v4-summary-status")?.getAttribute("data-status"),
+      }))
+    )),
+    [
+      { channel: "facebook", status: "Draft", underlying: "suggested" },
+      { channel: "email", status: "Draft", underlying: "suggested" },
+    ],
+  );
+  assert.equal(
+    await summary().getByRole("button", { name: "Start Review", exact: true }).count(),
+    1,
+  );
+  assert.equal(await page.locator(".suggested-prompt-section").count(), 0);
   await summary().getByRole("button", { name: "Start Review", exact: true }).click();
   await context().locator(".v4-context-footer")
     .getByRole("button", { name: "Schedule Facebook post", exact: true }).click();
@@ -290,12 +301,32 @@ try {
   );
 
   // Create another independent table-only showcase.
+  await page.getByRole("button", { name: "Icon button", exact: true }).click();
   await openCreation();
   await creation().getByRole("button", { name: /^Next/ }).click();
   await chooseChannels(["Google"]);
   await creation().getByRole("button", { name: "Create Draft Post", exact: true }).click();
-  await waitForGeneratedSummary();
-  await summary().getByRole("button", { name: "Close summary" }).click();
+  await waitForGeneratedContext();
+  const iconGeometry = await context().evaluate((dialog) => {
+    const dialogBox = dialog.getBoundingClientRect();
+    const switcher = dialog.querySelector(".channel-icon-switcher")?.getBoundingClientRect();
+    const details = dialog.querySelector(".v4-context-details")?.getBoundingClientRect();
+    const close = dialog.querySelector(".context-navigation-close")?.getBoundingClientRect();
+    return {
+      leftDelta: Math.abs((switcher?.left ?? 0) - (details?.left ?? 0)),
+      centerDelta: Math.abs(
+        (switcher?.left ?? 0) + (switcher?.width ?? 0) / 2
+          - (dialogBox.left + dialogBox.width / 2),
+      ),
+      closeRightDelta: Math.abs((close?.right ?? 0) - (dialogBox.right - 32)),
+    };
+  });
+  assert.ok(iconGeometry.leftDelta <= 1, JSON.stringify(iconGeometry));
+  assert.ok(iconGeometry.centerDelta >= 40, JSON.stringify(iconGeometry));
+  assert.ok(iconGeometry.closeRightDelta <= 1, JSON.stringify(iconGeometry));
+  await page.keyboard.press("Escape");
+  assert.equal(await page.locator(".calendar-modal-overlay").count(), 0);
+  assert.equal(await summary().count(), 0);
   assert.equal(await createdRows().count(), 2);
 
   await page.getByRole("group", { name: "Version 4 entry surface" })
@@ -315,7 +346,7 @@ try {
   assert.equal(await createdRows().count(), 0);
 
   console.log(
-    "Verified Ad-hoc job/channel selection, reset and back behavior, headerless loading, table-only persistence, Draft summary, scoped review, isolated lifecycle/deletion, multiple rows, switching, and reset.",
+    "Verified Ad-hoc selection, direct canonical context handoff, X/Escape dismissal, table persistence, later summary reopening, lifecycle/deletion, switching, and reset.",
   );
 } finally {
   await browser.close();

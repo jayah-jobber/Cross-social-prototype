@@ -55,6 +55,11 @@ try {
     "true",
   );
   assert.equal(
+    await navigationToggle().getByRole("button", { name: "Icon button", exact: true }).count(),
+    1,
+  );
+  assert.equal(await page.getByText("Progress button", { exact: true }).count(), 0);
+  assert.equal(
     await navigationToggle().evaluate((toggle) => (
       document.querySelector(".prototype-frame")?.contains(toggle) ?? false
     )),
@@ -79,12 +84,12 @@ try {
   await modal().getByRole("heading", { name: "About this Facebook post", exact: true }).waitFor();
 
   // The external toggle updates the open modal without changing its active channel.
-  await navigationToggle().getByRole("button", { name: "Progress button", exact: true }).click();
+  await navigationToggle().getByRole("button", { name: "Icon button", exact: true }).click();
   assert.equal(await arrowNavigator(modal()).count(), 0);
-  assert.equal(await modal().locator(".channel-progress-stepper--modal-v4").count(), 1);
+  assert.equal(await modal().locator(".channel-icon-switcher--modal-v4").count(), 1);
   assert.equal(
-    await modal().getByRole("button", { name: /^Facebook,/ }).getAttribute("aria-current"),
-    "step",
+    await modal().getByRole("radio", { name: "Facebook", exact: true }).getAttribute("aria-checked"),
+    "true",
   );
   await navigationToggle().getByRole("button", { name: "Arrow button", exact: true }).click();
   await assertArrowNavigation(modal(), 2, 5);
@@ -135,7 +140,7 @@ try {
   await modal().getByRole("button", { name: "Close", exact: true }).click();
 
   // Split-card entry honors the represented Email channel in both navigation styles.
-  await navigationToggle().getByRole("button", { name: "Progress button", exact: true }).click();
+  await navigationToggle().getByRole("button", { name: "Icon button", exact: true }).click();
   await campaignCard("Sunday, Nov 8").click();
   await page.locator(".v4-summary-modal").getByRole("button", {
     name: "Review Drafts",
@@ -143,8 +148,8 @@ try {
   }).click();
   await modal().waitFor();
   assert.equal(
-    await modal().getByRole("button", { name: /^Email,/ }).getAttribute("aria-current"),
-    "step",
+    await modal().getByRole("radio", { name: "Email", exact: true }).getAttribute("aria-checked"),
+    "true",
   );
   await navigationToggle().getByRole("button", { name: "Arrow button", exact: true }).click();
   await assertArrowNavigation(modal(), 3, 4);
@@ -178,14 +183,14 @@ try {
   await page.getByLabel("Close suggested marketing content").click();
 
   // The experiment is isolated to V4 and resets to arrows after version changes.
-  await navigationToggle().getByRole("button", { name: "Progress button", exact: true }).click();
+  await navigationToggle().getByRole("button", { name: "Icon button", exact: true }).click();
   await page.getByRole("button", { name: "Version 5", exact: true }).click();
   assert.equal(await navigationToggle().count(), 0);
   await saturdayCard().click();
   const v5Modal = page.locator(".v5-context-modal");
   await v5Modal.waitFor();
   assert.equal(await v5Modal.locator(".v4-arrow-navigator").count(), 0);
-  assert.equal(await v5Modal.locator(".channel-progress-stepper--modal-v5").count(), 1);
+  assert.equal(await v5Modal.locator(".channel-icon-switcher--modal-v5").count(), 1);
   await v5Modal.getByRole("button", { name: "Close", exact: true }).click();
 
   await page.getByRole("button", { name: "Version 4", exact: true }).click();

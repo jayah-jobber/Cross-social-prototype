@@ -42,16 +42,16 @@ async function assertReadableBody(scope, bodySelector, metadataSelector) {
   assert.ok(metadataSize < 16, `Metadata unexpectedly enlarged to ${metadataSize}px`);
 }
 
-async function selectChannel(scope, channel, stepperClass) {
-  await scope.locator(stepperClass)
-    .getByRole("button", { name: new RegExp(`^${channel},`) })
+async function selectChannel(scope, channel, switcherClass) {
+  await scope.locator(switcherClass)
+    .getByRole("radio", { name: channel, exact: true })
     .click();
 }
 
 try {
   await page.goto(baseUrl, { waitUntil: "networkidle" });
   await page.getByRole("button", { name: "Version 4", exact: true }).click();
-  await page.getByRole("button", { name: "Progress button", exact: true }).click();
+  await page.getByRole("button", { name: "Icon button", exact: true }).click();
 
   const saturday = page.locator(".calendar-day").filter({
     has: page.getByRole("heading", { name: "Saturday, Nov 7", exact: true }),
@@ -62,16 +62,16 @@ try {
     .click();
 
   for (const [channel, bodySelector, metadataSelector] of channels) {
-    await selectChannel(modal(), channel, ".channel-progress-stepper--modal-v4");
+    await selectChannel(modal(), channel, ".channel-icon-switcher--modal-v4");
     await assertReadableBody(modal(), bodySelector, metadataSelector);
   }
 
-  await selectChannel(modal(), "Google", ".channel-progress-stepper--modal-v4");
+  await selectChannel(modal(), "Google", ".channel-icon-switcher--modal-v4");
   await modal().locator(".v4-context-footer")
     .getByRole("button", { name: "Edit", exact: true })
     .click();
   for (const [channel, bodySelector, metadataSelector] of channels) {
-    await selectChannel(review(), channel, ".channel-progress-stepper--review");
+    await selectChannel(review(), channel, ".channel-icon-switcher--review");
     await assertReadableBody(review(), bodySelector, metadataSelector);
     const disclaimer = review().locator(".preview-disclaimer").first();
     if (await disclaimer.count()) {

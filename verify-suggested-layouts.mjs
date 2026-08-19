@@ -38,7 +38,7 @@ try {
   await page.goto(baseUrl, { waitUntil: "networkidle" });
 
   await selectVersion("Version 4");
-  await page.getByRole("button", { name: "Progress button", exact: true }).click();
+  await page.getByRole("button", { name: "Icon button", exact: true }).click();
   await openSuggested("V4 suggested layout prompt", "v4");
   const horizontal = page.locator(".v4-generated-flow-shell");
   const generatedReview = horizontal.locator(".v4-generated-review");
@@ -48,7 +48,7 @@ try {
     await generatedReview.getByRole("heading", { name: "REVIEW MULTIPLE CHANNELS", exact: true }).count(),
     0,
   );
-  assert.equal(await generatedReview.locator(".channel-progress-stepper--modal-v4").count(), 1);
+  assert.equal(await generatedReview.locator(".channel-icon-switcher--modal-v4").count(), 1);
   assert.equal(await generatedReview.locator(".v4-context-body").count(), 1);
   await horizontal.getByLabel("Edit marketing content prompt").fill("Regenerated V4 idea");
   await horizontal.getByRole("button", { name: "Regenerate suggestions" }).click();
@@ -61,15 +61,15 @@ try {
   await regeneratedSummary.getByRole("button", { name: "Review Drafts" }).click();
   await generatedReview.waitFor();
   for (const channel of channels.slice(0, 4)) {
-    const channelButton = generatedReview.getByRole("button", { name: new RegExp(`^${channel},`) });
+    const channelButton = generatedReview.getByRole("radio", { name: channel, exact: true });
     await channelButton.click();
-    assert.equal(await channelButton.getAttribute("aria-current"), "step");
+    assert.equal(await channelButton.getAttribute("aria-checked"), "true");
     assert.equal(await generatedReview.locator(".v4-context-preview-scroll > *").count(), 1);
   }
   await generatedReview.locator(".v4-context-footer").getByRole("button", { name: "Edit" }).click();
   await page.getByRole("heading", { name: "Review Email Campaign", exact: true }).waitFor();
   await page.locator(".review-footer").getByRole("button", { name: "Back" }).click();
-  await generatedReview.getByRole("button", { name: /^Email,/ }).waitFor();
+  await generatedReview.getByRole("radio", { name: "Email", exact: true }).waitFor();
   await horizontal.getByLabel("Close suggested marketing content").click();
 
   await selectVersion("Version 5");

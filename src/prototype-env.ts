@@ -1,5 +1,5 @@
 export type ResearchEntrySurface = "calendar" | "dashboard" | "adhoc";
-export type ResearchNavigationStyle = "arrows" | "progress";
+export type ResearchNavigationStyle = "arrows" | "icons";
 export type LockedPrototypeVersion = "v4" | "v5";
 
 const VERSION_MAP = {
@@ -23,6 +23,16 @@ function parseEnum<const T extends readonly string[]>(
   if (value === undefined) return fallback;
   if (values.includes(value)) return value as T[number];
   throw new Error(`${name} must be one of ${values.join(", ")}; received "${value}".`);
+}
+
+function parseNavigationStyle(value: string | undefined): ResearchNavigationStyle {
+  if (value === "progress") return "icons";
+  return parseEnum(
+    "VITE_NAVIGATION_STYLE",
+    value,
+    ["arrows", "icons"] as const,
+    "arrows",
+  );
 }
 
 const researchMode = parseBoolean(
@@ -51,12 +61,7 @@ export const prototypeEnv = {
       )
     : "calendar",
   navigationStyle: researchMode
-    ? parseEnum(
-        "VITE_NAVIGATION_STYLE",
-        import.meta.env.VITE_NAVIGATION_STYLE,
-        ["arrows", "progress"] as const,
-        "arrows",
-      )
+    ? parseNavigationStyle(import.meta.env.VITE_NAVIGATION_STYLE)
     : "arrows",
 } satisfies {
   researchMode: boolean;

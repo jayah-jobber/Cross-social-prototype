@@ -23,7 +23,7 @@ async function waitForPreviewReady(review) {
 }
 
 async function selectChannel(review, channel) {
-  const button = review.getByRole("button", { name: new RegExp(`^${channel},`) });
+  const button = review.getByRole("radio", { name: channel, exact: true });
   if (await button.count()) {
     await button.click();
     await waitForPreviewReady(review);
@@ -43,7 +43,7 @@ async function beginGeneratedReview() {
 try {
   await page.goto(baseUrl, { waitUntil: "networkidle" });
   await page.getByRole("button", { name: "Version 4", exact: true }).click();
-  await page.getByRole("button", { name: "Progress button", exact: true }).click();
+  await page.getByRole("button", { name: "Icon button", exact: true }).click();
   await beginGeneratedReview();
 
   // A draft date edit remains suggested until the delivery CTA, then regroups by date.
@@ -79,9 +79,27 @@ try {
   await summary().getByRole("button", { name: "Review Drafts", exact: true }).click();
   await context().waitFor();
   await waitForPreviewReady(context());
+  const reopenedGeometry = await context().evaluate((dialog) => {
+    const dialogBox = dialog.getBoundingClientRect();
+    const switcher = dialog.querySelector(".channel-icon-switcher")?.getBoundingClientRect();
+    const details = dialog.querySelector(".v4-context-details")?.getBoundingClientRect();
+    const close = dialog.querySelector(".context-navigation-close")?.getBoundingClientRect();
+    return {
+      leftDelta: Math.abs((switcher?.left ?? 0) - (details?.left ?? 0)),
+      centerDelta: Math.abs(
+        (switcher?.left ?? 0) + (switcher?.width ?? 0) / 2
+          - (dialogBox.left + dialogBox.width / 2),
+      ),
+      closeRightDelta: Math.abs((close?.right ?? 0) - (dialogBox.right - 32)),
+    };
+  });
+  assert.ok(reopenedGeometry.leftDelta <= 1, JSON.stringify(reopenedGeometry));
+  assert.ok(reopenedGeometry.centerDelta >= 40, JSON.stringify(reopenedGeometry));
+  assert.ok(reopenedGeometry.closeRightDelta <= 1, JSON.stringify(reopenedGeometry));
   assert.equal(
-    await context().getByRole("button", { name: /^Facebook,/ }).getAttribute("aria-current"),
-    "step",
+    await context().getByRole("radio", { name: "Facebook", exact: true })
+      .getAttribute("aria-checked"),
+    "true",
   );
   assert.ok(await context().getByText(/Christmas Special: Save 15%/).count() >= 1);
   await context().locator(".v4-context-footer").getByRole("button", { name: "Edit" }).click();
@@ -101,8 +119,9 @@ try {
   await context().waitFor();
   await waitForPreviewReady(context());
   assert.equal(
-    await context().getByRole("button", { name: /^Google,/ }).getAttribute("aria-current"),
-    "step",
+    await context().getByRole("radio", { name: "Google", exact: true })
+      .getAttribute("aria-checked"),
+    "true",
   );
   await selectChannel(context(), "Email");
   await context().locator(".v4-context-footer")

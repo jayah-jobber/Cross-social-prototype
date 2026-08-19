@@ -47,6 +47,8 @@ const generatedCard = () => calendarDay("Saturday, Nov 7").locator(".generated-d
 const context = () => page.locator(".v4-five-channel-modal:not(.v4-generated-review)");
 const generatedReview = () => page.locator(".v4-generated-review");
 
+const completion = () => page.getByRole("dialog", { name: /Nice\. You're making real progress/ });
+
 async function assertV4Toast(message) {
   await page.getByText(message, { exact: true }).waitFor();
   assert.equal(await page.getByText("Your post is scheduled", { exact: true }).count(), 0);
@@ -66,7 +68,7 @@ async function waitForPreview(review) {
 async function resetToV4() {
   await page.getByRole("button", { name: "Version 1", exact: true }).click();
   await page.getByRole("button", { name: "Version 4", exact: true }).click();
-  await page.getByRole("button", { name: "Progress button", exact: true }).click();
+  await page.getByRole("button", { name: "Icon button", exact: true }).click();
 }
 
 async function openOriginalCampaign() {
@@ -78,8 +80,8 @@ async function openOriginalCampaign() {
 }
 
 async function selectChannel(review, name) {
-  const channel = review.getByRole("button", { name: new RegExp(`^${name},`) });
-  if (await channel.count() && await channel.getAttribute("aria-current") !== "step") {
+  const channel = review.getByRole("radio", { name, exact: true });
+  if (await channel.count() && await channel.getAttribute("aria-checked") !== "true") {
     await channel.click();
   }
   await waitForPreview(review);
@@ -103,13 +105,21 @@ async function addGeneratedInstagramImage(review) {
 }
 
 async function scheduleChannels(review, expectedChannels, addInstagramMedia = false) {
-  for (const channel of expectedChannels) {
+  for (let index = 0; index < expectedChannels.length; index += 1) {
+    const channel = expectedChannels[index];
     await selectChannel(review, channel.name);
     if (addInstagramMedia && channel.name === "Instagram") {
       await addGeneratedInstagramImage(review);
     }
     await review.getByRole("button", { name: channel.scheduleLabel, exact: true }).click();
-    await assertV4Toast(channel.scheduled);
+    const isFinalChannel = index === expectedChannels.length - 1;
+    if (isFinalChannel) {
+      await completion().waitFor();
+      assert.equal(await page.getByRole("status").count(), 0);
+      await completion().getByRole("button", { name: "Back to Calendar", exact: true }).click();
+    } else {
+      await assertV4Toast(channel.scheduled);
+    }
   }
 }
 
@@ -125,7 +135,7 @@ async function deliverScheduledChannels(review, expectedChannels) {
 try {
   await page.goto(baseUrl, { waitUntil: "networkidle" });
   await page.getByRole("button", { name: "Version 4", exact: true }).click();
-  await page.getByRole("button", { name: "Progress button", exact: true }).click();
+  await page.getByRole("button", { name: "Icon button", exact: true }).click();
 
   // Original V4 campaign: every scheduled toast names its active channel.
   await openOriginalCampaign();

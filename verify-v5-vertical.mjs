@@ -30,8 +30,8 @@ try {
     await modal().getByRole("heading", { name: "Seasonal property cleanup in Hamilton" }).count(),
     1,
   );
-  const modalStepper = modal().locator(".channel-progress-stepper--modal-v5");
-  assert.equal(await modalStepper.getByRole("button").count(), 5);
+  const modalSwitcher = modal().locator(".channel-icon-switcher--modal-v5");
+  assert.equal(await modalSwitcher.getByRole("radio").count(), 5);
   assert.equal(await modal().locator(".v4-context-navigation-controls, .v5-context-navigation").count(), 0);
   assert.equal(await modal().locator(".v5-context-facts").getByRole("button", { name: "Edit" }).count(), 0);
 
@@ -49,12 +49,12 @@ try {
 
   const channelNames = ["Google", "Facebook", "Instagram", "Email", "Website"];
   for (const channel of channelNames) {
-    await modalStepper.getByRole("button", { name: new RegExp(`^${channel},`) }).click();
+    await modalSwitcher.getByRole("radio", { name: channel, exact: true }).click();
     await modal().locator(".v5-preview-channel").getByText(channel, { exact: true }).waitFor();
     assert.equal(await modal().locator(".v5-context-preview-surface > *").count(), 1);
   }
 
-  await modalStepper.getByRole("button", { name: /^Google,/ }).click();
+  await modalSwitcher.getByRole("radio", { name: "Google", exact: true }).click();
 
   const controls = page.getByRole("group", { name: "Google contextual modal demo status" });
   for (const state of ["Suggested", "Scheduled", "Sent", "Missed", "Error"]) {
@@ -88,7 +88,7 @@ try {
   assert.equal(await bookLink.getAttribute("href"), "https://example.com/v5-book");
   assert.equal((await modal().textContent()).includes("https://example.com/v5-book"), false);
 
-  await modalStepper.getByRole("button", { name: /^Facebook,/ }).click();
+  await modalSwitcher.getByRole("radio", { name: "Facebook", exact: true }).click();
   await footer().getByRole("button", { name: "Edit", exact: true }).click();
   await page.getByRole("heading", { name: "Review Facebook Post" }).waitFor();
   await page.locator(".review-field").first().getByRole("button", { name: "Edit" }).click();
@@ -100,7 +100,7 @@ try {
   await modal().locator(".channel-post-copy").getByText("#v5-only-hashtag", { exact: true }).waitFor();
 
   await footer().getByRole("button", { name: "Schedule and view next", exact: true }).click();
-  await modalStepper.getByRole("button", { name: "Facebook, scheduled" }).click();
+  await modalSwitcher.getByRole("radio", { name: "Facebook", exact: true }).click();
   assert.equal(
     (await modal().locator(".v5-preview-channel .v4-context-status").textContent())?.trim(),
     "Scheduled",
@@ -111,14 +111,14 @@ try {
 
   await modal().getByRole("button", { name: "Close", exact: true }).click();
   await select("Version 4");
-  await page.getByRole("button", { name: "Progress button", exact: true }).click();
+  await page.getByRole("button", { name: "Icon button", exact: true }).click();
   await saturdayCard().click();
   await page.locator(".v4-summary-modal").getByRole("button", { name: "Review Drafts" }).click();
   assert.equal(await page.locator(".v4-five-channel-modal").count(), 1);
   assert.equal(await page.locator(".v5-context-modal").count(), 0);
   assert.equal(await page.locator(".v4-five-channel-modal .v4-context-navigation-controls").count(), 0);
-  await page.locator(".channel-progress-stepper--modal-v4")
-    .getByRole("button", { name: /^Facebook,/ })
+  await page.locator(".channel-icon-switcher--modal-v4")
+    .getByRole("radio", { name: "Facebook", exact: true })
     .click();
   assert.equal(
     (await page.locator(".v4-context-preview").textContent()).includes("v5-only-contact"),
@@ -130,13 +130,13 @@ try {
   await select("Version 5");
   await saturdayCard().click();
   assert.equal(
-    await modal().locator(".channel-progress-stepper--modal-v5")
-      .getByRole("button", { name: /^Google,/ })
-      .getAttribute("aria-current"),
-    "step",
+    await modal().locator(".channel-icon-switcher--modal-v5")
+      .getByRole("radio", { name: "Google", exact: true })
+      .getAttribute("aria-checked"),
+    "true",
   );
-  await modal().locator(".channel-progress-stepper--modal-v5")
-    .getByRole("button", { name: /^Facebook,/ })
+  await modal().locator(".channel-icon-switcher--modal-v5")
+    .getByRole("radio", { name: "Facebook", exact: true })
     .click();
   assert.equal(
     (await modal().locator(".v5-context-preview-surface").textContent()).includes("v5-only-contact"),

@@ -20,7 +20,7 @@ const saturdayCard = () => page.locator(".calendar-day").filter({
 async function selectVersionFour() {
   await page.getByRole("button", { name: "Version 1", exact: true }).click();
   await page.getByRole("button", { name: "Version 4", exact: true }).click();
-  await page.getByRole("button", { name: "Progress button", exact: true }).click();
+  await page.getByRole("button", { name: "Icon button", exact: true }).click();
 }
 
 async function openOriginalGoogle() {
@@ -98,7 +98,7 @@ async function waitForGeneratedPreview() {
 try {
   await page.goto(baseUrl, { waitUntil: "networkidle" });
   await page.getByRole("button", { name: "Version 4", exact: true }).click();
-  await page.getByRole("button", { name: "Progress button", exact: true }).click();
+  await page.getByRole("button", { name: "Icon button", exact: true }).click();
   await openOriginalGoogle();
 
   // Original calendar content uses the current channel status on both preview and review titles.
@@ -127,8 +127,8 @@ try {
     ["Google", "Review Google Post"],
   ];
   for (const [channel, expectedTitle] of channelTitles) {
-    await channelReview().locator(".channel-progress-stepper--review")
-      .getByRole("button", { name: new RegExp(`^${channel},`) })
+    await channelReview().locator(".channel-icon-switcher--review")
+      .getByRole("radio", { name: channel, exact: true })
       .click();
     await expectReviewBadge("suggested", "informative", expectedTitle);
   }
@@ -182,8 +182,8 @@ try {
   await contextModal().locator(".v4-context-footer")
     .getByRole("button", { name: "Schedule Google post", exact: true })
     .click();
-  await contextModal().locator(".channel-progress-stepper--modal-v4")
-    .getByRole("button", { name: /^Google,/ })
+  await contextModal().locator(".channel-icon-switcher--modal-v4")
+    .getByRole("radio", { name: "Google", exact: true })
     .click();
   await waitForGeneratedPreview();
   await expectContextBadge("scheduled", "success");

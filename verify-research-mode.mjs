@@ -146,7 +146,7 @@ async function verifyCalendar(page, url) {
   const flow = page.locator(".v4-five-channel-modal");
   await flow.locator(".v4-arrow-navigator").waitFor();
   await assertResearchChromeAbsent(page);
-  assert.equal(await flow.locator(".channel-progress-stepper").count(), 0);
+  assert.equal(await flow.locator(".channel-icon-switcher").count(), 0);
   await flow.getByRole("button", { name: "Next channel", exact: true }).click();
   await flow.locator(".v4-context-footer").getByRole("button", { name: "Edit", exact: true }).click();
   const review = page.locator(".v4-channel-review");
@@ -184,7 +184,7 @@ async function verifyDashboard(page, url) {
   const flow = page.locator(".v4-generated-review");
   await flow.locator(".v4-arrow-navigator").waitFor();
   await assertResearchChromeAbsent(page);
-  assert.equal(await flow.locator(".channel-progress-stepper").count(), 0);
+  assert.equal(await flow.locator(".channel-icon-switcher").count(), 0);
   await flow.getByRole("button", { name: "Next channel", exact: true }).click();
   await flow.locator(".v4-context-footer").getByRole("button", { name: "Edit", exact: true }).click();
   const review = page.locator(".v4-channel-review");
@@ -211,6 +211,22 @@ async function verifyDevelopmentControls(page, url) {
   assert.equal(await page.getByRole("group", { name: "Version 4 navigation style" }).count(), 1);
 }
 
+async function verifyIconResearchNavigation(page, url) {
+  await page.goto(url, { waitUntil: "networkidle" });
+  const saturdayCard = page.locator(".calendar-day")
+    .filter({ has: page.getByRole("heading", { name: "Saturday, Nov 7", exact: true }) })
+    .locator(".combined-target-card");
+  await saturdayCard.click();
+  await page.locator(".v4-summary-modal").getByRole("button", {
+    name: "Review Drafts",
+    exact: true,
+  }).click();
+  const flow = page.locator(".v4-five-channel-modal");
+  await flow.getByRole("radiogroup", { name: "Channel view" }).waitFor();
+  assert.equal(await flow.locator(".channel-icon-switcher").count(), 1);
+  assert.equal(await flow.locator(".v4-arrow-navigator").count(), 0);
+}
+
 const browser = await chromium.launch({
   headless: true,
   ...(existsSync(chromePath) ? { executablePath: chromePath } : {}),
@@ -226,6 +242,18 @@ try {
   assertLoadingAssetsEmitted();
   await withViteServer("preview", process.env, (url) => verifyDashboard(page, url));
 
+  for (const navigationStyle of ["icons", "progress"]) {
+    const iconResearchEnv = {
+      ...process.env,
+      VITE_PROTOTYPE_VERSION: "version_4",
+      VITE_RESEARCH_MODE: "true",
+      VITE_ENTRY_SURFACE: "calendar",
+      VITE_NAVIGATION_STYLE: navigationStyle,
+    };
+    await run("npm", ["run", "build"], { env: iconResearchEnv });
+    await withViteServer("preview", iconResearchEnv, (url) => verifyIconResearchNavigation(page, url));
+  }
+
   const developmentEnv = { ...process.env };
   delete developmentEnv.VITE_PROTOTYPE_VERSION;
   delete developmentEnv.VITE_RESEARCH_MODE;
@@ -234,7 +262,7 @@ try {
   await withViteServer("dev", developmentEnv, (url) => verifyDevelopmentControls(page, url));
 
   console.log(
-    "Verified Calendar and Dashboard research builds, V4 arrow flows, absent research controls, loading assets, and development controls.",
+    "Verified research Arrow builds, icon and legacy progress compatibility, absent controls, loading assets, and development controls.",
   );
 } finally {
   await browser.close();

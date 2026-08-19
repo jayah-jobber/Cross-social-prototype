@@ -73,54 +73,28 @@ async function openReviewEditor(channel) {
 try {
   await page.goto(baseUrl, { waitUntil: "networkidle" });
   await page.getByRole("button", { name: "Version 4", exact: true }).click();
-  await page.getByRole("button", { name: "Progress button", exact: true }).click();
+  await page.getByRole("button", { name: "Icon button", exact: true }).click();
 
-  // The original Friday editor flattens both V4 social channels at edit entry.
-  await page.locator(".target-card:not(.combined-target-card)").click();
-  await page.locator(".calendar-modal-actions").getByRole("button", { name: "Edit" }).click();
-  await page.locator(".review-field").first().getByRole("button", { name: "Edit" }).click();
-  await page.getByRole("tab", { name: "Facebook", exact: true }).click();
-  assert.equal(await page.getByLabel("Message body").inputValue(), originalFlattened);
-  assert.equal(await page.getByLabel("Contact info").count(), 0);
-  assert.equal(await page.getByLabel("Hashtag").count(), 0);
-  await page.getByRole("tab", { name: "Instagram", exact: true }).click();
-  assert.equal(await page.getByLabel("Message body").inputValue(), originalFlattened);
-  assert.equal(await page.getByLabel("Contact info").count(), 0);
-  assert.equal(await page.getByLabel("Hashtag").count(), 0);
-
-  const fridayFacebook = `${originalFlattened}\n\nFriday-only update`;
-  await page.getByRole("tab", { name: "Facebook", exact: true }).click();
-  await page.getByLabel("Message body").fill(fridayFacebook);
-  const fridayPreview = page.locator(".dedicated-channel-preview .channel-post-copy > p");
-  assert.equal(await fridayPreview.count(), 1);
-  assert.equal(await fridayPreview.textContent(), fridayFacebook);
-  await page.getByRole("button", { name: "Save Edit", exact: true }).click();
-  await page.locator(".review-field").first().getByRole("button", { name: "Edit" }).click();
-  await page.getByRole("tab", { name: "Facebook", exact: true }).click();
-  assert.equal(await page.getByLabel("Message body").inputValue(), fridayFacebook);
-  assert.equal(occurrences(await page.getByLabel("Message body").inputValue(), originalCta), 1);
-  assert.equal(occurrences(await page.getByLabel("Message body").inputValue(), originalHashtags), 1);
-  await page.getByRole("button", { name: "Cancel", exact: true }).click();
-  await page.locator(".review-footer").getByRole("button", { name: "Back", exact: true }).click();
-
-  // Original campaign Facebook/Instagram editors use the same single-body contract.
+  // Post title 1 is intentionally inert in V4; verify editors through the live campaign.
   await page.locator(".combined-target-card").click();
   await page.locator(".v4-summary-modal").getByRole("button", { name: "Review Drafts" }).click();
-  await context().locator(".channel-progress-stepper--modal-v4")
-    .getByRole("button", { name: /^Facebook,/ }).click();
+  await context().locator(".channel-icon-switcher--modal-v4")
+    .getByRole("radio", { name: "Facebook", exact: true }).click();
   await contextFooter().getByRole("button", { name: "Edit", exact: true }).click();
   await openReviewEditor("Facebook");
-  await assertFlattenedEditor(fridayFacebook);
-  await assertExactPreview(fridayFacebook);
+  await assertFlattenedEditor(originalFlattened);
+  const originalFacebookSaved = `${originalFlattened}\n\nOriginal Facebook update`;
+  await messageInput().fill(originalFacebookSaved);
+  await assertExactPreview(originalFacebookSaved);
   await editor().getByRole("button", { name: "Save Edit", exact: true }).click();
   await openReviewEditor("Facebook");
-  await assertFlattenedEditor(fridayFacebook);
+  await assertFlattenedEditor(originalFacebookSaved);
   assert.equal(occurrences(await messageInput().inputValue(), originalCta), 1);
   assert.equal(occurrences(await messageInput().inputValue(), originalHashtags), 1);
   await editor().getByRole("button", { name: "Cancel", exact: true }).click();
 
-  await review().locator(".channel-progress-stepper--review")
-    .getByRole("button", { name: /^Instagram,/ }).click();
+  await review().locator(".channel-icon-switcher--review")
+    .getByRole("radio", { name: "Instagram", exact: true }).click();
   await openReviewEditor("Instagram");
   await assertFlattenedEditor(originalFlattened);
   const instagramSaved = `${originalFlattened}\n\nInstagram-only update`;
@@ -141,8 +115,8 @@ try {
   await flow().locator(".v4-summary-modal--generated").waitFor({ timeout: 8000 });
   await flow().locator(".v4-summary-modal--generated")
     .getByRole("button", { name: "Review Drafts", exact: true }).click();
-  await flow().locator(".channel-progress-stepper--modal-v4")
-    .getByRole("button", { name: /^Facebook,/ }).click();
+  await flow().locator(".channel-icon-switcher--modal-v4")
+    .getByRole("radio", { name: "Facebook", exact: true }).click();
   await flow().locator(".v4-context-footer").getByRole("button", { name: "Edit" }).click();
   await openReviewEditor("Facebook");
   await assertFlattenedEditor(generatedFlattened);
@@ -168,6 +142,18 @@ try {
     .filter({ has: page.getByRole("heading", { name: "Saturday, Nov 7", exact: true }) })
     .locator(".generated-delivery-card");
   await generatedCard.click();
+  await page.locator(".v4-summary-modal--calendar")
+    .getByRole("button", { name: "Review Drafts", exact: true }).click();
+  await context().locator(".v4-preview-glimmer").waitFor({
+    state: "detached",
+    timeout: 5000,
+  });
+  await context().locator(".channel-icon-switcher--modal-v4")
+    .getByRole("radio", { name: "Facebook", exact: true }).click();
+  await context().locator(".v4-preview-glimmer").waitFor({
+    state: "detached",
+    timeout: 5000,
+  });
   await contextFooter().getByRole("button", { name: "Edit", exact: true }).click();
   await openReviewEditor("Facebook");
   await assertFlattenedEditor(generatedSaved);

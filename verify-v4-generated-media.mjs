@@ -44,8 +44,8 @@ async function waitForPreviewReady() {
 
 async function selectContextChannel(channel) {
   await waitForPreviewReady();
-  await context().locator(".channel-progress-stepper--modal-v4")
-    .getByRole("button", { name: new RegExp(`^${channel},`) })
+  await context().locator(".channel-icon-switcher--modal-v4")
+    .getByRole("radio", { name: channel, exact: true })
     .click();
   await waitForPreviewReady();
 }
@@ -78,7 +78,7 @@ async function editInstagramImages(action) {
 try {
   await page.goto(baseUrl, { waitUntil: "networkidle" });
   await page.getByRole("button", { name: "Version 4", exact: true }).click();
-  await page.getByRole("button", { name: "Progress button", exact: true }).click();
+  await page.getByRole("button", { name: "Icon button", exact: true }).click();
 
   await generate("Christmas winter landscaping promotion");
   assert.equal(await generatedCard().count(), 0);
@@ -135,8 +135,9 @@ try {
     button.click();
   });
   assert.equal(
-    await context().getByRole("button", { name: /^Instagram,/ }).getAttribute("aria-current"),
-    "step",
+    await context().getByRole("radio", { name: "Instagram", exact: true })
+      .getAttribute("aria-checked"),
+    "true",
   );
   assert.equal(await generatedCard().count(), 1);
   assert.match(await generatedCard().locator(".calendar-card-details").textContent(), /Needs review/);
@@ -214,7 +215,7 @@ try {
   if (await reopenedGlimmer.count()) {
     await reopenedGlimmer.waitFor({ state: "detached", timeout: 4500 });
   }
-  await reopenedReview.getByRole("button", { name: /^Instagram,/ }).click();
+  await reopenedReview.getByRole("radio", { name: "Instagram", exact: true }).click();
   if (await reopenedGlimmer.count()) {
     await reopenedGlimmer.waitFor({ state: "detached", timeout: 4500 });
   }

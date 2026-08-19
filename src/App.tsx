@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type Ref } from "react";
 import { createPortal } from "react-dom";
 import {
   DndContext,
@@ -81,6 +81,12 @@ import {
   type AdHocCreationStep,
   type AdHocJobId,
 } from "./AdHocCreationFlow";
+import {
+  V4_CALENDAR_TASK_IDS,
+  V4_CALENDAR_TASK_SUCCESS_COPY,
+  V4CalendarTaskModal,
+  type V4CalendarTaskId,
+} from "./V4CalendarTasks";
 
 const INITIAL_MESSAGE = `This Hamilton property needed a seasonal refresh, starting with a clean up and mulching to bring the landscape back to a maintained state. 🌿
 
@@ -883,6 +889,9 @@ type CalendarCardStatuses = Partial<
 >;
 type CalendarStatusMap = Record<PrototypeVersion, CalendarCardStatuses>;
 type V4CampaignSource = "original" | "generated";
+type V4CampaignDeleteTarget =
+  | { kind: "calendar"; source: V4CampaignSource }
+  | { kind: "adhoc-created"; showcaseId: string };
 type V4CampaignCalendarCard = {
   date: string;
   source: V4CampaignSource;
@@ -1066,6 +1075,11 @@ function MarketingCalendarCard({
 function CalendarScreen({
   onOpenPost,
   onOpenCombinedPost,
+  onOpenTasks,
+  taskButtonRef,
+  taskReturnRef,
+  taskCount = 0,
+  showTaskCard = false,
   v4Prompt,
   v4Generating = false,
   onV4PromptChange,
@@ -1087,6 +1101,11 @@ function CalendarScreen({
     campaignSource?: V4CampaignSource,
     representedChannels?: CalendarChannel[],
   ) => void;
+  onOpenTasks?: () => void;
+  taskButtonRef?: Ref<HTMLButtonElement>;
+  taskReturnRef?: Ref<HTMLHeadingElement>;
+  taskCount?: number;
+  showTaskCard?: boolean;
   v4Prompt?: string;
   v4Generating?: boolean;
   onV4PromptChange?: (value: string) => void;
@@ -1225,7 +1244,31 @@ function CalendarScreen({
                 : ""}`}
               key={column.day}
             >
-              <h2 className={column.day.startsWith("Friday") ? "today" : ""}>{column.day}</h2>
+              <h2
+                className={column.day.startsWith("Friday") ? "today" : ""}
+                ref={column.day === "Friday, Nov 6" ? taskReturnRef : undefined}
+                tabIndex={column.day === "Friday, Nov 6" && taskReturnRef ? -1 : undefined}
+              >
+                {column.day}
+              </h2>
+              {showTaskCard && taskCount > 0 && column.day === "Friday, Nov 6" && onOpenTasks && (
+                <button
+                  className="v4-pending-task-card"
+                  type="button"
+                  ref={taskButtonRef}
+                  onClick={onOpenTasks}
+                >
+                  <span className="v4-pending-task-icon" aria-hidden="true">
+                    <img
+                      src="/assets/v4-task-icon.svg"
+                      width={11}
+                      height={14}
+                      alt=""
+                    />
+                  </span>
+                  <span>{taskCount} pending {taskCount === 1 ? "task" : "tasks"}</span>
+                </button>
+              )}
               {column.groups.map((group) => (
                 <div className="calendar-group" key={group.key ?? group.label}>
                   {!group.label.startsWith("Needs review")
@@ -1404,7 +1447,7 @@ function VersionFourDashboard({
               <div className="v4-dashboard-channels" aria-label="Generated channels">
                 {generatedChannels.map((channel) => (
                   <span key={channel}>
-                    <StepperChannelIcon channel={channel} iconStyle="jobber" />
+                    <ContextualChannelArtwork channel={channel} iconStyle="jobber" />
                     {CONTEXTUAL_CHANNELS.find(({ id }) => id === channel)?.label}
                   </span>
                 ))}
@@ -1614,6 +1657,11 @@ type V4ChannelDelivery = {
   statusOverride: Extract<CalendarChannelStatus, "missed" | "error"> | null;
 };
 type V4ChannelDeliveries = Record<ContextualChannel, V4ChannelDelivery>;
+type V4TopicCompletionAction = "schedule" | "send" | "delete";
+type V4TopicCompletionState = {
+  source: V4CampaignSource;
+  confirmation: string;
+};
 
 const V4_INITIAL_DATE = "2026-11-07";
 const V4_TODAY_DATE = "2026-11-06";
@@ -1653,6 +1701,18 @@ const createGeneratedV4ChannelDeliveries = (): V4ChannelDeliveries => Object.fro
     }]),
 ) as V4ChannelDeliveries;
 
+const markV4CampaignDeleted = (
+  deliveries: V4ChannelDeliveries,
+): V4ChannelDeliveries => Object.fromEntries(
+  (Object.entries(deliveries) as [ContextualChannel, V4ChannelDelivery][])
+    .map(([channel, delivery]) => [channel, {
+      ...delivery,
+      lifecycle: "unscheduled",
+      deleted: true,
+      statusOverride: null,
+    }]),
+) as V4ChannelDeliveries;
+
 function formatV4DeliveryDate(date: string) {
   const [year, month, day] = date.split("-").map(Number);
   const monthName = [
@@ -1660,6 +1720,15 @@ function formatV4DeliveryDate(date: string) {
     "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
   ][month - 1];
   return `${monthName} ${day}, ${year}`;
+}
+
+function formatV4CompletionDate(date: string) {
+  const [, month, day] = date.split("-").map(Number);
+  const monthName = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+  ][month - 1];
+  return `${monthName} ${day}`;
 }
 
 function formatV4DeliveryTime(time: string) {
@@ -1696,6 +1765,62 @@ function v4CalendarStatus(delivery: V4ChannelDelivery): CalendarChannelStatus | 
   if (delivery.lifecycle === "sent") return "sent";
   return undefined;
 }
+
+function isV4DeliveredChannel(
+  channel: ContextualChannel,
+  delivery: V4ChannelDelivery,
+  googleState: GoogleContextDemoState,
+) {
+  if (delivery.deleted || delivery.statusOverride) return false;
+  if (channel === "google") {
+    return googleState === "scheduled" || googleState === "sent";
+  }
+  return delivery.lifecycle === "scheduled" || delivery.lifecycle === "sent";
+}
+
+function isV4CampaignComplete(
+  channels: ContextualChannel[],
+  deliveries: V4ChannelDeliveries,
+  googleState: GoogleContextDemoState,
+) {
+  const deliveredCount = channels.filter((channel) => (
+    isV4DeliveredChannel(channel, deliveries[channel], googleState)
+  )).length;
+  return deliveredCount > 0 && channels.every((channel) => (
+    deliveries[channel].deleted
+    || isV4DeliveredChannel(channel, deliveries[channel], googleState)
+  ));
+}
+
+function v4CompletionConfirmation(
+  channel: ContextualChannel,
+  action: V4TopicCompletionAction,
+  delivery: V4ChannelDelivery,
+) {
+  if (action === "delete") return "Topic review complete";
+  if (action === "send") {
+    if (channel === "email") return "Email sent";
+    if (channel === "website") return "Website published";
+    return "Post sent";
+  }
+  const date = formatV4CompletionDate(delivery.date);
+  if (channel === "email") return `Email Scheduled for ${date}`;
+  if (channel === "website") return `Website Scheduled for ${date}`;
+  return `Post Scheduled for ${date}`;
+}
+
+const V4_STATIC_CALENDAR_CHANNEL_COUNT = UPDATED_CALENDAR_COLUMNS.reduce(
+  (total, column) => total + column.groups.reduce(
+    (groupTotal, group) => groupTotal + group.items.reduce(
+      (itemTotal, item) => itemTotal + (
+        item.combinedTarget ? 0 : (item.channels?.length ?? (item.channel ? 1 : 0))
+      ),
+      0,
+    ),
+    0,
+  ),
+  0,
+);
 
 function googleDemoCalendarStatus(
   state: GoogleContextDemoState,
@@ -1867,7 +1992,7 @@ const JOBBER_SOCIAL_ICON_SRC: Record<PreviewChannel, string> = {
   instagram: "/assets/jobber-instagram-channel-icon.svg",
 };
 
-function StepperChannelIcon({
+function ContextualChannelArtwork({
   channel,
   iconStyle = "brand",
   previewTitle = false,
@@ -1877,8 +2002,8 @@ function StepperChannelIcon({
   previewTitle?: boolean;
 }) {
   const wrapperClassName = previewTitle
-    ? "channel-progress-icon channel-preview-title-icon"
-    : "channel-progress-icon";
+    ? "channel-icon channel-preview-title-icon"
+    : "channel-icon";
 
   if (channel === "email") {
     return (
@@ -1922,7 +2047,7 @@ function StepperChannelIcon({
   );
 }
 
-type ChannelProgressStatus =
+type ChannelContentStatus =
   | V4ChannelState
   | Extract<CalendarChannelStatus, "missed" | "error">
   | "suggested";
@@ -2010,7 +2135,7 @@ const V4_SUMMARY_STATUS_PRESENTATION: Record<
   error: { label: "Error", tone: "critical" },
 };
 
-function versionFourSummaryStatus(status: ChannelProgressStatus): VersionFourSummaryStatus {
+function versionFourSummaryStatus(status: ChannelContentStatus): VersionFourSummaryStatus {
   return status === "unscheduled" ? "suggested" : status;
 }
 
@@ -2018,7 +2143,7 @@ function VersionFourContentStatusBadge({
   status,
   suggestedAsDraft = false,
 }: {
-  status: ChannelProgressStatus;
+  status: ChannelContentStatus;
   suggestedAsDraft?: boolean;
 }) {
   const normalizedStatus = versionFourSummaryStatus(status);
@@ -2039,11 +2164,11 @@ function VersionFourContentStatusBadge({
   );
 }
 
-function contextualProgressStatus(
+function contextualContentStatus(
   channel: ContextualChannel,
   deliveries: V4ChannelDeliveries,
   googleDemoState: GoogleContextDemoState,
-): ChannelProgressStatus {
+): ChannelContentStatus {
   if (channel === "google" && googleDemoState !== "suggested") return googleDemoState;
   return deliveries[channel].statusOverride ?? deliveries[channel].lifecycle;
 }
@@ -2105,13 +2230,15 @@ function VersionFourSummaryModal({
   iconStyle = "jobber",
   suggestedAsDraft = false,
   primaryActionLabel = "Review Drafts",
+  campaignIdentity,
+  onDeleteAll,
   onStartReview,
   onClose,
 }: {
   title: string;
   images: GalleryImage[];
   channels: ContextualChannel[];
-  statuses: Partial<Record<ContextualChannel, ChannelProgressStatus>>;
+  statuses: Partial<Record<ContextualChannel, ChannelContentStatus>>;
   delivery: V4ChannelDelivery;
   description?: string;
   scheduleText?: string;
@@ -2120,10 +2247,14 @@ function VersionFourSummaryModal({
   iconStyle?: SocialIconStyle;
   suggestedAsDraft?: boolean;
   primaryActionLabel?: string;
+  campaignIdentity?: string;
+  onDeleteAll?: () => void;
   onStartReview: () => void;
   onClose: () => void;
 }) {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const deleteButtonRef = useRef<HTMLButtonElement>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const orderedChannels = CONTEXTUAL_CHANNELS.filter(({ id }) => channels.includes(id));
   const collageImages = images.length > 0
     ? Array.from({ length: 3 }, (_, index) => images[index % images.length])
@@ -2136,11 +2267,20 @@ function VersionFourSummaryModal({
   useEffect(() => {
     if (origin !== "calendar") return;
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape" && !deleteDialogOpen) onClose();
     };
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [onClose, origin]);
+  }, [deleteDialogOpen, onClose, origin]);
+
+  useEffect(() => {
+    setDeleteDialogOpen(false);
+  }, [campaignIdentity]);
+
+  const closeDeleteDialog = () => {
+    setDeleteDialogOpen(false);
+    window.requestAnimationFrame(() => deleteButtonRef.current?.focus());
+  };
 
   const summary = (
     <section
@@ -2190,7 +2330,7 @@ function VersionFourSummaryModal({
                 return (
                   <li key={id} data-channel={id}>
                     <span className="v4-summary-channel">
-                      <StepperChannelIcon channel={id} iconStyle={iconStyle} />
+                      <ContextualChannelArtwork channel={id} iconStyle={iconStyle} />
                       <span>{label}</span>
                     </span>
                     <VersionFourContentStatusBadge
@@ -2202,13 +2342,33 @@ function VersionFourSummaryModal({
               })}
             </ul>
           </div>
-          <button
-            type="button"
-            className="primary-button v4-summary-start"
-            onClick={onStartReview}
-          >
-            {primaryActionLabel}
-          </button>
+          {onDeleteAll ? (
+            <footer className="v4-summary-actions">
+              <button
+                ref={deleteButtonRef}
+                type="button"
+                className="delete-post v4-summary-delete-all"
+                onClick={() => setDeleteDialogOpen(true)}
+              >
+                Delete All
+              </button>
+              <button
+                type="button"
+                className="primary-button v4-summary-start"
+                onClick={onStartReview}
+              >
+                {primaryActionLabel}
+              </button>
+            </footer>
+          ) : (
+            <button
+              type="button"
+              className="primary-button v4-summary-start"
+              onClick={onStartReview}
+            >
+              {primaryActionLabel}
+            </button>
+          )}
         </section>
         {artwork ? (
           <img
@@ -2248,59 +2408,202 @@ function VersionFourSummaryModal({
       }}
     >
       {summary}
+      {deleteDialogOpen && onDeleteAll && (
+        <DeletionFeedbackDialog
+          scope="campaign"
+          onCancel={closeDeleteDialog}
+          onConfirm={onDeleteAll}
+        />
+      )}
     </div>
   );
 }
 
-function ChannelProgressStepper({
+function V4TopicCompletionModal({
+  confirmation,
+  delivered,
+  total,
+  nextTopic,
+  onBackToCalendar,
+  onReviewNext,
+}: {
+  confirmation: string;
+  delivered: number;
+  total: number;
+  nextTopic: { channelLabel: string; title: string } | null;
+  onBackToCalendar: () => void;
+  onReviewNext: () => void;
+}) {
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const radius = 78;
+  const circumference = 2 * Math.PI * radius;
+  const segmentSpan = total > 0 ? circumference / total : circumference;
+  const gap = Math.min(8, Math.max(3, segmentSpan * 0.14));
+  const segmentLength = Math.max(1, segmentSpan - gap);
+
+  useEffect(() => {
+    closeButtonRef.current?.focus();
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onBackToCalendar();
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [onBackToCalendar]);
+
+  return (
+    <div
+      className="calendar-modal-overlay v4-completion-overlay"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onBackToCalendar();
+      }}
+    >
+      <section
+        className="v4-topic-completion-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="v4-topic-completion-title"
+      >
+        <button
+          ref={closeButtonRef}
+          className="v4-topic-completion-close"
+          type="button"
+          aria-label="Close success message"
+          onClick={onBackToCalendar}
+        >
+          <X size={24} aria-hidden="true" />
+        </button>
+
+        <div className="v4-topic-completion-content">
+          <div className="v4-topic-completion-confirmation">
+            <img
+              src="/assets/v4-topic-completion-check.svg"
+              width={32}
+              height={32}
+              alt=""
+              aria-hidden="true"
+            />
+            <strong>{confirmation}</strong>
+          </div>
+
+          <h1 id="v4-topic-completion-title">
+            Nice. You&apos;re making <span>real progress</span>
+          </h1>
+
+          <div
+            className="v4-topic-progress-ring"
+            role="img"
+            aria-label={`${delivered} of ${total} channel posts scheduled or published`}
+          >
+            <svg viewBox="0 0 184 184" aria-hidden="true">
+              {Array.from({ length: total }, (_, index) => (
+                <circle
+                  key={index}
+                  className={index < delivered ? "is-delivered" : "is-pending"}
+                  cx="92"
+                  cy="92"
+                  r={radius}
+                  pathLength={circumference}
+                  strokeDasharray={`${segmentLength} ${circumference - segmentLength}`}
+                  strokeDashoffset={-(index * segmentSpan)}
+                />
+              ))}
+            </svg>
+            <strong>{delivered}/{total}</strong>
+          </div>
+
+          <p className="v4-topic-completion-week">Week: Nov 2–8</p>
+          <p className="v4-topic-completion-support">
+            The more you have queued, the more often customers see your business.
+          </p>
+          {nextTopic && (
+            <p className="v4-topic-completion-next">
+              <span>Next up:</span>{" "}
+              <strong>{nextTopic.channelLabel} · {nextTopic.title}</strong>
+            </p>
+          )}
+        </div>
+
+        <footer className="v4-topic-completion-actions">
+          <button type="button" onClick={onBackToCalendar}>Back to Calendar</button>
+          {nextTopic && (
+            <button type="button" className="primary-button" onClick={onReviewNext}>
+              Review Next
+            </button>
+          )}
+        </footer>
+      </section>
+    </div>
+  );
+}
+
+function ChannelIconSwitcher({
   channels,
   activeChannel,
-  statuses,
   onSelect,
   className = "",
-  iconStyle = "brand",
 }: {
   channels: ContextualChannel[];
   activeChannel: ContextualChannel;
-  statuses: Partial<Record<ContextualChannel, ChannelProgressStatus>>;
   onSelect: (channel: ContextualChannel) => void;
   className?: string;
-  iconStyle?: SocialIconStyle;
 }) {
+  const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const orderedChannels = CONTEXTUAL_CHANNELS
     .map(({ id }) => id)
     .filter((channel) => channels.includes(channel));
+  const activeIndex = Math.max(0, orderedChannels.indexOf(activeChannel));
+  const selectAndFocus = (index: number) => {
+    const nextIndex = Math.max(0, Math.min(orderedChannels.length - 1, index));
+    const nextChannel = orderedChannels[nextIndex];
+    if (!nextChannel) return;
+    onSelect(nextChannel);
+    window.requestAnimationFrame(() => optionRefs.current[nextIndex]?.focus());
+  };
 
   return (
-    <nav
-      className={`channel-progress-stepper ${className}`.trim()}
-      aria-label="Channel delivery progress"
+    <div
+      className={`channel-icon-switcher ${className}`.trim()}
+      role="radiogroup"
+      aria-label="Channel view"
+      style={{
+        "--channel-count": orderedChannels.length,
+        "--channel-switcher-width": `${orderedChannels.length * 79.6}px`,
+      } as React.CSSProperties}
     >
-      <ol
-        style={{ "--channel-count": orderedChannels.length } as React.CSSProperties}
-      >
-        {orderedChannels.map((channel) => {
-          const config = CONTEXTUAL_CHANNELS.find(({ id }) => id === channel)!;
-          const status = statuses[channel] ?? "unscheduled";
-          const completed = status === "scheduled" || status === "sent";
-          const active = channel === activeChannel;
-          return (
-            <li key={channel}>
-              <button
-                type="button"
-                className={`${active ? "active " : ""}${completed ? "completed" : ""}`.trim()}
-                aria-label={`${config.label}, ${status}`}
-                aria-current={active ? "step" : undefined}
-                title={`${config.label} · ${status}`}
-                onClick={() => onSelect(channel)}
-              >
-                <StepperChannelIcon channel={channel} iconStyle={iconStyle} />
-              </button>
-            </li>
-          );
-        })}
-      </ol>
-    </nav>
+      {orderedChannels.map((channel, index) => {
+        const config = CONTEXTUAL_CHANNELS.find(({ id }) => id === channel)!;
+        const active = channel === activeChannel;
+        return (
+          <button
+            ref={(node) => {
+              optionRefs.current[index] = node;
+            }}
+            type="button"
+            role="radio"
+            aria-label={config.label}
+            aria-checked={active}
+            tabIndex={active ? 0 : -1}
+            title={config.label}
+            onClick={() => onSelect(channel)}
+            onKeyDown={(event) => {
+              if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+              event.preventDefault();
+              event.stopPropagation();
+              if (event.key === "Home") selectAndFocus(0);
+              else if (event.key === "End") selectAndFocus(orderedChannels.length - 1);
+              else if (event.key === "ArrowLeft") {
+                selectAndFocus((activeIndex - 1 + orderedChannels.length) % orderedChannels.length);
+              } else {
+                selectAndFocus((activeIndex + 1) % orderedChannels.length);
+              }
+            }}
+          >
+            <ContextualChannelArtwork channel={channel} iconStyle="jobber" />
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -3179,20 +3482,31 @@ function VersionThreeCombinedContextModal({
 
 function DeletionFeedbackDialog({
   channel,
+  scope = "channel",
   onCancel,
   onConfirm,
 }: {
-  channel: ContextualChannel;
+  channel?: ContextualChannel;
+  scope?: "channel" | "campaign";
   onCancel: () => void;
   onConfirm: () => void;
 }) {
   const [feedback, setFeedback] = useState("");
-  const isEmail = channel === "email";
-  const isWebsite = channel === "website";
+  const [reason, setReason] = useState("");
+  const isCampaign = scope === "campaign";
+  const isEmail = !isCampaign && channel === "email";
+  const isWebsite = !isCampaign && channel === "website";
   const contentNoun = isEmail ? "campaign" : isWebsite ? "page" : "post";
   const buttonNoun = isEmail ? "Campaign" : isWebsite ? "Page" : "Post";
-  const titleId = `v4-delete-title-${channel}`;
-  const feedbackId = `v4-delete-feedback-${channel}`;
+  const dialogIdentity = isCampaign ? "campaign" : channel;
+  const titleId = `v4-delete-title-${dialogIdentity}`;
+  const feedbackId = `v4-delete-feedback-${dialogIdentity}`;
+  const campaignReasons = [
+    "The content isn’t relevant",
+    "I don’t like the recommendation",
+    "The timing isn’t right",
+    "Other",
+  ];
 
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent) => {
@@ -3222,22 +3536,65 @@ function DeletionFeedbackDialog({
           <X size={24} />
         </button>
         <h2 id={titleId}>Improve future recommendations</h2>
-        <p>
-          Tell us why this {contentNoun} wasn’t right for your business. Your feedback helps us make
-          future recommendations more useful.
-        </p>
-        <label htmlFor={feedbackId}>Feedback <span>(optional)</span></label>
-        <input
-          id={feedbackId}
-          value={feedback}
-          placeholder="What should we know for next time?"
-          onChange={(event) => setFeedback(event.target.value)}
-          autoFocus
-        />
+        {isCampaign ? (
+          <>
+            <p>
+              Tell us why this campaign wasn’t right for your business. Deleting it will remove the
+              entire campaign and all of its cross-channel content from your calendar and Job Showcase.
+            </p>
+            <fieldset className="campaign-delete-reasons">
+              <legend>Why are you deleting this campaign?</legend>
+              {campaignReasons.map((option, index) => (
+                <label key={option}>
+                  <input
+                    type="radio"
+                    name="campaign-delete-reason"
+                    value={option}
+                    checked={reason === option}
+                    onChange={(event) => setReason(event.target.value)}
+                    autoFocus={index === 0}
+                  />
+                  <span>{option}</span>
+                </label>
+              ))}
+            </fieldset>
+            {reason === "Other" && (
+              <>
+                <label htmlFor={feedbackId}>Feedback <span>(optional)</span></label>
+                <input
+                  id={feedbackId}
+                  value={feedback}
+                  placeholder="What should we know for next time?"
+                  onChange={(event) => setFeedback(event.target.value)}
+                />
+              </>
+            )}
+          </>
+        ) : (
+          <>
+            <p>
+              Tell us why this {contentNoun} wasn’t right for your business. Your feedback helps us make
+              future recommendations more useful.
+            </p>
+            <label htmlFor={feedbackId}>Feedback <span>(optional)</span></label>
+            <input
+              id={feedbackId}
+              value={feedback}
+              placeholder="What should we know for next time?"
+              onChange={(event) => setFeedback(event.target.value)}
+              autoFocus
+            />
+          </>
+        )}
         <footer>
           <button type="button" className="secondary-button" onClick={onCancel}>Cancel</button>
-          <button type="button" className="primary-button" onClick={onConfirm}>
-            Delete {buttonNoun}
+          <button
+            type="button"
+            className="primary-button"
+            disabled={isCampaign && !reason}
+            onClick={onConfirm}
+          >
+            {isCampaign ? "Delete Campaign" : `Delete ${buttonNoun}`}
           </button>
         </footer>
       </section>
@@ -3336,10 +3693,10 @@ function VersionFourContextModal({
       : `${active.label} Post Preview`;
   const hasOriginalScheduleDate = isGoogleDemo
     && (googleDemoState === "missed" || googleDemoState === "error");
-  const progressStatuses = Object.fromEntries(channels.map(({ id }) => [
+  const channelStatuses = Object.fromEntries(channels.map(({ id }) => [
     id,
-    contextualProgressStatus(id, channelDeliveries, googleDemoState),
-  ])) as Partial<Record<ContextualChannel, ChannelProgressStatus>>;
+    contextualContentStatus(id, channelDeliveries, googleDemoState),
+  ])) as Partial<Record<ContextualChannel, ChannelContentStatus>>;
   const showChannel = (index: number) => {
     const nextIndex = Math.max(0, Math.min(channels.length - 1, index));
     setPreviewLoading(shouldLoadPreview(channels[nextIndex]?.id));
@@ -3460,7 +3817,7 @@ function VersionFourContextModal({
         : { "aria-label": "Generated channel review" })}
     >
         <header
-          className={`context-progress-header v4-context-navigation v4-navigation--${navigationStyle}`}
+          className={`context-navigation-header v4-context-navigation v4-navigation--${navigationStyle}`}
           inert={deleteDialogOpen || previewLoading ? true : undefined}
         >
           {navigationStyle === "arrows" ? (
@@ -3470,21 +3827,16 @@ function VersionFourContextModal({
               onSelect={selectChannel}
             />
           ) : (
-            <>
-              {!embedded && <span className="context-progress-spacer" aria-hidden="true" />}
-              <ChannelProgressStepper
-                channels={channels.map(({ id }) => id)}
-                activeChannel={active.id}
-                statuses={progressStatuses}
-                onSelect={selectChannel}
-                className="channel-progress-stepper--modal-v4"
-                iconStyle={iconStyle}
-              />
-            </>
+            <ChannelIconSwitcher
+              channels={channels.map(({ id }) => id)}
+              activeChannel={active.id}
+              onSelect={selectChannel}
+              className="channel-icon-switcher--modal-v4"
+            />
           )}
           {!embedded && (
             <button
-              className="context-progress-close"
+              className="context-navigation-close"
               type="button"
               aria-label="Close"
               onClick={onClose}
@@ -3508,7 +3860,7 @@ function VersionFourContextModal({
                 <div className="v4-about-heading v4-status-heading-row">
                   <h2>{active.about}</h2>
                   <VersionFourContentStatusBadge
-                    status={progressStatuses[active.id] ?? "suggested"}
+                    status={channelStatuses[active.id] ?? "suggested"}
                   />
                 </div>
                 <p>{active.rationale}</p>
@@ -3673,7 +4025,7 @@ function VersionFourContextModal({
             aria-busy={previewLoading}
           >
             <header>
-              <StepperChannelIcon channel={active.id} iconStyle={iconStyle} previewTitle />
+              <ContextualChannelArtwork channel={active.id} iconStyle={iconStyle} previewTitle />
               <strong>{previewTitle}</strong>
             </header>
             <div className="v4-context-preview-scroll">
@@ -3873,10 +4225,6 @@ function VersionFiveContextModal({
   const presentation = contextPresentation(active.id, activeDelivery, googleDemoState);
   const isGoogleDemo = active.id === "google";
   const atEnd = safeIndex === channels.length - 1;
-  const progressStatuses = Object.fromEntries(channels.map(({ id }) => [
-    id,
-    contextualProgressStatus(id, channelDeliveries, googleDemoState),
-  ])) as Partial<Record<ContextualChannel, ChannelProgressStatus>>;
   const selectChannel = (channel: ContextualChannel) => {
     setSplitMenuOpen(false);
     setActiveIndex(channels.findIndex(({ id }) => id === channel));
@@ -3951,18 +4299,16 @@ function VersionFiveContextModal({
         aria-labelledby="v5-context-title"
       >
         <header
-          className="context-progress-header v5-context-header"
+          className="context-navigation-header v5-context-header"
           inert={deleteDialogOpen ? true : undefined}
         >
-          <span>Review multiple channels</span>
-          <ChannelProgressStepper
+          <ChannelIconSwitcher
             channels={channels.map(({ id }) => id)}
             activeChannel={active.id}
-            statuses={progressStatuses}
             onSelect={selectChannel}
-            className="channel-progress-stepper--modal-v5"
+            className="channel-icon-switcher--modal-v5"
           />
-          <button className="context-progress-close" type="button" aria-label="Close" onClick={onClose}>
+          <button className="context-navigation-close" type="button" aria-label="Close" onClick={onClose}>
             <X size={24} aria-hidden="true" />
           </button>
         </header>
@@ -4251,9 +4597,9 @@ function VersionFourChannelReview({
   onEditSchedule,
   delivery,
   availableChannels,
-  progressStatuses,
+  channelStatuses,
   onChannelChange,
-  navigationStyle = "progress",
+  navigationStyle = "icons",
   lifecycleEnabled = false,
   compactPreview = false,
   inactive = false,
@@ -4279,7 +4625,7 @@ function VersionFourChannelReview({
   onEditSchedule?: () => void;
   delivery?: V4ChannelDelivery;
   availableChannels: ContextualChannel[];
-  progressStatuses: Partial<Record<ContextualChannel, ChannelProgressStatus>>;
+  channelStatuses: Partial<Record<ContextualChannel, ChannelContentStatus>>;
   onChannelChange: (channel: ContextualChannel) => void;
   navigationStyle?: V4NavigationStyle;
   lifecycleEnabled?: boolean;
@@ -4391,13 +4737,11 @@ function VersionFourChannelReview({
               onSelect={onChannelChange}
             />
           ) : (
-            <ChannelProgressStepper
+            <ChannelIconSwitcher
               channels={availableChannels}
               activeChannel={channel}
-              statuses={progressStatuses}
               onSelect={onChannelChange}
-              className="channel-progress-stepper--review"
-              iconStyle={iconStyle}
+              className="channel-icon-switcher--review"
             />
           )}
         </header>
@@ -4406,7 +4750,7 @@ function VersionFourChannelReview({
             <h1 id="v4-channel-review-title">{reviewTitle}</h1>
             {showContentStatus && (
               <VersionFourContentStatusBadge
-                status={progressStatuses[channel] ?? "suggested"}
+                status={channelStatuses[channel] ?? "suggested"}
               />
             )}
           </div>
@@ -6138,6 +6482,12 @@ export default function App() {
   );
   const [screen, setScreen] = useState<"calendar" | "review" | "edit">("calendar");
   const [calendarModalOpen, setCalendarModalOpen] = useState(false);
+  const [v4TaskModalOpen, setV4TaskModalOpen] = useState(false);
+  const [v4RemainingTaskIds, setV4RemainingTaskIds] = useState<V4CalendarTaskId[]>(
+    () => [...V4_CALENDAR_TASK_IDS],
+  );
+  const v4TaskButtonRef = useRef<HTMLButtonElement>(null);
+  const v4TaskCalendarRef = useRef<HTMLHeadingElement>(null);
   const [v3CombinedModalOpen, setV3CombinedModalOpen] = useState(false);
   const [v3ContextPreviewChannel, setV3ContextPreviewChannel] = useState<PreviewChannel>("google");
   const [v3ReviewOrigin, setV3ReviewOrigin] = useState<"friday" | "saturday" | null>(null);
@@ -6211,6 +6561,8 @@ export default function App() {
   const [reviewDeleteChannel, setReviewDeleteChannel] = useState<ContextualChannel | null>(null);
   const [scheduleToastVisible, setScheduleToastVisible] = useState(false);
   const [contextualToast, setContextualToast] = useState<ContextualToast | null>(null);
+  const [v4TopicCompletion, setV4TopicCompletion] =
+    useState<V4TopicCompletionState | null>(null);
   const [saturdayCompletion, setSaturdayCompletion] = useState<
     Record<"v3" | "v4" | "v5", CalendarChannel[] | null>
   >({ v3: null, v4: null, v5: null });
@@ -6258,14 +6610,14 @@ export default function App() {
       ? availableV4Channels
       : (v4ReviewScopedChannels ?? scopedV4Channels)
   ).filter((channel) => !v4ChannelDeliveries[channel].deleted);
-  const v4ProgressStatuses = Object.fromEntries(CONTEXTUAL_CHANNELS.map(({ id }) => [
+  const v4ContentStatuses = Object.fromEntries(CONTEXTUAL_CHANNELS.map(({ id }) => [
     id,
-    contextualProgressStatus(id, v4ChannelDeliveries, googleContextDemoState),
-  ])) as Partial<Record<ContextualChannel, ChannelProgressStatus>>;
+    contextualContentStatus(id, v4ChannelDeliveries, googleContextDemoState),
+  ])) as Partial<Record<ContextualChannel, ChannelContentStatus>>;
   const v4AdHocCampaignChannels: AdHocCampaignChannel[] = CONTEXTUAL_CHANNELS
     .filter(({ id }) => availableV4Channels.includes(id))
     .map(({ id, label }) => {
-      const status = versionFourSummaryStatus(v4ProgressStatuses[id] ?? "suggested");
+      const status = versionFourSummaryStatus(v4ContentStatuses[id] ?? "suggested");
       const presentation = V4_SUMMARY_STATUS_PRESENTATION[status];
       const adHocPresentation = status === "suggested"
         ? { label: "Draft", tone: "neutral" as const }
@@ -6287,7 +6639,7 @@ export default function App() {
           showcase.channels.includes(id) && !showcase.deliveries[id].deleted
         ))
         .map(({ id, label }) => {
-          const status = versionFourSummaryStatus(contextualProgressStatus(
+          const status = versionFourSummaryStatus(contextualContentStatus(
             id,
             showcase.deliveries,
             showcase.googleDemoState,
@@ -6330,28 +6682,28 @@ export default function App() {
   const activeAdHocSummaryStatuses = activeAdHocSummary
     ? Object.fromEntries(activeAdHocSummaryChannels.map((channel) => [
         channel,
-        contextualProgressStatus(
+        contextualContentStatus(
           channel,
           activeAdHocSummary.deliveries,
           activeAdHocSummary.googleDemoState,
         ),
-      ])) as Partial<Record<ContextualChannel, ChannelProgressStatus>>
+      ])) as Partial<Record<ContextualChannel, ChannelContentStatus>>
     : {};
-  const suggestedProgressStatuses = Object.fromEntries(CONTEXTUAL_CHANNELS.map(({ id }) => [
+  const suggestedContentStatuses = Object.fromEntries(CONTEXTUAL_CHANNELS.map(({ id }) => [
     id,
     calendarStatuses[activeDaisyVersion].suggested?.[CONTEXTUAL_TO_CALENDAR_CHANNEL[id]]
       ?? "suggested",
-  ])) as Partial<Record<ContextualChannel, ChannelProgressStatus>>;
-  const generatedV4ProgressStatuses = Object.fromEntries(
+  ])) as Partial<Record<ContextualChannel, ChannelContentStatus>>;
+  const generatedV4ContentStatuses = Object.fromEntries(
     availableGeneratedV4Channels.map((channel) => [
       channel,
-      contextualProgressStatus(
+      contextualContentStatus(
         channel,
         generatedV4State.channelDeliveries,
         generatedV4State.googleDemoState,
       ),
     ]),
-  ) as Partial<Record<ContextualChannel, ChannelProgressStatus>>;
+  ) as Partial<Record<ContextualChannel, ChannelContentStatus>>;
   const generatedCalendarV4Deliveries: V4ChannelDeliveries = {
     ...generatedV4State.channelDeliveries,
     ...generatedV4CalendarDeliveries,
@@ -6446,9 +6798,9 @@ export default function App() {
       ? availableGeneratedV4Channels
       : availableV4Channels
     : scopedV4Channels;
-  const activeCalendarV4ProgressStatuses = activeV4CampaignSource === "generated"
-    ? generatedV4ProgressStatuses
-    : v4ProgressStatuses;
+  const activeCalendarV4ContentStatuses = activeV4CampaignSource === "generated"
+    ? generatedV4ContentStatuses
+    : v4ContentStatuses;
   const activeV4CampaignDeliveries = activeV4CampaignSource === "generated"
     ? generatedV4State.channelDeliveries
     : v4ChannelDeliveries;
@@ -6459,6 +6811,78 @@ export default function App() {
   const activeV4CampaignTitle = activeV4CampaignSource === "generated"
     ? GENERATED_V4_CAMPAIGN_TITLE
     : "Seasonal property cleanup in Hamilton";
+  const hasPersistedGeneratedV4Campaign =
+    Object.keys(generatedV4CalendarDeliveries).length > 0;
+  const originalV4CompletionChannels = CONTEXTUAL_CHANNELS.map(({ id }) => id);
+  const generatedV4CompletionChannels = GENERATED_V4_CHANNELS;
+  const v4CompletionProgress = {
+    delivered: availableV4Channels.filter((channel) => (
+      isV4DeliveredChannel(
+        channel,
+        v4ChannelDeliveries[channel],
+        googleContextDemoState,
+      )
+    )).length + (hasPersistedGeneratedV4Campaign
+      ? availableGeneratedV4Channels.filter((channel) => (
+          isV4DeliveredChannel(
+            channel,
+            generatedV4State.channelDeliveries[channel],
+            generatedV4State.googleDemoState,
+          )
+        )).length
+      : 0),
+    total: V4_STATIC_CALENDAR_CHANNEL_COUNT
+      + availableV4Channels.length
+      + (hasPersistedGeneratedV4Campaign ? availableGeneratedV4Channels.length : 0),
+  };
+  const v4ReviewableTopics = [
+    {
+      source: "original" as const,
+      title: "Seasonal property cleanup in Hamilton",
+      channels: originalV4CompletionChannels,
+      deliveries: v4ChannelDeliveries,
+      googleState: googleContextDemoState,
+      date: availableV4Channels
+        .map((channel) => v4CalendarDeliveries[channel].date)
+        .sort()[0] ?? V4_INITIAL_DATE,
+    },
+    ...(hasPersistedGeneratedV4Campaign
+      ? [{
+          source: "generated" as const,
+          title: GENERATED_V4_CAMPAIGN_TITLE,
+          channels: generatedV4CompletionChannels,
+          deliveries: generatedV4State.channelDeliveries,
+          googleState: generatedV4State.googleDemoState,
+          date: availableGeneratedV4Channels
+            .map((channel) => (
+              generatedV4CalendarDeliveries[channel]?.date
+              ?? generatedV4State.channelDeliveries[channel].date
+            ))
+            .sort()[0] ?? V4_INITIAL_DATE,
+        }]
+      : []),
+  ];
+  const nextV4IncompleteTopic = v4TopicCompletion
+    ? v4ReviewableTopics
+      .filter((topic) => (
+        topic.source !== v4TopicCompletion.source
+        && topic.channels.some((channel) => !topic.deliveries[channel].deleted)
+        && !isV4CampaignComplete(
+          topic.channels,
+          topic.deliveries,
+          topic.googleState,
+        )
+      ))
+      .sort((left, right) => left.date.localeCompare(right.date))[0] ?? null
+    : null;
+  const nextV4IncompleteChannel = nextV4IncompleteTopic?.channels.find((channel) => (
+    !nextV4IncompleteTopic.deliveries[channel].deleted
+    && !isV4DeliveredChannel(
+      channel,
+      nextV4IncompleteTopic.deliveries[channel],
+      nextV4IncompleteTopic.googleState,
+    )
+  )) ?? null;
   const isV4GeneratedEditor = version === "v4"
     && (v4ReviewOrigin === "suggested-content" || v4ReviewOrigin === "generated-calendar");
   const isReopenedGeneratedV4Editor = v4ReviewOrigin === "generated-calendar";
@@ -6472,12 +6896,125 @@ export default function App() {
   const suggestedFlowChannels = isV4GeneratedEditor
     ? availableGeneratedV4Channels
     : CONTEXTUAL_CHANNELS.map(({ id }) => id);
-  const suggestedFlowProgressStatuses = isV4GeneratedEditor
-    ? generatedV4ProgressStatuses
-    : suggestedProgressStatuses;
+  const suggestedFlowContentStatuses = isV4GeneratedEditor
+    ? generatedV4ContentStatuses
+    : suggestedContentStatuses;
   const showContextualToast = (message: string, dark = false) => {
     setScheduleToastVisible(false);
     setContextualToast((current) => ({ message, dark, id: (current?.id ?? 0) + 1 }));
+  };
+  const openV4TopicCompletionIfNeeded = ({
+    source,
+    channel,
+    action,
+    previousDeliveries,
+    nextDeliveries,
+    previousGoogleState,
+    nextGoogleState,
+  }: {
+    source: V4CampaignSource;
+    channel: ContextualChannel;
+    action: V4TopicCompletionAction;
+    previousDeliveries: V4ChannelDeliveries;
+    nextDeliveries: V4ChannelDeliveries;
+    previousGoogleState: GoogleContextDemoState;
+    nextGoogleState: GoogleContextDemoState;
+  }) => {
+    if (version !== "v4") return false;
+    if (source === "generated" && !hasPersistedGeneratedV4Campaign) return false;
+    const channels = source === "generated"
+      ? generatedV4CompletionChannels
+      : originalV4CompletionChannels;
+    const wasComplete = isV4CampaignComplete(
+      channels,
+      previousDeliveries,
+      previousGoogleState,
+    );
+    const isComplete = isV4CampaignComplete(
+      channels,
+      nextDeliveries,
+      nextGoogleState,
+    );
+    if (wasComplete || !isComplete) return false;
+
+    setContextualToast(null);
+    setScheduleToastVisible(false);
+    setReviewDeleteChannel(null);
+    setV4CardSummaryOpen(false);
+    setV4SuggestedSummaryOpen(false);
+    setSuggestedDialogOpen(false);
+    setSuggestedReviewChannel(null);
+    setSuggestedEditor(null);
+    setCombinedWorkflow(null);
+    setV4ReviewOrigin(null);
+    setActiveV4ContextChannel(null);
+    setV4ReviewScopedChannels(null);
+    setScreen("calendar");
+    setV4EntrySurface("calendar");
+    setV4TopicCompletion({
+      source,
+      confirmation: v4CompletionConfirmation(channel, action, nextDeliveries[channel]),
+    });
+    return true;
+  };
+  const deleteV4Campaign = (target: V4CampaignDeleteTarget) => {
+    if (target.kind === "calendar" && target.source === "original") {
+      const deletedDeliveries = markV4CampaignDeleted(v4ChannelDeliveries);
+      setV4ChannelDeliveries(deletedDeliveries);
+      setV4CalendarDeliveries(deletedDeliveries);
+      setGoogleContextDemoState("suggested");
+      setCalendarStatuses((current) => ({
+        ...current,
+        v4: {
+          ...current.v4,
+          "saturday-campaign": {},
+        },
+      }));
+    } else if (target.kind === "calendar" && target.source === "generated") {
+      setGeneratedV4State((current) => ({
+        ...current,
+        channelDeliveries: markV4CampaignDeleted(current.channelDeliveries),
+        googleDemoState: "suggested",
+        loadedPreviewChannels: [],
+      }));
+      setGeneratedV4CalendarDeliveries({});
+      setCalendarStatuses((current) => ({
+        ...current,
+        v4: {
+          ...current.v4,
+          suggested: {},
+        },
+      }));
+    } else if (target.kind === "adhoc-created") {
+      setAdHocShowcases((current) => current.filter(
+        ({ id }) => id !== target.showcaseId,
+      ));
+    }
+
+    setV4CardSummaryOpen(false);
+    setAdHocSummaryId(null);
+    setAdHocContext(null);
+    setAdHocActiveContextChannel(null);
+    setCombinedWorkflow(null);
+    setCombinedModalStartIndex(0);
+    setV4ReviewOrigin(null);
+    setActiveV4ContextChannel(null);
+    setActiveV4GroupDate(null);
+    setActiveV4CampaignSource(null);
+    setPreferredV4EntryChannel(null);
+    setV4ReviewScopedChannels(null);
+    setScheduleEditorChannel(null);
+    setReviewDeleteChannel(null);
+    setSuggestedReviewChannel(null);
+    setSuggestedEditor(null);
+    setSuggestedGoogleDrafts(null);
+    setSuggestedTextDraft(null);
+    setSocialEditDraft(null);
+    setV4TaskModalOpen(false);
+    setV4TopicCompletion(null);
+    setScreen("calendar");
+    setV4EntrySurface("calendar");
+    showContextualToast("Your campaign has been successfully deleted.", true);
   };
   const setCalendarChannelStatus = (
     targetVersion: PrototypeVersion,
@@ -6572,10 +7109,16 @@ export default function App() {
     action: V4LifecycleAction,
     returnToContext = false,
   ) => {
+    const previousGoogleState = googleContextDemoState;
+    const nextGoogleState = channel === "google"
+      ? action === "schedule"
+        ? "scheduled"
+        : action === "send"
+          ? "sent"
+          : "suggested"
+      : previousGoogleState;
     if (channel === "google") {
-      setGoogleContextDemoState(
-        action === "schedule" ? "scheduled" : action === "send" ? "sent" : "suggested",
-      );
+      setGoogleContextDemoState(nextGoogleState);
     }
     const originDate = activeV4GroupDate ?? v4ChannelDeliveries[channel].date;
     const nextState: V4ChannelState = action === "schedule"
@@ -6600,7 +7143,16 @@ export default function App() {
         [channel]: nextDelivery,
       });
     }
-    if (action === "schedule") {
+    const completionOpened = action !== "cancel" && openV4TopicCompletionIfNeeded({
+      source: "original",
+      channel,
+      action,
+      previousDeliveries: v4ChannelDeliveries,
+      nextDeliveries,
+      previousGoogleState,
+      nextGoogleState,
+    });
+    if (action === "schedule" && !completionOpened) {
       showContextualToast(
         version === "v4"
           ? contextualSuccessMessage(channel, "schedule")
@@ -6608,10 +7160,12 @@ export default function App() {
         true,
       );
     }
-    if (action === "send") {
+    if (action === "send" && !completionOpened) {
       showContextualToast(contextualSuccessMessage(channel, "post"), true);
     }
-    if (returnToContext) returnToV4ContextAfter(channel, originDate, nextDeliveries);
+    if (returnToContext && !completionOpened) {
+      returnToV4ContextAfter(channel, originDate, nextDeliveries);
+    }
     return nextDeliveries;
   };
   const advanceV4Review = (
@@ -6653,11 +7207,27 @@ export default function App() {
       return;
     }
 
+    const previousDeliveries = v4ChannelDeliveries;
+    const previousGoogleState = googleContextDemoState;
     const nextDeliveries = performV4LifecycleAction(channel, action);
+    const nextGoogleState = channel === "google"
+      ? action === "schedule" ? "scheduled" : "sent"
+      : previousGoogleState;
+    if (!isV4CampaignComplete(
+      originalV4CompletionChannels,
+      previousDeliveries,
+      previousGoogleState,
+    ) && isV4CampaignComplete(
+      originalV4CompletionChannels,
+      nextDeliveries,
+      nextGoogleState,
+    )) return;
     advanceV4Review(channel, nextDeliveries, true);
   };
   const deleteV4Channel = (channel: ContextualChannel, returnToContext = true) => {
-    if (channel === "google") setGoogleContextDemoState("suggested");
+    const previousGoogleState = googleContextDemoState;
+    const nextGoogleState = channel === "google" ? "suggested" : previousGoogleState;
+    if (channel === "google") setGoogleContextDemoState(nextGoogleState);
     setPreferredV4EntryChannel((preferred) => preferred === channel ? null : preferred);
     const originDate = activeV4GroupDate ?? v4ChannelDeliveries[channel].date;
     const nextDeliveries: V4ChannelDeliveries = {
@@ -6670,16 +7240,43 @@ export default function App() {
       },
     };
     setV4ChannelDeliveries(nextDeliveries);
+    if (version === "v4") {
+      setV4CalendarDeliveries({
+        ...v4CalendarDeliveries,
+        [channel]: nextDeliveries[channel],
+      });
+    }
     setReviewDeleteChannel(null);
-    showContextualToast(contextualDeletionMessage(channel), true);
-    if (returnToContext) {
+    const completionOpened = openV4TopicCompletionIfNeeded({
+      source: "original",
+      channel,
+      action: "delete",
+      previousDeliveries: v4ChannelDeliveries,
+      nextDeliveries,
+      previousGoogleState,
+      nextGoogleState,
+    });
+    if (!completionOpened) showContextualToast(contextualDeletionMessage(channel), true);
+    if (returnToContext && !completionOpened) {
       setV4ReviewScopedChannels(null);
       returnToV4ContextAfter(channel, originDate, nextDeliveries);
     }
     return nextDeliveries;
   };
   const deleteV4ReviewChannel = (channel: ContextualChannel) => {
+    const previousDeliveries = v4ChannelDeliveries;
+    const previousGoogleState = googleContextDemoState;
     const nextDeliveries = deleteV4Channel(channel, false);
+    const nextGoogleState = channel === "google" ? "suggested" : previousGoogleState;
+    if (!isV4CampaignComplete(
+      originalV4CompletionChannels,
+      previousDeliveries,
+      previousGoogleState,
+    ) && isV4CampaignComplete(
+      originalV4CompletionChannels,
+      nextDeliveries,
+      nextGoogleState,
+    )) return;
     advanceV4Review(channel, nextDeliveries, true);
   };
   const acceptGeneratedV4Campaign = () => {
@@ -6711,6 +7308,14 @@ export default function App() {
     if (channel === "instagram" && generatedV4State.drafts.instagram.images.length === 0) {
       return false;
     }
+    const previousGoogleState = generatedV4State.googleDemoState;
+    const nextGoogleState = channel === "google"
+      ? action === "schedule"
+        ? "scheduled"
+        : action === "send"
+          ? "sent"
+          : "suggested"
+      : previousGoogleState;
     const lifecycle: V4ChannelState = action === "schedule"
       ? "scheduled"
       : action === "send"
@@ -6730,19 +7335,22 @@ export default function App() {
     };
     setGeneratedV4State((current) => ({
       ...current,
-      googleDemoState: channel === "google"
-        ? action === "schedule"
-          ? "scheduled"
-          : action === "send"
-            ? "sent"
-            : "suggested"
-        : current.googleDemoState,
+      googleDemoState: nextGoogleState,
       channelDeliveries: nextDeliveries,
     }));
     const nextCalendarDeliveries = { ...generatedV4CalendarDeliveries };
     nextCalendarDeliveries[channel] = nextDelivery;
     setGeneratedV4CalendarDeliveries(nextCalendarDeliveries);
-    if (action !== "cancel") {
+    const completionOpened = action !== "cancel" && openV4TopicCompletionIfNeeded({
+      source: "generated",
+      channel,
+      action,
+      previousDeliveries: generatedV4State.channelDeliveries,
+      nextDeliveries,
+      previousGoogleState,
+      nextGoogleState,
+    });
+    if (action !== "cancel" && !completionOpened) {
       showContextualToast(contextualSuccessMessage(
         channel,
         action === "schedule" ? "schedule" : "post",
@@ -6752,6 +7360,7 @@ export default function App() {
       activeV4CampaignSource === "generated"
       && combinedWorkflow === "modal"
       && (returnToContext || action === "cancel")
+      && !completionOpened
     ) {
       const remainingChannels = GENERATED_V4_CHANNELS.filter(
         (candidate) => !nextDeliveries[candidate].deleted,
@@ -6777,6 +7386,8 @@ export default function App() {
     return nextDeliveries;
   };
   const deleteGeneratedV4Channel = (channel: ContextualChannel) => {
+    const previousGoogleState = generatedV4State.googleDemoState;
+    const nextGoogleState = channel === "google" ? "suggested" : previousGoogleState;
     setPreferredV4EntryChannel((preferred) => preferred === channel ? null : preferred);
     const nextDeliveries: V4ChannelDeliveries = {
       ...generatedV4State.channelDeliveries,
@@ -6789,7 +7400,7 @@ export default function App() {
     };
     setGeneratedV4State((current) => ({
       ...current,
-      googleDemoState: channel === "google" ? "suggested" : current.googleDemoState,
+      googleDemoState: nextGoogleState,
       channelDeliveries: nextDeliveries,
       loadedPreviewChannels: current.loadedPreviewChannels.filter(
         (loadedChannel) => loadedChannel !== channel,
@@ -6805,7 +7416,16 @@ export default function App() {
       null,
     );
     setReviewDeleteChannel(null);
-    showContextualToast(contextualDeletionMessage(channel), true);
+    const completionOpened = openV4TopicCompletionIfNeeded({
+      source: "generated",
+      channel,
+      action: "delete",
+      previousDeliveries: generatedV4State.channelDeliveries,
+      nextDeliveries,
+      previousGoogleState,
+      nextGoogleState,
+    });
+    if (!completionOpened) showContextualToast(contextualDeletionMessage(channel), true);
     const hasRemainingChannels = GENERATED_V4_CHANNELS.some(
       (candidate) => !nextDeliveries[candidate].deleted,
     );
@@ -6813,7 +7433,11 @@ export default function App() {
       closeGeneratedV4Session(nextCalendarDeliveries, nextDeliveries);
       return nextDeliveries;
     }
-    if (activeV4CampaignSource === "generated" && combinedWorkflow === "modal") {
+    if (
+      activeV4CampaignSource === "generated"
+      && combinedWorkflow === "modal"
+      && !completionOpened
+    ) {
       const remainingChannels = GENERATED_V4_CHANNELS.filter(
         (candidate) => !nextDeliveries[candidate].deleted,
       );
@@ -6935,13 +7559,39 @@ export default function App() {
     channel: ContextualChannel,
     action: Extract<V4LifecycleAction, "schedule" | "send">,
   ) => {
+    const previousDeliveries = generatedV4State.channelDeliveries;
+    const previousGoogleState = generatedV4State.googleDemoState;
     const nextDeliveries = performGeneratedV4LifecycleAction(channel, action);
     if (nextDeliveries === false) return;
+    const nextGoogleState = channel === "google"
+      ? action === "schedule" ? "scheduled" : "sent"
+      : previousGoogleState;
+    if (!isV4CampaignComplete(
+      generatedV4CompletionChannels,
+      previousDeliveries,
+      previousGoogleState,
+    ) && isV4CampaignComplete(
+      generatedV4CompletionChannels,
+      nextDeliveries,
+      nextGoogleState,
+    )) return;
     advanceGeneratedV4Review(channel, nextDeliveries, true);
   };
   const deleteGeneratedV4ReviewChannel = (channel: ContextualChannel) => {
+    const previousDeliveries = generatedV4State.channelDeliveries;
+    const previousGoogleState = generatedV4State.googleDemoState;
     const nextDeliveries = deleteGeneratedV4Channel(channel);
     if (GENERATED_V4_CHANNELS.every((candidate) => nextDeliveries[candidate].deleted)) return;
+    const nextGoogleState = channel === "google" ? "suggested" : previousGoogleState;
+    if (!isV4CampaignComplete(
+      generatedV4CompletionChannels,
+      previousDeliveries,
+      previousGoogleState,
+    ) && isV4CampaignComplete(
+      generatedV4CompletionChannels,
+      nextDeliveries,
+      nextGoogleState,
+    )) return;
     advanceGeneratedV4Review(channel, nextDeliveries, true);
   };
   const saveScheduleEdits = (
@@ -7085,9 +7735,44 @@ export default function App() {
     setActiveV4CampaignSource(null);
     setPreferredV4EntryChannel(null);
     setV4ReviewScopedChannels(null);
+    setV4TaskModalOpen(false);
+    setV4TopicCompletion(null);
     closeAdHocTransient();
     setScreen("calendar");
     setV4EntrySurface(nextSurface);
+  };
+  const closeV4TopicCompletion = () => {
+    setV4TopicCompletion(null);
+    setV4CardSummaryOpen(false);
+    setCombinedWorkflow(null);
+    setV4ReviewOrigin(null);
+    setActiveV4ContextChannel(null);
+    setActiveV4GroupDate(null);
+    setActiveV4CampaignSource(null);
+    setPreferredV4EntryChannel(null);
+    setV4ReviewScopedChannels(null);
+    setSuggestedDialogOpen(false);
+    setSuggestedReviewChannel(null);
+    setSuggestedEditor(null);
+    setScreen("calendar");
+    setV4EntrySurface("calendar");
+  };
+  const reviewNextV4Topic = () => {
+    if (!nextV4IncompleteTopic || !nextV4IncompleteChannel) return;
+    setV4TopicCompletion(null);
+    setScreen("calendar");
+    setV4EntrySurface("calendar");
+    setActiveV4CampaignSource(nextV4IncompleteTopic.source);
+    setActiveV4GroupDate(nextV4IncompleteTopic.date);
+    setPreferredV4EntryChannel(nextV4IncompleteChannel);
+    setV4ReviewScopedChannels(null);
+    setCombinedModalStartIndex(0);
+    setSocialWorkflowChannel(nextV4IncompleteChannel);
+    setV4ReviewOrigin(nextV4IncompleteTopic.source === "generated"
+      ? "generated-calendar"
+      : "saturday");
+    setCombinedWorkflow(null);
+    setV4CardSummaryOpen(true);
   };
   const openV4AdHocCampaignSummary = () => {
     const entryChannel = availableV4Channels[0];
@@ -7292,6 +7977,8 @@ export default function App() {
     setVersion(nextVersion);
     setScreen("calendar");
     setCalendarModalOpen(false);
+    setV4TaskModalOpen(false);
+    setV4RemainingTaskIds([...V4_CALENDAR_TASK_IDS]);
     setV3CombinedModalOpen(false);
     setV3ContextPreviewChannel("google");
     setV3ReviewOrigin(null);
@@ -7321,6 +8008,7 @@ export default function App() {
     setReviewDeleteChannel(null);
     setScheduleToastVisible(false);
     setContextualToast(null);
+    setV4TopicCompletion(null);
     setSaturdayCompletion({ v3: null, v4: null, v5: null });
   };
   const toggleChannel = (channel: PreviewChannel) => {
@@ -7407,7 +8095,12 @@ export default function App() {
       setAdHocGenerating(false);
       setAdHocLoadingStage(0);
       setPendingAdHocShowcase(null);
-      setAdHocSummaryId(completed.id);
+      setAdHocSummaryId(null);
+      setAdHocContext({
+        showcaseId: completed.id,
+        startIndex: 0,
+        returnToSummary: false,
+      });
     }, 1000);
     adHocTimerRef.current = interval;
     return () => {
@@ -7558,12 +8251,12 @@ export default function App() {
               >
                 <legend className="sr-only">Version 4 navigation style</legend>
                 <button
-                  className={v4NavigationStyle === "progress" ? "selected" : ""}
+                  className={v4NavigationStyle === "icons" ? "selected" : ""}
                   type="button"
-                  aria-pressed={v4NavigationStyle === "progress"}
-                  onClick={() => setV4NavigationStyle("progress")}
+                  aria-pressed={v4NavigationStyle === "icons"}
+                  onClick={() => setV4NavigationStyle("icons")}
                 >
-                  Progress button
+                  Icon button
                 </button>
                 <button
                   className={v4NavigationStyle === "arrows" ? "selected" : ""}
@@ -7672,9 +8365,9 @@ export default function App() {
                   && suggestedReviewChannel === "instagram"
                   && suggestedFlowDrafts.instagram.images.length === 0}
                 availableChannels={suggestedFlowChannels}
-                progressStatuses={suggestedFlowProgressStatuses}
+                channelStatuses={suggestedFlowContentStatuses}
                 onChannelChange={setSuggestedReviewChannel}
-                navigationStyle={version === "v4" ? v4NavigationStyle : "progress"}
+                navigationStyle={version === "v4" ? v4NavigationStyle : "icons"}
                 showContentStatus={version === "v4"}
                 onBack={returnFromSuggestedReview}
                 onEditSchedule={isV4GeneratedEditor
@@ -7747,9 +8440,9 @@ export default function App() {
                 lifecycleEnabled={v4ReviewOrigin === "saturday"}
                 delivery={v4ChannelDeliveries[socialWorkflowChannel]}
                 availableChannels={reviewScopedV4Channels}
-                progressStatuses={v4ProgressStatuses}
+                channelStatuses={v4ContentStatuses}
                 onChannelChange={setSocialWorkflowChannel}
-                navigationStyle={version === "v4" ? v4NavigationStyle : "progress"}
+                navigationStyle={version === "v4" ? v4NavigationStyle : "icons"}
                 iconStyle={version === "v4" ? "jobber" : "brand"}
                 versionFourActionLabels={version === "v4"}
                 showContentStatus={version === "v4"}
@@ -7847,6 +8540,18 @@ export default function App() {
               ) : (
                 <CalendarScreen
                 updated
+                showTaskCard={version === "v4" && v4RemainingTaskIds.length > 0}
+                taskCount={version === "v4" ? v4RemainingTaskIds.length : 0}
+                taskButtonRef={v4TaskButtonRef}
+                taskReturnRef={version === "v4" ? v4TaskCalendarRef : undefined}
+                onOpenTasks={version === "v4" && v4RemainingTaskIds.length > 0
+                  ? () => {
+                      setCalendarModalOpen(false);
+                      setV4CardSummaryOpen(false);
+                      setCombinedWorkflow(null);
+                      setV4TaskModalOpen(true);
+                    }
+                  : undefined}
                 targetPublished={scheduledChannels[version] !== null}
                 combinedPublished={currentSaturdayCompletion !== null}
                 targetChannels={PREVIEW_CHANNEL_ORDER
@@ -7876,6 +8581,7 @@ export default function App() {
                     }
                   : undefined}
                 onOpenPost={() => {
+                  setV4TaskModalOpen(false);
                   setV3ReviewOrigin(null);
                   setCalendarModalOpen(true);
                 }}
@@ -7884,6 +8590,7 @@ export default function App() {
                   campaignSource = "original",
                   representedCalendarChannels = [],
                 ) => {
+                  setV4TaskModalOpen(false);
                   if (version === "v3") {
                     setV3ContextPreviewChannel("google");
                     setV3ReviewOrigin(null);
@@ -7943,6 +8650,28 @@ export default function App() {
                   : undefined}
                 />
               )}
+              {v4TaskModalOpen && version === "v4" && v4EntrySurface === "calendar" && (
+                <V4CalendarTaskModal
+                  remainingTaskIds={v4RemainingTaskIds}
+                  onComplete={(taskId, finalTask) => {
+                    setV4RemainingTaskIds((current) => (
+                      current.includes(taskId)
+                        ? current.filter((candidate) => candidate !== taskId)
+                        : current
+                    ));
+                    showContextualToast(V4_CALENDAR_TASK_SUCCESS_COPY[taskId]);
+                    if (!finalTask) return;
+                    setV4TaskModalOpen(false);
+                    setScreen("calendar");
+                    setV4EntrySurface("calendar");
+                    window.requestAnimationFrame(() => v4TaskCalendarRef.current?.focus());
+                  }}
+                  onClose={() => {
+                    setV4TaskModalOpen(false);
+                    window.requestAnimationFrame(() => v4TaskButtonRef.current?.focus());
+                  }}
+                />
+              )}
               {version === "v4" && v4EntrySurface === "adhoc" && adHocCreationStep && (
                 <AdHocCreationDialog
                   step={adHocCreationStep}
@@ -7990,6 +8719,11 @@ export default function App() {
                   iconStyle="jobber"
                   suggestedAsDraft
                   primaryActionLabel="Start Review"
+                  campaignIdentity={`adhoc-created:${activeAdHocSummary.id}`}
+                  onDeleteAll={() => deleteV4Campaign({
+                    kind: "adhoc-created",
+                    showcaseId: activeAdHocSummary.id,
+                  })}
                   onStartReview={() => openCreatedAdHocChannel(
                     activeAdHocSummary.id,
                     activeAdHocSummaryChannels[0],
@@ -8034,14 +8768,16 @@ export default function App() {
                   )}
                 />
               )}
-              {v4CardSummaryOpen && version === "v4" && (
+              {v4CardSummaryOpen
+                && version === "v4"
+                && activeCalendarV4Channels.length > 0 && (
                 <VersionFourSummaryModal
                   title={activeV4CampaignTitle}
                   images={activeV4CampaignSource === "generated"
                     ? generatedV4State.drafts.all.images
                     : v4Drafts.all.images}
                   channels={activeCalendarV4Channels}
-                  statuses={activeCalendarV4ProgressStatuses}
+                  statuses={activeCalendarV4ContentStatuses}
                   delivery={activeV4CampaignDeliveries[activeCalendarV4Channels[0] ?? "google"]}
                   scheduleText={activeV4CampaignScheduleText}
                   description={activeV4CampaignSource === "generated"
@@ -8051,6 +8787,11 @@ export default function App() {
                     ? GENERATED_V4_PROMOTION_ARTWORK
                     : undefined}
                   iconStyle="jobber"
+                  campaignIdentity={`calendar:${activeV4CampaignSource ?? "original"}`}
+                  onDeleteAll={() => deleteV4Campaign({
+                    kind: "calendar",
+                    source: activeV4CampaignSource ?? "original",
+                  })}
                   onStartReview={() => {
                     const entryChannel = preferredV4EntryChannel
                       && activeCalendarV4Channels.includes(preferredV4EntryChannel)
@@ -8095,7 +8836,7 @@ export default function App() {
                       title={GENERATED_V4_CAMPAIGN_TITLE}
                       images={generatedV4State.drafts.all.images}
                       channels={availableGeneratedV4Channels}
-                      statuses={generatedV4ProgressStatuses}
+                      statuses={generatedV4ContentStatuses}
                       delivery={generatedV4State.channelDeliveries.google}
                       description={GENERATED_V4_SUMMARY_COPY}
                       scheduleText={GENERATED_V4_SCHEDULE_TEXT}
@@ -8307,7 +9048,7 @@ export default function App() {
                   googleDemoState={activeV4CampaignSource === "generated"
                     ? generatedV4State.googleDemoState
                     : googleContextDemoState}
-                  navigationStyle={version === "v4" ? v4NavigationStyle : "progress"}
+                  navigationStyle={version === "v4" ? v4NavigationStyle : "icons"}
                   iconStyle={version === "v4" ? "jobber" : "brand"}
                   scopeDate={version === "v5" ? activeV4GroupDate ?? undefined : undefined}
                   previewLoadingDuration={version === "v4" && activeV4CampaignSource === "generated"
@@ -8497,6 +9238,22 @@ export default function App() {
               onSave={(date, time) => {
                 saveScheduleEdits(scheduleEditorChannel, date, time);
               }}
+            />
+          )}
+          {version === "v4" && v4TopicCompletion && (
+            <V4TopicCompletionModal
+              confirmation={v4TopicCompletion.confirmation}
+              delivered={v4CompletionProgress.delivered}
+              total={v4CompletionProgress.total}
+              nextTopic={nextV4IncompleteTopic && nextV4IncompleteChannel
+                ? {
+                    channelLabel:
+                      CONTEXTUAL_TO_CALENDAR_CHANNEL[nextV4IncompleteChannel],
+                    title: nextV4IncompleteTopic.title,
+                  }
+                : null}
+              onBackToCalendar={closeV4TopicCompletion}
+              onReviewNext={reviewNextV4Topic}
             />
           )}
           {scheduleToastVisible && (

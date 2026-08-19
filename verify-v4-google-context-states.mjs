@@ -58,14 +58,14 @@ async function expectSentGoogleActionsRightAligned() {
 }
 
 async function selectState(label) {
-  const stepper = modal().locator(".channel-progress-stepper--modal-v4");
-  const activeBefore = await stepper.locator("[aria-current='step']").getAttribute("aria-label");
+  const switcher = modal().locator(".channel-icon-switcher--modal-v4");
+  const activeBefore = await switcher.locator("[aria-checked='true']").getAttribute("aria-label");
   const cardCountBefore = await saturdayCard().count();
   await controls().getByRole("button", { name: label, exact: true }).click();
   assert.equal(await modal().count(), 1, `${label} must keep the modal open`);
   assert.equal(
-    (await stepper.locator("[aria-current='step']").getAttribute("aria-label"))?.split(",")[0],
-    activeBefore?.split(",")[0],
+    await switcher.locator("[aria-checked='true']").getAttribute("aria-label"),
+    activeBefore,
     `${label} must keep the active channel`,
   );
   assert.equal(await modal().locator(".v4-context-navigation-controls").count(), 0);
@@ -79,7 +79,7 @@ async function selectState(label) {
 try {
   await page.goto(baseUrl, { waitUntil: "networkidle" });
   await page.getByRole("button", { name: "Version 4" }).click();
-  await page.getByRole("button", { name: "Progress button", exact: true }).click();
+  await page.getByRole("button", { name: "Icon button", exact: true }).click();
   await openSaturdayReview();
 
   assert.deepEqual(
@@ -134,12 +134,12 @@ try {
   await footer().getByRole("button", { name: "Edit", exact: true }).waitFor();
   await footer().getByRole("button", { name: "Post Now", exact: true }).waitFor();
 
-  await modal().locator(".channel-progress-stepper--modal-v4")
-    .getByRole("button", { name: /^Facebook,/ })
+  await modal().locator(".channel-icon-switcher--modal-v4")
+    .getByRole("radio", { name: "Facebook", exact: true })
     .click();
   assert.equal(await controls().count(), 0, "Controls must hide on Facebook");
-  await modal().locator(".channel-progress-stepper--modal-v4")
-    .getByRole("button", { name: /^Google,/ })
+  await modal().locator(".channel-icon-switcher--modal-v4")
+    .getByRole("radio", { name: "Google", exact: true })
     .click();
   await controls().getByRole("button", { name: "Error", exact: true }).waitFor();
   assert.equal(
@@ -155,7 +155,7 @@ try {
 
   await page.getByRole("button", { name: "Version 1" }).click();
   await page.getByRole("button", { name: "Version 4" }).click();
-  await page.getByRole("button", { name: "Progress button", exact: true }).click();
+  await page.getByRole("button", { name: "Icon button", exact: true }).click();
   await openSaturdayReview();
   assert.equal(
     await controls().getByRole("button", { name: "Suggested", exact: true }).getAttribute("aria-pressed"),

@@ -10,6 +10,7 @@
     "build:research:dashboard": "VITE_PROTOTYPE_VERSION=version_4 VITE_RESEARCH_MODE=true VITE_ENTRY_SURFACE=dashboard VITE_NAVIGATION_STYLE=arrows npm run build",
     "build:research:adhoc": "VITE_PROTOTYPE_VERSION=version_4 VITE_RESEARCH_MODE=true VITE_ENTRY_SURFACE=adhoc VITE_NAVIGATION_STYLE=arrows npm run build",
     "preview": "vite preview",
+    "verify:channel-switcher": "node verify-channel-icon-switcher.mjs",
     "verify:icon-style": "node verify-v4-icon-style.mjs",
     "verify:v4-adhoc": "node verify-v4-adhoc.mjs",
     "verify:v4-adhoc-create": "node verify-v4-adhoc-create.mjs",
@@ -23,6 +24,9 @@
     "verify:v4-review-status": "node verify-v4-review-status.mjs",
     "verify:v4-lifecycle": "node verify-v4-lifecycle.mjs",
     "verify:v4-linked-split": "node verify-v4-linked-split.mjs",
+    "verify:v4-delete-all": "node verify-v4-delete-all.mjs",
+    "verify:v4-topic-completion": "node verify-v4-topic-completion.mjs",
+    "verify:v4-calendar-tasks": "node verify-v4-calendar-tasks.mjs",
     "verify:research": "node verify-research-mode.mjs"
   },
   "dependencies": {

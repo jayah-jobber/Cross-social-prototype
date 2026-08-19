@@ -169,7 +169,7 @@ try {
   await page.locator(".v4-generated-review .v4-context-preview")
     .getByRole("button", { name: "Book", exact: true }).waitFor();
 
-  // Generated edits remain source-aware; original V4 campaign origins keep their own defaults.
+  // Generated edits remain source-aware; the live original V4 campaign keeps its own defaults.
   await page.getByLabel("Close suggested marketing content").click();
   await page.locator(".combined-target-card").click();
   await page.locator(".v4-summary-modal").getByRole("button", { name: "Review Drafts" }).click();
@@ -177,21 +177,7 @@ try {
     .getByRole("link", { name: "Learn More", exact: true }).waitFor();
   await page.getByRole("button", { name: "Close", exact: true }).click();
 
-  await page.locator(
-    ".target-card:not(.combined-target-card):not(.generated-delivery-card)",
-  ).click();
-  await page.locator(".calendar-modal-preview")
-    .getByRole("link", { name: "Learn More", exact: true }).waitFor();
-  await page.locator(".calendar-modal-actions").getByRole("button", { name: "Edit" }).click();
-  await page.locator(".review-carousel-preview")
-    .getByRole("link", { name: "Learn More", exact: true }).waitFor();
-  await page.locator(".review-field").first().getByRole("button", { name: "Edit" }).click();
-  await expectGoogleEditor();
-  assert.equal(await buttonText().textContent(), "TextLearn More");
-  assert.match(await linkDestination().getAttribute("aria-label"), /External link$/);
-  assert.equal(await buttonUrl().inputValue(), "http://yourwebsite.com");
-
-  // Versions 1–3 retain their existing editors and do not receive the V4 control.
+  // Post title 1 is intentionally inert in V4. Versions 1–3 retain their existing editors.
   for (const version of ["Version 1", "Version 2", "Version 3"]) {
     await page.getByRole("button", { name: version, exact: true }).click();
     await page.locator(".target-card:not(.combined-target-card)").click();

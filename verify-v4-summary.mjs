@@ -26,7 +26,7 @@ const instagramImageRequirement = "Add at least 1 image before posting to Instag
 async function resetV4() {
   await page.getByRole("button", { name: "Version 1", exact: true }).click();
   await page.getByRole("button", { name: "Version 4", exact: true }).click();
-  await page.getByRole("button", { name: "Progress button", exact: true }).click();
+  await page.getByRole("button", { name: "Icon button", exact: true }).click();
 }
 
 async function openSaturdaySummary() {
@@ -68,7 +68,7 @@ async function waitForGeneratedPreviewReady(review) {
 try {
   await page.goto(baseUrl, { waitUntil: "networkidle" });
   await page.getByRole("button", { name: "Version 4", exact: true }).click();
-  await page.getByRole("button", { name: "Progress button", exact: true }).click();
+  await page.getByRole("button", { name: "Icon button", exact: true }).click();
 
   // Multi-channel V4 campaign cards enter the Figma summary before channel review.
   await openSaturdaySummary();
@@ -84,7 +84,7 @@ try {
   assert.ok((await summaryRows().allTextContents()).every((text) => text.includes("Suggested")));
   assert.equal(await summary().locator(".v4-summary-collage img").count(), 3);
   assert.equal(await summary().getByRole("button", { name: "Review Drafts" }).count(), 1);
-  assert.equal(await summary().locator(".channel-progress-stepper").count(), 0);
+  assert.equal(await summary().locator(".channel-icon-switcher").count(), 0);
   assert.equal(await summary().getByRole("heading", {
     name: "REVIEW MULTIPLE CHANNELS",
     exact: true,
@@ -141,7 +141,7 @@ try {
   ]);
   await startCardReview();
   assert.equal(
-    await contextModal().locator(".channel-progress-stepper--modal-v4").getByRole("button").count(),
+    await contextModal().locator(".channel-icon-switcher--modal-v4").getByRole("radio").count(),
     5,
   );
   assert.equal(await contextModal().getByRole("heading", {
@@ -151,28 +151,32 @@ try {
   assert.equal(await contextModal().getAttribute("aria-labelledby"), "v4-context-title");
   const reviewHeaderGeometry = await contextModal().evaluate((dialog) => {
     const modal = dialog.getBoundingClientRect();
-    const stepper = dialog.querySelector(".channel-progress-stepper")?.getBoundingClientRect();
-    const close = dialog.querySelector(".context-progress-close")?.getBoundingClientRect();
+    const switcher = dialog.querySelector(".channel-icon-switcher")?.getBoundingClientRect();
+    const details = dialog.querySelector(".v4-context-details")?.getBoundingClientRect();
+    const close = dialog.querySelector(".context-navigation-close")?.getBoundingClientRect();
     return {
+      leftDelta: Math.abs((switcher?.left ?? 0) - (details?.left ?? 0)),
       centerDelta: Math.abs(
-        (stepper?.left ?? 0) + (stepper?.width ?? 0) / 2 - (modal.left + modal.width / 2),
+        (switcher?.left ?? 0) + (switcher?.width ?? 0) / 2 - (modal.left + modal.width / 2),
       ),
       closeRightDelta: Math.abs((close?.right ?? 0) - (modal.right - 32)),
     };
   });
-  assert.ok(reviewHeaderGeometry.centerDelta <= 1);
+  assert.ok(reviewHeaderGeometry.leftDelta <= 1);
+  assert.ok(reviewHeaderGeometry.centerDelta >= 40);
   assert.ok(reviewHeaderGeometry.closeRightDelta <= 1);
-  const modalStepper = contextModal().locator(".channel-progress-stepper--modal-v4");
-  await modalStepper.getByRole("button", { name: /^Google,/ }).focus();
+  const modalSwitcher = contextModal().locator(".channel-icon-switcher--modal-v4");
+  await modalSwitcher.getByRole("radio", { name: "Google", exact: true }).focus();
   await page.keyboard.press("ArrowRight");
   assert.equal(
-    await modalStepper.getByRole("button", { name: /^Facebook,/ }).getAttribute("aria-current"),
-    "step",
+    await modalSwitcher.getByRole("radio", { name: "Facebook", exact: true })
+      .getAttribute("aria-checked"),
+    "true",
   );
-  await modalStepper.getByRole("button", { name: /^Google,/ }).click();
+  await modalSwitcher.getByRole("radio", { name: "Google", exact: true }).click();
   await page.screenshot({ path: "/tmp/v4-calendar-review.png" });
   assert.deepEqual(
-    await contextModal().locator(".channel-progress-stepper--modal-v4 img").evaluateAll((images) => (
+    await contextModal().locator(".channel-icon-switcher--modal-v4 img").evaluateAll((images) => (
       images.slice(0, 3).map((image) => new URL(image.src).pathname)
     )),
     [
@@ -197,8 +201,8 @@ try {
   await openSaturdaySummary();
   assert.equal(await summaryRow("Google").locator("[data-status='scheduled']").count(), 1);
   await startCardReview();
-  await contextModal().locator(".channel-progress-stepper--modal-v4")
-    .getByRole("button", { name: "Google, scheduled" }).click();
+  await contextModal().locator(".channel-icon-switcher--modal-v4")
+    .getByRole("radio", { name: "Google", exact: true }).click();
   await contextModal().locator(".v4-context-footer")
     .getByRole("button", { name: "Show scheduled post options" }).click();
   await contextModal().getByRole("menuitem", { name: "Cancel schedule", exact: true }).click();
@@ -218,7 +222,7 @@ try {
   await summary().getByText("Schedule date: Various dates", { exact: true }).waitFor();
   await startCardReview();
   assert.equal(
-    await contextModal().locator(".channel-progress-stepper--modal-v4").getByRole("button").count(),
+    await contextModal().locator(".channel-icon-switcher--modal-v4").getByRole("radio").count(),
     5,
   );
   await contextModal().getByText("Sent", { exact: true }).waitFor();
@@ -239,8 +243,8 @@ try {
   assert.equal(await summaryRow("Google").locator("[data-status='error']").count(), 1);
   await page.screenshot({ path: "/tmp/v4-summary-mixed.png" });
   await startCardReview();
-  await contextModal().locator(".channel-progress-stepper--modal-v4")
-    .getByRole("button", { name: /^Facebook,/ }).click();
+  await contextModal().locator(".channel-icon-switcher--modal-v4")
+    .getByRole("radio", { name: "Facebook", exact: true }).click();
   await contextModal().locator(".v4-context-footer")
     .getByRole("button", { name: "Delete", exact: true }).click();
   await page.getByRole("dialog", { name: "Improve future recommendations" })
@@ -303,26 +307,26 @@ try {
     name: "15% promotion",
     exact: true,
   }).count(), 1);
-  assert.equal(await generatedReview.locator(".channel-progress-stepper--modal-v4").count(), 1);
+  assert.equal(await generatedReview.locator(".channel-icon-switcher--modal-v4").count(), 1);
   assert.equal(
-    await generatedReview.locator(".channel-progress-stepper--modal-v4").getByRole("button").count(),
+    await generatedReview.locator(".channel-icon-switcher--modal-v4").getByRole("radio").count(),
     4,
   );
-  assert.equal(await generatedReview.getByRole("button", { name: /^Website,/ }).count(), 0);
+  assert.equal(await generatedReview.getByRole("radio", { name: "Website", exact: true }).count(), 0);
   assert.equal(
     await generatedReview.getByText(/Christmas Special: Save 15% on Winter Landscaping Services/).count(),
     1,
   );
   assert.equal(await generatedReview.locator(".post-image, .empty-post-image").count(), 0);
-  const generatedStepper = generatedReview.locator(".channel-progress-stepper--modal-v4");
-  await generatedStepper.getByRole("button", { name: /^Facebook,/ }).click();
+  const generatedSwitcher = generatedReview.locator(".channel-icon-switcher--modal-v4");
+  await generatedSwitcher.getByRole("radio", { name: "Facebook", exact: true }).click();
   await waitForGeneratedPreviewReady(generatedReview);
   assert.equal(
     await generatedReview.getByText(/Christmas Special: Save 15% on Winter Landscaping Services/).count(),
     1,
   );
   assert.equal(await generatedReview.locator(".channel-image-grid").count(), 0);
-  await generatedStepper.getByRole("button", { name: /^Instagram,/ }).click();
+  await generatedSwitcher.getByRole("radio", { name: "Instagram", exact: true }).click();
   await waitForGeneratedPreviewReady(generatedReview);
   assert.equal(
     await generatedReview.getByText(/Christmas Special: Save 15% on Winter Landscaping Services/).count(),
@@ -341,7 +345,7 @@ try {
     await generatedReview.getByRole("button", { name: "Show publishing options" }).isDisabled(),
     true,
   );
-  await generatedStepper.getByRole("button", { name: /^Email,/ }).click();
+  await generatedSwitcher.getByRole("radio", { name: "Email", exact: true }).click();
   await waitForGeneratedPreviewReady(generatedReview);
   assert.equal(
     await generatedReview.getByText(/Subject: Save 15% on your next landscaping project/).count(),
@@ -352,13 +356,13 @@ try {
     1,
   );
   assert.equal(await generatedReview.locator(".email-hero").count(), 0);
-  await generatedStepper.getByRole("button", { name: /^Google,/ }).click();
+  await generatedSwitcher.getByRole("radio", { name: "Google", exact: true }).click();
   await waitForGeneratedPreviewReady(generatedReview);
   assert.equal(await generatedReview.getByRole("button", { name: "Close", exact: true }).count(), 0);
   assert.equal(await page.locator(".prototype-status-controls").count(), 0);
   await generatedReview.locator(".v4-context-footer")
     .getByRole("button", { name: "Schedule Google post", exact: true }).click();
-  await generatedReview.getByRole("button", { name: /^Facebook,/ }).waitFor();
+  await generatedReview.getByRole("radio", { name: "Facebook", exact: true }).waitFor();
   await suggested.getByLabel("Close suggested marketing content").click();
 
   // V5 remains on its existing contextual modal and never renders Summary.

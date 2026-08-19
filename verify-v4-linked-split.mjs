@@ -22,7 +22,7 @@ const summaryRows = () => summary().locator(".v4-summary-status-list > li");
 async function resetV4() {
   await page.getByRole("button", { name: "Version 1", exact: true }).click();
   await page.getByRole("button", { name: "Version 4", exact: true }).click();
-  await page.getByRole("button", { name: "Progress button", exact: true }).click();
+  await page.getByRole("button", { name: "Icon button", exact: true }).click();
 }
 
 async function openSummary(card, expectedChannels, scheduleText) {
@@ -52,19 +52,20 @@ async function openSummary(card, expectedChannels, scheduleText) {
 async function startCampaignReview(expectedChannels, expectedStart = "Google") {
   await summary().getByRole("button", { name: "Review Drafts", exact: true }).click();
   await context().waitFor();
-  const stepper = context().locator(".channel-progress-stepper--modal-v4");
-  assert.equal(await stepper.getByRole("button").count(), expectedChannels);
+  const switcher = context().locator(".channel-icon-switcher--modal-v4");
+  assert.equal(await switcher.getByRole("radio").count(), expectedChannels);
   assert.equal(
-    await stepper.getByRole("button", {
-      name: new RegExp(`^${expectedStart},`),
-    }).getAttribute("aria-current"),
-    "step",
+    await switcher.getByRole("radio", {
+      name: expectedStart,
+      exact: true,
+    }).getAttribute("aria-checked"),
+    "true",
   );
 }
 
 async function selectContextChannel(channel) {
-  await context().locator(".channel-progress-stepper--modal-v4")
-    .getByRole("button", { name: new RegExp(`^${channel},`) })
+  await context().locator(".channel-icon-switcher--modal-v4")
+    .getByRole("radio", { name: channel, exact: true })
     .click();
   const glimmer = context().locator(".v4-preview-glimmer");
   if (await glimmer.count()) await glimmer.waitFor({ state: "detached", timeout: 4500 });
@@ -93,7 +94,7 @@ async function deleteCurrent() {
 try {
   await page.goto(baseUrl, { waitUntil: "networkidle" });
   await page.getByRole("button", { name: "Version 4", exact: true }).click();
-  await page.getByRole("button", { name: "Progress button", exact: true }).click();
+  await page.getByRole("button", { name: "Icon button", exact: true }).click();
 
   // Only the original Friday social card is presentational in V4.
   assert.equal(await inertFridayCard().count(), 1);
@@ -127,7 +128,7 @@ try {
   await startCampaignReview(5);
   await editSchedule("Google", "2026-11-05", "14:30");
   assert.equal(
-    await review().locator(".channel-progress-stepper--review").getByRole("button").count(),
+    await review().locator(".channel-icon-switcher--review").getByRole("radio").count(),
     5,
   );
   await review().locator(".review-footer")
@@ -135,7 +136,7 @@ try {
     .click();
   await review().getByRole("heading", { name: "Review Facebook Post" }).waitFor();
   assert.equal(
-    await review().locator(".channel-progress-stepper--review").getByRole("button").count(),
+    await review().locator(".channel-icon-switcher--review").getByRole("radio").count(),
     5,
   );
   await review().locator(".review-footer").getByRole("button", { name: "Back" }).click();
@@ -149,12 +150,12 @@ try {
     .click();
   await context().getByRole("menuitem", { name: "Post now and view next", exact: true }).click();
   assert.equal(
-    await context().locator(".channel-progress-stepper--modal-v4").getByRole("button").count(),
+    await context().locator(".channel-icon-switcher--modal-v4").getByRole("radio").count(),
     5,
   );
   assert.equal(
-    await context().getByRole("button", { name: /^Email,/ }).getAttribute("aria-current"),
-    "step",
+    await context().getByRole("radio", { name: "Email", exact: true }).getAttribute("aria-checked"),
+    "true",
   );
   await context().getByRole("button", { name: "Close", exact: true }).click();
 
@@ -202,8 +203,9 @@ try {
   await openSummary(originalCard("Friday, Nov 6"), 5, "Various dates");
   await startCampaignReview(5, "Facebook");
   assert.equal(
-    await context().getByRole("button", { name: /^Facebook,/ }).getAttribute("aria-current"),
-    "step",
+    await context().getByRole("radio", { name: "Facebook", exact: true })
+      .getAttribute("aria-checked"),
+    "true",
   );
   await context().getByRole("button", { name: "Close", exact: true }).click();
 
@@ -237,16 +239,16 @@ try {
   await openSummary(originalCard("Saturday, Nov 7"), 5, "Various dates");
   await startCampaignReview(5, "Facebook");
   assert.equal(
-    await context().locator(".channel-progress-stepper--modal-v4").getByRole("button")
-      .evaluateAll((buttons) => (
-        buttons.findIndex((button) => button.getAttribute("aria-current") === "step") + 1
+    await context().locator(".channel-icon-switcher--modal-v4").getByRole("radio")
+      .evaluateAll((options) => (
+        options.findIndex((option) => option.getAttribute("aria-checked") === "true") + 1
       )),
     2,
   );
   await selectContextChannel("Google");
   assert.equal(
-    await context().getByRole("button", { name: /^Google,/ }).getAttribute("aria-current"),
-    "step",
+    await context().getByRole("radio", { name: "Google", exact: true }).getAttribute("aria-checked"),
+    "true",
   );
   await context().getByRole("button", { name: "Close", exact: true }).click();
 
@@ -257,7 +259,7 @@ try {
   await selectContextChannel("Facebook");
   await deleteCurrent();
   assert.equal(
-    await context().locator(".channel-progress-stepper--modal-v4").getByRole("button").count(),
+    await context().locator(".channel-icon-switcher--modal-v4").getByRole("radio").count(),
     4,
   );
   await context().getByRole("button", { name: "Close", exact: true }).click();
@@ -272,7 +274,7 @@ try {
     await deleteCurrent();
     if (remaining > 0) {
       assert.equal(
-        await context().locator(".channel-progress-stepper--modal-v4").getByRole("button").count(),
+        await context().locator(".channel-icon-switcher--modal-v4").getByRole("radio").count(),
         remaining,
       );
     }
@@ -289,10 +291,10 @@ try {
   const generatedReview = page.locator(".v4-generated-review");
   await generatedReview.getByRole("status", { name: "Loading Google preview" }).waitFor();
   await generatedReview.locator(".v4-preview-glimmer").waitFor({ state: "detached", timeout: 4500 });
-  await generatedReview.getByRole("button", { name: /^Facebook,/ }).click();
+  await generatedReview.getByRole("radio", { name: "Facebook", exact: true }).click();
   await generatedReview.getByRole("status", { name: "Loading Facebook preview" }).waitFor();
   await generatedReview.locator(".v4-preview-glimmer").waitFor({ state: "detached", timeout: 4500 });
-  await generatedReview.getByRole("button", { name: /^Email,/ }).click();
+  await generatedReview.getByRole("radio", { name: "Email", exact: true }).click();
   await generatedReview.getByRole("status", { name: "Loading Email preview" }).waitFor();
   await generatedReview.locator(".v4-preview-glimmer").waitFor({ state: "detached", timeout: 4500 });
   await generatedReview.locator(".v4-context-footer").getByRole("button", { name: "Edit" }).click();
@@ -306,7 +308,7 @@ try {
   await review().locator(".review-footer").getByRole("button", { name: "Back" }).click();
   await generatedReview.waitFor();
   assert.equal(
-    await generatedReview.locator(".channel-progress-stepper--modal-v4").getByRole("button").count(),
+    await generatedReview.locator(".channel-icon-switcher--modal-v4").getByRole("radio").count(),
     4,
   );
   await generatedReview.locator(".v4-context-footer")
