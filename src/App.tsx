@@ -118,7 +118,7 @@ const INITIAL_IMAGES: GalleryImage[] = [
 
 const GENERATED_V4_PROMOTION_ARTWORK: GalleryImage = {
   id: "v4-15-percent-promotion",
-  src: "/assets/v4-15-percent-promotion.png",
+  src: "/assets/v4-generated-summary-channel-artwork.png",
   alt: "Marketing channels surrounding the Jobber logo",
 };
 
@@ -158,6 +158,7 @@ type SocialIconStyle = "jobber" | "brand";
 type V4NavigationStyle = ResearchNavigationStyle;
 type V4EntrySurface = ResearchEntrySurface | "adhoc";
 type V4GeneratedFlowOrigin = ResearchEntrySurface;
+type GeneratedV4Phase = "idle" | "idea-loading" | "idea-summary" | "draft-review";
 type GoogleButtonAction = "learn-more" | "book" | "call-now";
 type GoogleLinkDestination = "external" | "booking" | "default-form" | "other-form";
 type EnabledChannels = Record<PreviewChannel, boolean>;
@@ -1663,8 +1664,13 @@ type V4TopicCompletionState = {
   confirmation: string;
 };
 
-const V4_INITIAL_DATE = "2026-11-07";
 const V4_TODAY_DATE = "2026-11-06";
+function nextIsoDate(date: string) {
+  const next = new Date(`${date}T12:00:00Z`);
+  next.setUTCDate(next.getUTCDate() + 1);
+  return next.toISOString().slice(0, 10);
+}
+const V4_INITIAL_DATE = nextIsoDate(V4_TODAY_DATE);
 const V4_INITIAL_TIME = "09:00";
 const V4_TIMEZONE = "America/Toronto" as const;
 const V4_WEEK_MIN = "2026-11-02";
@@ -2121,7 +2127,6 @@ const V4_LOADING_STAGES: V4LoadingStage[] = [
 const V4_SUMMARY_COPY = "Your recent Hamilton clean up and mulching project (Job ID xxx) is a great one to showcase on all your platforms. It talks about transforming a property with a seasonal clean up and fresh mulch, highlighting the visual impact and value of a well-maintained landscape.";
 const GENERATED_V4_CAMPAIGN_TITLE = "15% promotion";
 const GENERATED_V4_SUMMARY_COPY = "Promotional content is a great one to showcase on all your platforms. It talks about a limited-time opportunity for homeowners to save on landscaping services, creating urgency while encouraging potential customers to book before the promotion ends.";
-const GENERATED_V4_SCHEDULE_TEXT = "Nov 7th, 2026 9:00am";
 const INSTAGRAM_IMAGE_REQUIRED_MESSAGE = "Add at least 1 image before posting to Instagram";
 
 const V4_SUMMARY_STATUS_PRESENTATION: Record<
@@ -2149,17 +2154,20 @@ function VersionFourContentStatusBadge({
   const normalizedStatus = versionFourSummaryStatus(status);
   const presentation = V4_SUMMARY_STATUS_PRESENTATION[normalizedStatus];
   const showDraft = suggestedAsDraft && normalizedStatus === "suggested";
+  const label = showDraft ? "Draft" : presentation.label;
 
   return (
     <span
       className={`v4-summary-status ${
-        showDraft ? "adhoc-campaign-status--neutral" : `v4-summary-status--${presentation.tone}`
+        showDraft
+          ? "adhoc-campaign-status--neutral"
+          : `v4-summary-status--${presentation.tone}`
       } v4-content-status`}
       data-status={normalizedStatus}
-      aria-label={`Content status: ${showDraft ? "Draft" : presentation.label}`}
+      aria-label={`Content status: ${label}`}
     >
       <span className="v4-status-dot" aria-hidden="true" />
-      {showDraft ? "Draft" : presentation.label}
+      {label}
     </span>
   );
 }
@@ -2229,6 +2237,7 @@ function VersionFourSummaryModal({
   origin = "calendar",
   iconStyle = "jobber",
   suggestedAsDraft = false,
+  recommendationOnly = false,
   primaryActionLabel = "Review Drafts",
   campaignIdentity,
   onDeleteAll,
@@ -2246,6 +2255,7 @@ function VersionFourSummaryModal({
   origin?: "calendar" | "generated";
   iconStyle?: SocialIconStyle;
   suggestedAsDraft?: boolean;
+  recommendationOnly?: boolean;
   primaryActionLabel?: string;
   campaignIdentity?: string;
   onDeleteAll?: () => void;
@@ -2318,13 +2328,20 @@ function VersionFourSummaryModal({
             <p>{description}</p>
             <hr />
             <div className="v4-summary-schedule">
+              {!recommendationOnly && (
+                <p>
+                  <strong>Schedule date:</strong>{" "}
+                  {scheduleText ?? formatV4DeliveryDateTime(delivery).replace(" · ", " ")}
+                </p>
+              )}
               <p>
-                <strong>Schedule date:</strong>{" "}
-                {scheduleText ?? formatV4DeliveryDateTime(delivery).replace(" · ", " ")}
+                <strong>{recommendationOnly ? "Suggested channels:" : "Post to:"}</strong>
               </p>
-              <p><strong>Post to:</strong></p>
             </div>
-            <ul className="v4-summary-status-list" aria-label="Channel statuses">
+            <ul
+              className="v4-summary-status-list"
+              aria-label={recommendationOnly ? "Suggested channels" : "Channel statuses"}
+            >
               {orderedChannels.map(({ id, label }) => {
                 const status = versionFourSummaryStatus(statuses[id] ?? "suggested");
                 return (
@@ -3602,6 +3619,97 @@ function DeletionFeedbackDialog({
   );
 }
 
+function GeneratedV4ExitDialog({
+  onCancel,
+  onSaveAndExit,
+  onDiscardAndExit,
+}: {
+  onCancel: () => void;
+  onSaveAndExit: () => void;
+  onDiscardAndExit: () => void;
+}) {
+  const dialogRef = useRef<HTMLElement>(null);
+  const saveButtonRef = useRef<HTMLButtonElement>(null);
+  const actionStartedRef = useRef(false);
+
+  useEffect(() => {
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    saveButtonRef.current?.focus();
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        onCancel();
+        window.requestAnimationFrame(() => previouslyFocused?.focus());
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const focusable = Array.from(
+        dialogRef.current?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)") ?? [],
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onCancel]);
+
+  const runOnce = (action: () => void) => {
+    if (actionStartedRef.current) return;
+    actionStartedRef.current = true;
+    action();
+  };
+
+  return (
+    <div
+      className="google-delete-overlay generated-v4-exit-overlay"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget && !actionStartedRef.current) onCancel();
+      }}
+    >
+      <section
+        ref={dialogRef}
+        className="google-delete-dialog generated-v4-exit-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="generated-v4-exit-title"
+        aria-describedby="generated-v4-exit-description"
+      >
+        <h2 id="generated-v4-exit-title">Save generated content?</h2>
+        <p id="generated-v4-exit-description">
+          Do you want to save the generated drafts to your calendar? Discarding the drafts will not affected already scheduled or posted content.
+        </p>
+        <footer>
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => runOnce(onDiscardAndExit)}
+          >
+            Discard and exit
+          </button>
+          <button
+            ref={saveButtonRef}
+            type="button"
+            className="primary-button"
+            onClick={() => runOnce(onSaveAndExit)}
+          >
+            Save and exit
+          </button>
+        </footer>
+      </section>
+    </div>
+  );
+}
+
 function VersionFourContextModal({
   drafts,
   emailMessage,
@@ -3622,6 +3730,7 @@ function VersionFourContextModal({
   navigationStyle,
   iconStyle = "jobber",
   embedded = false,
+  embeddedExitControls = false,
   enforceInstagramImageRequirement = false,
   scopeDate,
   previewLoadingDuration = 0,
@@ -3652,6 +3761,7 @@ function VersionFourContextModal({
   navigationStyle: V4NavigationStyle;
   iconStyle?: SocialIconStyle;
   embedded?: boolean;
+  embeddedExitControls?: boolean;
   enforceInstagramImageRequirement?: boolean;
   scopeDate?: string;
   previewLoadingDuration?: number;
@@ -3786,14 +3896,21 @@ function VersionFourContextModal({
         return;
       }
       if (previewLoading) return;
-      if (event.key === "Escape" && !embedded) onClose();
+      if (event.key === "Escape" && (!embedded || embeddedExitControls)) onClose();
       if (deleteDialogOpen) return;
       if (event.key === "ArrowLeft") goPrevious();
       if (event.key === "ArrowRight") goNext();
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [deleteDialogOpen, embedded, onClose, previewLoading, splitMenuOpen]);
+  }, [
+    deleteDialogOpen,
+    embedded,
+    embeddedExitControls,
+    onClose,
+    previewLoading,
+    splitMenuOpen,
+  ]);
 
   useEffect(() => {
     if (!splitMenuOpen) return;
@@ -3808,7 +3925,7 @@ function VersionFourContextModal({
   const modal = (
     <section
       className={`v4-context-modal v4-five-channel-modal${embedded ? " v4-generated-review" : ""}${deleteDialogOpen ? " delete-dialog-open" : ""}${previewLoading ? " preview-loading" : ""}`}
-      {...(!embedded
+      {...(!embedded || embeddedExitControls
         ? {
             role: "dialog",
             "aria-modal": true,
@@ -3834,7 +3951,7 @@ function VersionFourContextModal({
               className="channel-icon-switcher--modal-v4"
             />
           )}
-          {!embedded && (
+          {(!embedded || embeddedExitControls) && (
             <button
               className="context-navigation-close"
               type="button"
@@ -4072,7 +4189,13 @@ function VersionFourContextModal({
   if (embedded) return modal;
 
   return (
-    <div className="calendar-modal-overlay v4-context-overlay" role="presentation">
+    <div
+      className="calendar-modal-overlay v4-context-overlay"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
       {modal}
     </div>
   );
@@ -6340,6 +6463,7 @@ const createInitialDaisyVersionStates = (): Record<DaisyPrototypeVersion, DaisyV
 });
 
 type GeneratedV4State = {
+  campaignId: number | null;
   drafts: V2Drafts;
   emailMessage: string;
   emailSubject: string;
@@ -6406,6 +6530,7 @@ const createAdHocShowcase = ({
 };
 
 const createInitialGeneratedV4State = (): GeneratedV4State => ({
+  campaignId: null,
   drafts: createGeneratedV4Drafts(),
   emailMessage: GENERATED_V4_EMAIL_MESSAGE,
   emailSubject: GENERATED_V4_EMAIL_SUBJECT,
@@ -6431,6 +6556,14 @@ export default function App() {
   const [generatedV4State, setGeneratedV4State] = useState(createInitialGeneratedV4State);
   const [generatedV4CalendarDeliveries, setGeneratedV4CalendarDeliveries] =
     useState<GeneratedV4CalendarDeliveries>({});
+  const [generatedV4Phase, setGeneratedV4Phase] = useState<GeneratedV4Phase>("idle");
+  const [generatedV4ExitTarget, setGeneratedV4ExitTarget] =
+    useState<V4EntrySurface | null>(null);
+  const [generatedV4ExitVersionTarget, setGeneratedV4ExitVersionTarget] =
+    useState<PrototypeVersion | null>(null);
+  const generatedV4CampaignSequenceRef = useRef(0);
+  const generatedV4ExitPendingRef = useRef(false);
+  const generatedV4ExitActionRef = useRef(false);
   const [adHocShowcases, setAdHocShowcases] = useState<AdHocShowcaseState[]>([]);
   const [adHocCreationStep, setAdHocCreationStep] =
     useState<AdHocCreationStep | null>(null);
@@ -6951,6 +7084,13 @@ export default function App() {
     setV4ReviewScopedChannels(null);
     setScreen("calendar");
     setV4EntrySurface("calendar");
+    if (source === "generated") {
+      setGeneratedV4Phase("idle");
+      setGeneratedV4ExitTarget(null);
+      setGeneratedV4ExitVersionTarget(null);
+      generatedV4ExitPendingRef.current = false;
+      generatedV4ExitActionRef.current = false;
+    }
     setV4TopicCompletion({
       source,
       confirmation: v4CompletionConfirmation(channel, action, nextDeliveries[channel]),
@@ -7280,16 +7420,46 @@ export default function App() {
     advanceV4Review(channel, nextDeliveries, true);
   };
   const acceptGeneratedV4Campaign = () => {
+    const fresh = createInitialGeneratedV4State();
+    generatedV4CampaignSequenceRef.current += 1;
+    const protectedChannels = GENERATED_V4_CHANNELS.filter((channel) => {
+      const delivery = generatedV4CalendarDeliveries[channel];
+      return delivery
+        && !generatedV4State.channelDeliveries[channel].deleted
+        && (delivery.lifecycle === "scheduled" || delivery.lifecycle === "sent");
+    });
+    const channelDeliveries = { ...fresh.channelDeliveries };
+    protectedChannels.forEach((channel) => {
+      channelDeliveries[channel] = { ...generatedV4CalendarDeliveries[channel]! };
+      if (channel === "google" || channel === "facebook" || channel === "instagram") {
+        fresh.drafts[channel] = {
+          ...generatedV4State.drafts[channel],
+          images: [...generatedV4State.drafts[channel].images],
+        };
+      } else if (channel === "email") {
+        fresh.emailMessage = generatedV4State.emailMessage;
+        fresh.emailSubject = generatedV4State.emailSubject;
+      }
+    });
+    const nextState: GeneratedV4State = {
+      ...fresh,
+      campaignId: generatedV4CampaignSequenceRef.current,
+      channelDeliveries,
+      googleDemoState: channelDeliveries.google.lifecycle === "scheduled"
+        ? "scheduled"
+        : channelDeliveries.google.lifecycle === "sent"
+          ? "sent"
+          : "suggested",
+    };
     const acceptedDeliveries = Object.fromEntries(
-      availableGeneratedV4Channels.map((channel) => [
+      GENERATED_V4_CHANNELS.map((channel) => [
         channel,
-        { ...generatedV4State.channelDeliveries[channel] },
+        { ...nextState.channelDeliveries[channel] },
       ]),
     ) as GeneratedV4CalendarDeliveries;
-    setGeneratedV4CalendarDeliveries((current) => ({
-      ...current,
-      ...acceptedDeliveries,
-    }));
+    setGeneratedV4State(nextState);
+    setGeneratedV4CalendarDeliveries(acceptedDeliveries);
+    setGeneratedV4Phase("draft-review");
     return acceptedDeliveries;
   };
   const markGeneratedV4PreviewLoaded = (channel: ContextualChannel) => {
@@ -7381,6 +7551,11 @@ export default function App() {
         setActiveV4CampaignSource(null);
         setV4ReviewScopedChannels(null);
         setCombinedModalStartIndex(0);
+        setGeneratedV4Phase("idle");
+        setGeneratedV4ExitTarget(null);
+        setGeneratedV4ExitVersionTarget(null);
+        generatedV4ExitPendingRef.current = false;
+        generatedV4ExitActionRef.current = false;
       }
     }
     return nextDeliveries;
@@ -7430,7 +7605,7 @@ export default function App() {
       (candidate) => !nextDeliveries[candidate].deleted,
     );
     if (!hasRemainingChannels) {
-      closeGeneratedV4Session(nextCalendarDeliveries, nextDeliveries);
+      closeGeneratedV4Session();
       return nextDeliveries;
     }
     if (
@@ -7469,42 +7644,8 @@ export default function App() {
     setV4Generating(false);
     setV4LoadingStage(0);
   };
-  const closeGeneratedV4Session = (
-    calendarDeliveries: GeneratedV4CalendarDeliveries = generatedV4CalendarDeliveries,
-    channelDeliveriesOverride?: V4ChannelDeliveries,
-  ) => {
+  const closeGeneratedV4WorkflowUi = (target: V4EntrySurface) => {
     cancelSuggestionGeneration();
-    setGeneratedV4State((current) => {
-      const initial = createInitialGeneratedV4State();
-      const channelDeliveries = channelDeliveriesOverride ?? current.channelDeliveries;
-      const deliveredEntries = GENERATED_V4_CHANNELS.flatMap((channel) => {
-        const delivery = calendarDeliveries[channel]
-          ?? (channelDeliveries[channel].lifecycle !== "unscheduled"
-            ? channelDeliveries[channel]
-            : null);
-        return delivery ? [[channel, delivery] as const] : [];
-      });
-      if (deliveredEntries.length === 0) return initial;
-      const delivered = Object.fromEntries(deliveredEntries);
-      const persistedDeliveries = {
-        ...initial.channelDeliveries,
-        ...delivered,
-      };
-      GENERATED_V4_CHANNELS.forEach((channel) => {
-        if (channelDeliveries[channel].deleted) {
-          persistedDeliveries[channel] = channelDeliveries[channel];
-        }
-      });
-      return {
-        ...current,
-        channelDeliveries: persistedDeliveries,
-        googleDemoState: delivered.google?.lifecycle === "scheduled"
-          ? "scheduled"
-          : delivered.google?.lifecycle === "sent"
-            ? "sent"
-            : "suggested",
-      };
-    });
     setV4SuggestedSummaryOpen(false);
     setSuggestedDialogOpen(false);
     setSuggestedPreviewIndex(0);
@@ -7519,9 +7660,105 @@ export default function App() {
     setActiveV4CampaignSource(null);
     setPreferredV4EntryChannel(null);
     setV4ReviewScopedChannels(null);
+    setCombinedWorkflow(null);
+    setCombinedModalStartIndex(0);
+    setScheduleEditorChannel(null);
+    setReviewDeleteChannel(null);
     setSuggestedPrompt("");
     setCalendarPrompt("");
     setV4DashboardPrompt("");
+    setGeneratedV4Phase("idle");
+    setGeneratedV4ExitTarget(null);
+    setGeneratedV4ExitVersionTarget(null);
+    generatedV4ExitPendingRef.current = false;
+    generatedV4ExitActionRef.current = false;
+    setV4CardSummaryOpen(false);
+    setScreen("calendar");
+    setV4EntrySurface(target);
+  };
+  const closeGeneratedV4Session = () => {
+    closeGeneratedV4WorkflowUi(v4GeneratedFlowOrigin);
+  };
+  const requestGeneratedV4Exit = (
+    target: V4EntrySurface = v4GeneratedFlowOrigin,
+  ) => {
+    if (generatedV4Phase !== "draft-review") {
+      closeGeneratedV4WorkflowUi(target);
+      return;
+    }
+    if (generatedV4ExitPendingRef.current || generatedV4ExitActionRef.current) return;
+    generatedV4ExitPendingRef.current = true;
+    setGeneratedV4ExitVersionTarget(null);
+    setGeneratedV4ExitTarget(target);
+  };
+  const requestGeneratedV4VersionExit = (target: PrototypeVersion) => {
+    if (generatedV4ExitPendingRef.current || generatedV4ExitActionRef.current) return;
+    generatedV4ExitPendingRef.current = true;
+    setGeneratedV4ExitTarget(null);
+    setGeneratedV4ExitVersionTarget(target);
+  };
+  const cancelGeneratedV4Exit = () => {
+    if (generatedV4ExitActionRef.current) return;
+    generatedV4ExitPendingRef.current = false;
+    setGeneratedV4ExitTarget(null);
+    setGeneratedV4ExitVersionTarget(null);
+  };
+  const saveAndExitGeneratedV4 = () => {
+    if (generatedV4ExitActionRef.current) return;
+    generatedV4ExitActionRef.current = true;
+    const versionTarget = generatedV4ExitVersionTarget;
+    closeGeneratedV4WorkflowUi(generatedV4ExitTarget ?? v4GeneratedFlowOrigin);
+    if (versionTarget) switchVersion(versionTarget, true);
+  };
+  const discardAndExitGeneratedV4 = () => {
+    if (generatedV4ExitActionRef.current) return;
+    generatedV4ExitActionRef.current = true;
+    const protectedEntries = GENERATED_V4_CHANNELS.flatMap((channel) => {
+      const delivery = generatedV4CalendarDeliveries[channel];
+      return delivery
+        && !generatedV4State.channelDeliveries[channel].deleted
+        && (delivery.lifecycle === "scheduled" || delivery.lifecycle === "sent")
+        ? [[channel, { ...delivery }] as const]
+        : [];
+    });
+    const protectedDeliveries = Object.fromEntries(
+      protectedEntries,
+    ) as GeneratedV4CalendarDeliveries;
+    if (protectedEntries.length === 0) {
+      setGeneratedV4State(createInitialGeneratedV4State());
+      setGeneratedV4CalendarDeliveries({});
+    } else {
+      const protectedChannels = new Set(protectedEntries.map(([channel]) => channel));
+      setGeneratedV4State((current) => {
+        const channelDeliveries = { ...current.channelDeliveries };
+        GENERATED_V4_CHANNELS.forEach((channel) => {
+          channelDeliveries[channel] = protectedChannels.has(channel)
+            ? { ...protectedDeliveries[channel]! }
+            : {
+                ...channelDeliveries[channel],
+                lifecycle: "unscheduled",
+                deleted: true,
+                statusOverride: null,
+              };
+        });
+        return {
+          ...current,
+          channelDeliveries,
+          googleDemoState: protectedDeliveries.google?.lifecycle === "scheduled"
+            ? "scheduled"
+            : protectedDeliveries.google?.lifecycle === "sent"
+              ? "sent"
+              : "suggested",
+          loadedPreviewChannels: current.loadedPreviewChannels.filter(
+            (channel) => protectedChannels.has(channel),
+          ),
+        };
+      });
+      setGeneratedV4CalendarDeliveries(protectedDeliveries);
+    }
+    const versionTarget = generatedV4ExitVersionTarget;
+    closeGeneratedV4WorkflowUi(generatedV4ExitTarget ?? v4GeneratedFlowOrigin);
+    if (versionTarget) switchVersion(versionTarget, true);
   };
   const advanceGeneratedV4Review = (
     channel: ContextualChannel,
@@ -7551,6 +7788,11 @@ export default function App() {
       setPreferredV4EntryChannel(null);
       setV4ReviewScopedChannels(null);
       setCombinedModalStartIndex(0);
+      setGeneratedV4Phase("idle");
+      setGeneratedV4ExitTarget(null);
+      setGeneratedV4ExitVersionTarget(null);
+      generatedV4ExitPendingRef.current = false;
+      generatedV4ExitActionRef.current = false;
       return;
     }
     closeGeneratedV4Session();
@@ -7683,6 +7925,7 @@ export default function App() {
     }));
     setV4LoadingStage(0);
     setV4Generating(true);
+    setGeneratedV4Phase("idea-loading");
   };
   const closeAdHocTransient = () => {
     if (adHocTimerRef.current !== null) {
@@ -7719,13 +7962,13 @@ export default function App() {
   };
   const switchV4EntrySurface = (nextSurface: V4EntrySurface) => {
     if (nextSurface === v4EntrySurface) return;
-    const generatedFlowActive = v4Generating
-      || v4SuggestedSummaryOpen
-      || suggestedDialogOpen
-      || (version === "v4" && v4ReviewOrigin === "suggested-content")
-      || (version === "v4" && suggestedReviewChannel !== null)
-      || (version === "v4" && suggestedEditor !== null);
-    if (generatedFlowActive) closeGeneratedV4Session();
+    if (version === "v4" && generatedV4Phase === "draft-review") {
+      requestGeneratedV4Exit(nextSurface);
+      return;
+    }
+    if (version === "v4" && generatedV4Phase !== "idle") {
+      closeGeneratedV4WorkflowUi(nextSurface);
+    }
     setV4CardSummaryOpen(false);
     setCombinedWorkflow(null);
     setCombinedModalStartIndex(0);
@@ -7947,11 +8190,22 @@ export default function App() {
         : showcase
     )));
   };
-  const switchVersion = (nextVersion: PrototypeVersion) => {
+  const switchVersion = (
+    nextVersion: PrototypeVersion,
+    bypassGeneratedExitGuard = false,
+  ) => {
     if (
       nextVersion === version
       || (LOCKED_PROTOTYPE_VERSION && nextVersion !== LOCKED_PROTOTYPE_VERSION)
     ) return;
+    if (
+      !bypassGeneratedExitGuard
+      && version === "v4"
+      && generatedV4Phase === "draft-review"
+    ) {
+      requestGeneratedV4VersionExit(nextVersion);
+      return;
+    }
 
     cancelSuggestionGeneration();
     setMessage(INITIAL_V1_MESSAGE);
@@ -7961,6 +8215,12 @@ export default function App() {
     setDaisyVersionStates(createInitialDaisyVersionStates());
     setGeneratedV4State(createInitialGeneratedV4State());
     setGeneratedV4CalendarDeliveries({});
+    setGeneratedV4Phase("idle");
+    setGeneratedV4ExitTarget(null);
+    setGeneratedV4ExitVersionTarget(null);
+    generatedV4CampaignSequenceRef.current = 0;
+    generatedV4ExitPendingRef.current = false;
+    generatedV4ExitActionRef.current = false;
     closeAdHocTransient();
     setAdHocShowcases([]);
     setEnabledChannels({
@@ -7970,7 +8230,7 @@ export default function App() {
     });
     setScheduledChannels({ v1: null, v2: null, v3: null, v4: null, v5: null });
     setCalendarStatuses(createInitialCalendarStatuses());
-    setV4NavigationStyle("arrows");
+    setV4NavigationStyle(prototypeEnv.navigationStyle);
     setV4EntrySurface("calendar");
     setV4GeneratedFlowOrigin("calendar");
     setV4DashboardPrompt("");
@@ -8068,6 +8328,7 @@ export default function App() {
       setSuggestedPreviewIndex(0);
       setV4ReviewOrigin(null);
       setV4SuggestedSummaryOpen(true);
+      setGeneratedV4Phase("idea-summary");
     }, 1000);
     suggestionTimerRef.current = interval;
 
@@ -8076,6 +8337,20 @@ export default function App() {
       if (suggestionTimerRef.current === interval) suggestionTimerRef.current = null;
     };
   }, [version, v4Generating]);
+
+  useEffect(() => {
+    if (version !== "v4" || generatedV4Phase !== "draft-review") return;
+    const guardGeneratedExit = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || generatedV4ExitPendingRef.current) return;
+      if (document.querySelector(
+        ".google-delete-overlay:not(.generated-v4-exit-overlay), .schedule-date-overlay, [role='menu']",
+      )) return;
+      event.preventDefault();
+      requestGeneratedV4Exit();
+    };
+    window.addEventListener("keydown", guardGeneratedExit);
+    return () => window.removeEventListener("keydown", guardGeneratedExit);
+  }, [generatedV4Phase, version]);
 
   useEffect(() => {
     if (version !== "v4" || !adHocGenerating || !pendingAdHocShowcase) return;
@@ -8787,7 +9062,9 @@ export default function App() {
                     ? GENERATED_V4_PROMOTION_ARTWORK
                     : undefined}
                   iconStyle="jobber"
-                  campaignIdentity={`calendar:${activeV4CampaignSource ?? "original"}`}
+                  campaignIdentity={activeV4CampaignSource === "generated"
+                    ? `calendar:generated:${generatedV4State.campaignId ?? "none"}`
+                    : "calendar:original"}
                   onDeleteAll={() => deleteV4Campaign({
                     kind: "calendar",
                     source: activeV4CampaignSource ?? "original",
@@ -8804,6 +9081,12 @@ export default function App() {
                     ));
                     setSocialWorkflowChannel(entryChannel);
                     setPreferredV4EntryChannel(null);
+                    if (activeV4CampaignSource === "generated") {
+                      setV4GeneratedFlowOrigin(
+                        v4EntrySurface === "dashboard" ? "dashboard" : "calendar",
+                      );
+                      setGeneratedV4Phase("draft-review");
+                    }
                     setCombinedWorkflow("modal");
                   }}
                   onClose={() => {
@@ -8818,7 +9101,7 @@ export default function App() {
                 />
               )}
               {version === "v4"
-                && (v4Generating || v4SuggestedSummaryOpen || suggestedDialogOpen) && (
+                && (v4Generating || v4SuggestedSummaryOpen) && (
                 <VersionFourGeneratedFlowShell
                   prompt={suggestedPrompt}
                   loading={v4Generating}
@@ -8834,19 +9117,22 @@ export default function App() {
                   ) : v4SuggestedSummaryOpen ? (
                     <VersionFourSummaryModal
                       title={GENERATED_V4_CAMPAIGN_TITLE}
-                      images={generatedV4State.drafts.all.images}
-                      channels={availableGeneratedV4Channels}
-                      statuses={generatedV4ContentStatuses}
-                      delivery={generatedV4State.channelDeliveries.google}
+                      images={[]}
+                      channels={GENERATED_V4_CHANNELS}
+                      statuses={Object.fromEntries(GENERATED_V4_CHANNELS.map((channel) => [
+                        channel,
+                        "suggested",
+                      ]))}
+                      delivery={createGeneratedV4ChannelDeliveries().google}
                       description={GENERATED_V4_SUMMARY_COPY}
-                      scheduleText={GENERATED_V4_SCHEDULE_TEXT}
                       artwork={GENERATED_V4_PROMOTION_ARTWORK}
                       origin="generated"
                       iconStyle="jobber"
+                      recommendationOnly
+                      campaignIdentity={`idea:${suggestedPrompt}`}
                       onStartReview={() => {
                         acceptGeneratedV4Campaign();
-                        const groupDate = V4_INITIAL_DATE;
-                        setActiveV4GroupDate(groupDate);
+                        setActiveV4GroupDate(V4_INITIAL_DATE);
                         setActiveV4CampaignSource("generated");
                         setPreferredV4EntryChannel(null);
                         setV4ReviewScopedChannels(null);
@@ -8856,9 +9142,19 @@ export default function App() {
                       }}
                       onClose={() => undefined}
                     />
-                  ) : (
+                  ) : null}
+                </VersionFourGeneratedFlowShell>
+              )}
+              {version === "v4" && suggestedDialogOpen && (
+                <div
+                  className="calendar-modal-overlay suggested-content-overlay v4-generated-flow-overlay"
+                  role="presentation"
+                  onMouseDown={(event) => {
+                    if (event.target === event.currentTarget) requestGeneratedV4Exit();
+                  }}
+                >
                     <VersionFourContextModal
-                      key={`generated-${suggestedPrompt}-${availableGeneratedV4Channels.join("-")}`}
+                      key={`generated-${generatedV4State.campaignId}-${availableGeneratedV4Channels.join("-")}`}
                       drafts={generatedV4State.drafts}
                       emailMessage={generatedV4State.emailMessage}
                       emailSubject={generatedV4State.emailSubject}
@@ -8873,12 +9169,13 @@ export default function App() {
                       navigationStyle={v4NavigationStyle}
                       iconStyle="jobber"
                       embedded
+                      embeddedExitControls
                       enforceInstagramImageRequirement
                       previewLoadingDuration={V4_PREVIEW_LOADING_MS}
                       loadedPreviewChannels={generatedV4State.loadedPreviewChannels}
                       onPreviewLoaded={markGeneratedV4PreviewLoaded}
                       onActiveChannelChange={setActiveV4ContextChannel}
-                      onClose={() => undefined}
+                      onClose={() => requestGeneratedV4Exit()}
                       onEdit={(channel) => {
                         setSuggestedPreviewIndex(
                           availableGeneratedV4Channels.indexOf(channel),
@@ -8891,22 +9188,8 @@ export default function App() {
                       onLifecycleAction={(channel, action) => {
                         return performGeneratedV4LifecycleAction(channel, action);
                       }}
-                      onComplete={(nextDeliveries) => {
-                        if (!nextDeliveries) {
-                          closeGeneratedV4Session();
-                          return;
-                        }
-                        closeGeneratedV4Session(
-                          Object.fromEntries(availableGeneratedV4Channels.map((channel) => [
-                            channel,
-                            nextDeliveries[channel],
-                          ])) as GeneratedV4CalendarDeliveries,
-                          nextDeliveries,
-                        );
-                      }}
                     />
-                  )}
-                </VersionFourGeneratedFlowShell>
+                </div>
               )}
               {suggestedDialogOpen && version === "v5" && (
                 <SuggestedMarketingContentDialog
@@ -9065,6 +9348,14 @@ export default function App() {
                   }
                   onActiveChannelChange={setActiveV4ContextChannel}
                   onClose={() => {
+                    if (
+                      version === "v4"
+                      && activeV4CampaignSource === "generated"
+                      && generatedV4Phase === "draft-review"
+                    ) {
+                      requestGeneratedV4Exit();
+                      return;
+                    }
                     setActiveV4ContextChannel(null);
                     setCombinedModalStartIndex(0);
                     setV4ReviewOrigin(null);
@@ -9254,6 +9545,14 @@ export default function App() {
                 : null}
               onBackToCalendar={closeV4TopicCompletion}
               onReviewNext={reviewNextV4Topic}
+            />
+          )}
+          {version === "v4"
+            && (generatedV4ExitTarget !== null || generatedV4ExitVersionTarget !== null) && (
+            <GeneratedV4ExitDialog
+              onCancel={cancelGeneratedV4Exit}
+              onSaveAndExit={saveAndExitGeneratedV4}
+              onDiscardAndExit={discardAndExitGeneratedV4}
             />
           )}
           {scheduleToastVisible && (

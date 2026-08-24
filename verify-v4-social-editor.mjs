@@ -115,9 +115,11 @@ try {
   await flow().locator(".v4-summary-modal--generated").waitFor({ timeout: 8000 });
   await flow().locator(".v4-summary-modal--generated")
     .getByRole("button", { name: "Review Drafts", exact: true }).click();
-  await flow().locator(".channel-icon-switcher--modal-v4")
+  const generatedReview = page.locator(".v4-generated-review");
+  await generatedReview.locator(".channel-icon-switcher--modal-v4")
     .getByRole("radio", { name: "Facebook", exact: true }).click();
-  await flow().locator(".v4-context-footer").getByRole("button", { name: "Edit" }).click();
+  await generatedReview.locator(".v4-context-footer")
+    .getByRole("button", { name: "Edit" }).click();
   await openReviewEditor("Facebook");
   await assertFlattenedEditor(generatedFlattened);
   assert.equal(occurrences(await messageInput().inputValue(), generatedHashtags), 1);
@@ -136,7 +138,9 @@ try {
     { exact: true },
   ).waitFor();
   await review().locator(".review-footer").getByRole("button", { name: "Back", exact: true }).click();
-  await flow().getByLabel("Close suggested marketing content").click();
+  await generatedReview.getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("dialog", { name: "Save generated content?" })
+    .getByRole("button", { name: "Save and exit", exact: true }).click();
 
   const generatedCard = page.locator(".calendar-day")
     .filter({ has: page.getByRole("heading", { name: "Saturday, Nov 7", exact: true }) })

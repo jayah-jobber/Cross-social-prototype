@@ -208,7 +208,21 @@ async function verifyDevelopmentControls(page, url) {
   assert.equal(await page.getByLabel("Prototype version").count(), 1);
   await page.getByRole("button", { name: "Version 4", exact: true }).click();
   assert.equal(await page.getByRole("group", { name: "Version 4 entry surface" }).count(), 1);
-  assert.equal(await page.getByRole("group", { name: "Version 4 navigation style" }).count(), 1);
+  const navigation = page.getByRole("group", { name: "Version 4 navigation style" });
+  assert.equal(await navigation.count(), 1);
+  assert.equal(
+    await navigation.getByRole("button", { name: "Icon button", exact: true })
+      .getAttribute("aria-pressed"),
+    "true",
+  );
+  await navigation.getByRole("button", { name: "Arrow button", exact: true }).click();
+  await page.getByRole("button", { name: "Version 5", exact: true }).click();
+  await page.getByRole("button", { name: "Version 4", exact: true }).click();
+  assert.equal(
+    await navigation.getByRole("button", { name: "Icon button", exact: true })
+      .getAttribute("aria-pressed"),
+    "true",
+  );
 }
 
 async function verifyIconResearchNavigation(page, url) {
@@ -262,7 +276,7 @@ try {
   await withViteServer("dev", developmentEnv, (url) => verifyDevelopmentControls(page, url));
 
   console.log(
-    "Verified research Arrow builds, icon and legacy progress compatibility, absent controls, loading assets, and development controls.",
+    "Verified research Arrow builds, icon and legacy progress compatibility, absent controls, and development icon defaults.",
   );
 } finally {
   await browser.close();

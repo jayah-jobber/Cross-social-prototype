@@ -61,8 +61,9 @@ async function persistGeneratedCampaign() {
   if (await glimmer.count()) await glimmer.waitFor({ state: "detached", timeout: 4_500 });
   await generatedReview.locator(".v4-context-footer")
     .getByRole("button", { name: "Schedule Google post", exact: true }).click();
-  await page.locator(".v4-generated-flow-shell")
-    .getByLabel("Close suggested marketing content").click();
+  await generatedReview.getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("dialog", { name: "Save generated content?" })
+    .getByRole("button", { name: "Save and exit", exact: true }).click();
   await generatedCards().first().waitFor();
 }
 

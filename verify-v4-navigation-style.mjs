@@ -50,12 +50,12 @@ try {
   await navigationToggle().waitFor();
   assert.equal(await navigationToggle().count(), 1);
   assert.equal(
-    await navigationToggle().getByRole("button", { name: "Arrow button", exact: true })
+    await navigationToggle().getByRole("button", { name: "Icon button", exact: true })
       .getAttribute("aria-pressed"),
     "true",
   );
   assert.equal(
-    await navigationToggle().getByRole("button", { name: "Icon button", exact: true }).count(),
+    await navigationToggle().getByRole("button", { name: "Arrow button", exact: true }).count(),
     1,
   );
   assert.equal(await page.getByText("Progress button", { exact: true }).count(), 0);
@@ -73,7 +73,14 @@ try {
   }).click();
   await modal().waitFor();
 
-  // Five-channel contextual review defaults to the Figma arrow header.
+  // Five-channel contextual review defaults to the icon switcher.
+  assert.equal(await arrowNavigator(modal()).count(), 0);
+  assert.equal(await modal().locator(".channel-icon-switcher--modal-v4").count(), 1);
+  assert.equal(
+    await modal().getByRole("radio", { name: "Google", exact: true }).getAttribute("aria-checked"),
+    "true",
+  );
+  await navigationToggle().getByRole("button", { name: "Arrow button", exact: true }).click();
   await assertArrowNavigation(modal(), 1, 5);
   assert.equal(
     await arrowNavigator(modal()).getByRole("button", { name: "Previous channel" }).isDisabled(),
@@ -180,10 +187,12 @@ try {
     name: "About this Facebook post",
     exact: true,
   }).waitFor();
-  await page.getByLabel("Close suggested marketing content").click();
+  await generatedReview.getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("dialog", { name: "Save generated content?" })
+    .getByRole("button", { name: "Save and exit", exact: true }).click();
 
-  // The experiment is isolated to V4 and resets to arrows after version changes.
-  await navigationToggle().getByRole("button", { name: "Icon button", exact: true }).click();
+  // The experiment is isolated to V4 and resets to icons after version changes.
+  await navigationToggle().getByRole("button", { name: "Arrow button", exact: true }).click();
   await page.getByRole("button", { name: "Version 5", exact: true }).click();
   assert.equal(await navigationToggle().count(), 0);
   await saturdayCard().click();
@@ -195,13 +204,13 @@ try {
 
   await page.getByRole("button", { name: "Version 4", exact: true }).click();
   assert.equal(
-    await navigationToggle().getByRole("button", { name: "Arrow button", exact: true })
+    await navigationToggle().getByRole("button", { name: "Icon button", exact: true })
       .getAttribute("aria-pressed"),
     "true",
   );
 
   console.log(
-    "Verified V4 arrow defaults, scoped navigation, deletion, review parity, live toggling, reset, and V5 isolation.",
+    "Verified V4 icon defaults, scoped navigation, arrow opt-in, live toggling, reset, and V5 isolation.",
   );
 } finally {
   await browser.close();

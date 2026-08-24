@@ -234,8 +234,9 @@ try {
     exact: true,
   }).waitFor();
   assert.equal(
-    await contextModal().locator(".v4-arrow-navigator").getByText("2 of 5", { exact: true }).count(),
-    1,
+    await contextModal().getByRole("radio", { name: "Facebook", exact: true })
+      .getAttribute("aria-checked"),
+    "true",
   );
   await contextModal().getByRole("button", { name: "Close", exact: true }).click();
   assert.equal(await childRows().count(), 5);

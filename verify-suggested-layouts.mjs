@@ -40,9 +40,11 @@ try {
   await selectVersion("Version 4");
   await page.getByRole("button", { name: "Icon button", exact: true }).click();
   await openSuggested("V4 suggested layout prompt", "v4");
-  const horizontal = page.locator(".v4-generated-flow-shell");
-  const generatedReview = horizontal.locator(".v4-generated-review");
-  await horizontal.getByRole("heading", { name: "Suggested Marketing Content", exact: true }).waitFor();
+  const generatedReview = page.locator(".v4-generated-review");
+  await generatedReview.waitFor();
+  assert.equal(await page.locator(".v4-generated-flow-shell").count(), 0);
+  assert.equal(await page.getByLabel("Edit marketing content prompt").count(), 0);
+  await generatedReview.getByRole("heading", { name: "15% promotion", exact: true }).waitFor();
   assert.equal(await page.locator(".suggested-vertical-dialog").count(), 0);
   assert.equal(
     await generatedReview.getByRole("heading", { name: "REVIEW MULTIPLE CHANNELS", exact: true }).count(),
@@ -50,16 +52,6 @@ try {
   );
   assert.equal(await generatedReview.locator(".channel-icon-switcher--modal-v4").count(), 1);
   assert.equal(await generatedReview.locator(".v4-context-body").count(), 1);
-  await horizontal.getByLabel("Edit marketing content prompt").fill("Regenerated V4 idea");
-  await horizontal.getByRole("button", { name: "Regenerate suggestions" }).click();
-  const regeneratedSummary = horizontal.locator(".v4-summary-modal--generated");
-  await regeneratedSummary.waitFor();
-  assert.equal(
-    await horizontal.getByLabel("Edit marketing content prompt").inputValue(),
-    "Regenerated V4 idea",
-  );
-  await regeneratedSummary.getByRole("button", { name: "Review Drafts" }).click();
-  await generatedReview.waitFor();
   for (const channel of channels.slice(0, 4)) {
     const channelButton = generatedReview.getByRole("radio", { name: channel, exact: true });
     await channelButton.click();
@@ -70,7 +62,9 @@ try {
   await page.getByRole("heading", { name: "Review Email Campaign", exact: true }).waitFor();
   await page.locator(".review-footer").getByRole("button", { name: "Back" }).click();
   await generatedReview.getByRole("radio", { name: "Email", exact: true }).waitFor();
-  await horizontal.getByLabel("Close suggested marketing content").click();
+  await generatedReview.getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("dialog", { name: "Save generated content?" })
+    .getByRole("button", { name: "Save and exit", exact: true }).click();
 
   await selectVersion("Version 5");
   await openSuggested("V5 suggested layout prompt", "v5");

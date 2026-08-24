@@ -11,7 +11,7 @@ const controls = () => page.getByRole("group", {
   name: "Google contextual modal demo status",
 });
 const generatedFlow = () => page.locator(".v4-generated-flow-shell");
-const generatedReview = () => generatedFlow().locator(".v4-generated-review");
+const generatedReview = () => page.locator(".v4-generated-review");
 const saturdayCard = () => page.locator(".calendar-day").filter({
   has: page.getByRole("heading", { name: "Saturday, Nov 7", exact: true }),
 }).locator(".combined-target-card");
@@ -180,10 +180,9 @@ try {
     name: "Post now and view next",
     exact: true,
   }).click();
-  await generatedFlow().getByRole("button", {
-    name: "Close suggested marketing content",
-    exact: true,
-  }).click();
+  await generatedReview().getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("dialog", { name: "Save generated content?" })
+    .getByRole("button", { name: "Save and exit", exact: true }).click();
   const sentGoogleCard = page.locator(".calendar-day").filter({
     has: page.getByRole("heading", { name: "Friday, Nov 6", exact: true }),
   }).locator(".generated-delivery-card");

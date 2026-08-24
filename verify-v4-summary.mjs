@@ -20,7 +20,7 @@ const statusControls = () => page.getByRole("group", {
 });
 const revisedSummaryCopy = "Your recent Hamilton clean up and mulching project (Job ID xxx) is a great one to showcase on all your platforms. It talks about transforming a property with a seasonal clean up and fresh mulch, highlighting the visual impact and value of a well-maintained landscape.";
 const promotionSummaryCopy = "Promotional content is a great one to showcase on all your platforms. It talks about a limited-time opportunity for homeowners to save on landscaping services, creating urgency while encouraging potential customers to book before the promotion ends.";
-const summaryArtworkPath = "/assets/v4-15-percent-promotion.png";
+const summaryArtworkPath = "/assets/v4-generated-summary-channel-artwork.png";
 const instagramImageRequirement = "Add at least 1 image before posting to Instagram";
 
 async function resetV4() {
@@ -57,6 +57,23 @@ async function imageSources(scope) {
 async function assertSummaryArtwork(locator) {
   assert.equal(await locator.count(), 1);
   assert.equal(new URL(await locator.getAttribute("src"), baseUrl).pathname, summaryArtworkPath);
+  const geometry = await locator.evaluate((image) => {
+    const box = image.getBoundingClientRect();
+    return {
+      naturalWidth: image.naturalWidth,
+      naturalHeight: image.naturalHeight,
+      renderedWidth: Math.round(box.width),
+      renderedHeight: Math.round(box.height),
+      objectFit: getComputedStyle(image).objectFit,
+    };
+  });
+  assert.deepEqual(geometry, {
+    naturalWidth: 430,
+    naturalHeight: 577,
+    renderedWidth: 430,
+    renderedHeight: 577,
+    objectFit: "contain",
+  });
 }
 
 async function waitForGeneratedPreviewReady(review) {
@@ -275,20 +292,8 @@ try {
     rows.map((row) => row.querySelector(".v4-summary-channel")?.textContent?.trim())
   )), ["Google", "Facebook", "Instagram", "Email"]);
   assert.equal(await summaryRow("Website").count(), 0);
-  assert.equal(
-    await summary().getByText("Schedule date: Nov 7th, 2026 9:00am", { exact: true }).count(),
-    1,
-  );
-  const generatedSummaryArtwork = summary().locator(".v4-summary-artwork");
-  await assertSummaryArtwork(generatedSummaryArtwork);
-  assert.equal(await summary().locator(`img[src="${summaryArtworkPath}"]`).count(), 1);
-  assert.deepEqual(
-    await generatedSummaryArtwork.evaluate((image) => {
-      const bounds = image.getBoundingClientRect();
-      return [Math.round(bounds.width), Math.round(bounds.height)];
-    }),
-    [430, 577],
-  );
+  assert.equal(await summary().getByText("Schedule date:", { exact: true }).count(), 0);
+  await assertSummaryArtwork(summary().locator(".v4-summary-artwork"));
   assert.equal(await summary().locator(".v4-summary-collage").count(), 0);
   assert.equal(await summary().locator(".v4-summary-image-placeholder").count(), 0);
   assert.equal(await summary().locator(".v4-summary-body--text-only").count(), 0);
@@ -298,9 +303,9 @@ try {
     "Promote fall cleanup",
   );
   assert.ok((await summaryRows().allTextContents()).every((text) => text.includes("Suggested")));
+  assert.equal(await summary().getByText(/Recommended/).count(), 0);
   await summary().getByRole("button", { name: "Review Drafts", exact: true }).click();
-  const suggested = page.locator(".v4-generated-flow-shell");
-  const generatedReview = suggested.locator(".v4-generated-review");
+  const generatedReview = page.locator(".v4-generated-review");
   await generatedReview.waitFor();
   await waitForGeneratedPreviewReady(generatedReview);
   assert.equal(await generatedReview.getByRole("heading", {
@@ -318,6 +323,7 @@ try {
     1,
   );
   assert.equal(await generatedReview.locator(".post-image, .empty-post-image").count(), 0);
+  assert.equal(await generatedReview.locator(`img[src="${summaryArtworkPath}"]`).count(), 0);
   const generatedSwitcher = generatedReview.locator(".channel-icon-switcher--modal-v4");
   await generatedSwitcher.getByRole("radio", { name: "Facebook", exact: true }).click();
   await waitForGeneratedPreviewReady(generatedReview);
@@ -358,12 +364,15 @@ try {
   assert.equal(await generatedReview.locator(".email-hero").count(), 0);
   await generatedSwitcher.getByRole("radio", { name: "Google", exact: true }).click();
   await waitForGeneratedPreviewReady(generatedReview);
-  assert.equal(await generatedReview.getByRole("button", { name: "Close", exact: true }).count(), 0);
+  assert.equal(await generatedReview.getByRole("button", { name: "Close", exact: true }).count(), 1);
+  assert.equal(await page.getByLabel("Edit marketing content prompt").count(), 0);
   assert.equal(await page.locator(".prototype-status-controls").count(), 0);
   await generatedReview.locator(".v4-context-footer")
     .getByRole("button", { name: "Schedule Google post", exact: true }).click();
   await generatedReview.getByRole("radio", { name: "Facebook", exact: true }).waitFor();
-  await suggested.getByLabel("Close suggested marketing content").click();
+  await generatedReview.getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("dialog", { name: "Save generated content?" })
+    .getByRole("button", { name: "Save and exit", exact: true }).click();
 
   // V5 remains on its existing contextual modal and never renders Summary.
   await page.getByRole("button", { name: "Version 5", exact: true }).click();

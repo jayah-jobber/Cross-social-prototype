@@ -31,7 +31,7 @@ function parseNavigationStyle(value: string | undefined): ResearchNavigationStyl
     "VITE_NAVIGATION_STYLE",
     value,
     ["arrows", "icons"] as const,
-    "arrows",
+    "icons",
   );
 }
 
@@ -60,9 +60,7 @@ export const prototypeEnv = {
         "calendar",
       )
     : "calendar",
-  navigationStyle: researchMode
-    ? parseNavigationStyle(import.meta.env.VITE_NAVIGATION_STYLE)
-    : "arrows",
+  navigationStyle: parseNavigationStyle(import.meta.env.VITE_NAVIGATION_STYLE),
 } satisfies {
   researchMode: boolean;
   lockedVersion: LockedPrototypeVersion | undefined;

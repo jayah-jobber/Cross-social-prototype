@@ -314,7 +314,10 @@ try {
   await generatedReview.locator(".v4-context-footer")
     .getByRole("button", { name: "Schedule Email", exact: true })
     .click();
-  await page.locator(".v4-generated-flow-shell").waitFor({ state: "detached" });
+  await generatedReview.getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("dialog", { name: "Save generated content?" })
+    .getByRole("button", { name: "Save and exit", exact: true })
+    .click();
 
   assert.equal(await generatedCard("Saturday, Nov 7").count(), 1);
   assert.equal(await generatedCard("Sunday, Nov 8").count(), 1);
@@ -350,6 +353,9 @@ try {
       true,
     );
     await context().getByRole("button", { name: "Close", exact: true }).click();
+    await page.getByRole("dialog", { name: "Save generated content?" })
+      .getByRole("button", { name: "Save and exit", exact: true })
+      .click();
   }
 
   console.log(

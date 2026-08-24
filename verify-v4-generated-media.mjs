@@ -21,11 +21,11 @@ Book before Christmas to take advantage of this limited-time offer and keep your
 📞 Contact us today for a free quote and reserve your spot before our schedule fills up.`;
 const hashtags = "#ChristmasSpecial #WinterLandscaping #LandscapeMaintenance #HolidaySavings";
 const imageRequirement = "Add at least 1 image before posting to Instagram";
-const summaryArtworkPath = "/assets/v4-15-percent-promotion.png";
+const summaryArtworkPath = "/assets/v4-generated-summary-channel-artwork.png";
 
 const flow = () => page.locator(".v4-generated-flow-shell");
 const summary = () => flow().locator(".v4-summary-modal--generated");
-const context = () => flow().locator(".v4-generated-review");
+const context = () => page.locator(".v4-generated-review");
 const generatedCard = () => page.locator(".generated-delivery-card");
 
 async function generate(prompt) {
@@ -82,16 +82,7 @@ try {
 
   await generate("Christmas winter landscaping promotion");
   assert.equal(await generatedCard().count(), 0);
-  const artwork = summary().locator(".v4-summary-artwork");
-  assert.equal(await artwork.count(), 1);
-  assert.equal(new URL(await artwork.getAttribute("src"), baseUrl).pathname, summaryArtworkPath);
-  assert.deepEqual(
-    await artwork.evaluate((image) => {
-      const bounds = image.getBoundingClientRect();
-      return [Math.round(bounds.width), Math.round(bounds.height)];
-    }),
-    [430, 577],
-  );
+  assert.equal(await summary().locator(`img[src="${summaryArtworkPath}"]`).count(), 1);
   assert.equal(await summary().locator(".v4-summary-collage").count(), 0);
   assert.equal(await summary().locator(".v4-summary-body--text-only").count(), 0);
 
@@ -104,6 +95,7 @@ try {
   await waitForPreviewReady();
 
   await assertCollapsedMedia();
+  assert.equal(await context().locator(`img[src="${summaryArtworkPath}"]`).count(), 0);
   assert.equal(await context().locator(".post-copy > p").textContent(), body);
 
   await selectContextChannel("Facebook");
@@ -178,7 +170,9 @@ try {
     "Your email campaign has been successfully scheduled.",
     { exact: true },
   ).waitFor();
-  await flow().waitFor({ state: "detached" });
+  await context().getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("dialog", { name: "Save generated content?" })
+    .getByRole("button", { name: "Save and exit", exact: true }).click();
 
   // Undelivered Instagram remains Suggested on the persisted campaign.
   await generatedCard().click();

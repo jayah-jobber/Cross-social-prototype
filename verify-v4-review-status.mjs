@@ -172,10 +172,28 @@ try {
   await generatedSummary.getByRole("button", { name: "Review Drafts", exact: true }).click();
   await expectContextBadge("suggested", "informative");
   await waitForGeneratedPreview();
+  for (const channel of ["Facebook", "Instagram", "Email", "Google"]) {
+    await contextModal().locator(".channel-icon-switcher--modal-v4")
+      .getByRole("radio", { name: channel, exact: true })
+      .click();
+    await waitForGeneratedPreview();
+    await expectContextBadge("suggested", "informative");
+  }
   await contextModal().locator(".v4-context-footer")
     .getByRole("button", { name: "Edit", exact: true })
     .click();
   await expectReviewBadge("suggested", "informative", "Review Google Post");
+  for (const [channel, expectedTitle] of [
+    ["Facebook", "Review Facebook Post"],
+    ["Instagram", "Review Instagram Post"],
+    ["Email", "Review Email Campaign"],
+    ["Google", "Review Google Post"],
+  ]) {
+    await channelReview().locator(".channel-icon-switcher--review")
+      .getByRole("radio", { name: channel, exact: true })
+      .click();
+    await expectReviewBadge("suggested", "informative", expectedTitle);
+  }
   await channelReview().locator(".review-footer").getByRole("button", { name: "Back" }).click();
   await waitForGeneratedPreview();
 
@@ -198,7 +216,9 @@ try {
     .getByRole("button", { name: "Show publishing options" })
     .click();
   await contextModal().getByRole("menuitem", { name: "Post now and view next", exact: true }).click();
-  await page.getByRole("button", { name: "Close suggested marketing content" }).click();
+  await contextModal().getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("dialog", { name: "Save generated content?" })
+    .getByRole("button", { name: "Save and exit", exact: true }).click();
   const sentGeneratedCard = page.locator(".calendar-day").filter({
     has: page.getByRole("heading", { name: "Friday, Nov 6", exact: true }),
   }).locator(".generated-delivery-card");
@@ -211,6 +231,8 @@ try {
 
   // Other prototype versions never receive the V4-only content badge.
   await page.getByRole("button", { name: "Version 5", exact: true }).click();
+  await page.getByRole("dialog", { name: "Save generated content?" })
+    .getByRole("button", { name: "Save and exit", exact: true }).click();
   assert.equal(await page.locator(".v4-content-status").count(), 0);
 
   console.log(

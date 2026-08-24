@@ -25,7 +25,7 @@ async function openSuggestedGoogleEditor() {
   await page.getByLabel("Add to your marketing calendar").fill("Google button QA");
   await page.getByRole("button", { name: "Generate suggested marketing content" }).click();
   await page.locator(".v4-summary-modal").getByRole("button", { name: "Review Drafts" }).click();
-  await page.getByRole("heading", { name: "Suggested Marketing Content", exact: true }).waitFor();
+  await page.locator(".v4-generated-review").waitFor();
   await page.locator(".v4-generated-review .v4-context-footer")
     .getByRole("button", { name: "Edit" }).click();
   await page.getByRole("heading", { name: "Review Google Post", exact: true }).waitFor();
@@ -165,12 +165,15 @@ try {
   await page.locator(".v4-facebook-preview").getByRole("button", { name: "Book", exact: true }).waitFor();
   assert.ok(!(await page.locator(".v4-facebook-preview").textContent()).includes("https://example.com/book"));
   await page.locator(".review-footer").getByRole("button", { name: "Back" }).click();
-  await page.getByRole("heading", { name: "Suggested Marketing Content", exact: true }).waitFor();
+  await page.locator(".v4-generated-review").waitFor();
   await page.locator(".v4-generated-review .v4-context-preview")
     .getByRole("button", { name: "Book", exact: true }).waitFor();
 
   // Generated edits remain source-aware; the live original V4 campaign keeps its own defaults.
-  await page.getByLabel("Close suggested marketing content").click();
+  await page.locator(".v4-generated-review")
+    .getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("dialog", { name: "Save generated content?" })
+    .getByRole("button", { name: "Save and exit", exact: true }).click();
   await page.locator(".combined-target-card").click();
   await page.locator(".v4-summary-modal").getByRole("button", { name: "Review Drafts" }).click();
   await page.locator(".v4-context-preview")

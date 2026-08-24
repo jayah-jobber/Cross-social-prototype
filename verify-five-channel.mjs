@@ -94,8 +94,9 @@ async function verifyChannel(channel, index) {
   assert.equal(await scheduleEdit.getAttribute("aria-disabled"), null);
 
   await reviewBack().click();
-  await expectHeading("Suggested Marketing Content");
-  assert.equal(await page.getByLabel("Edit marketing content prompt").inputValue(), "Five channel QA prompt");
+  await generatedReview().locator("#v4-context-title").waitFor();
+  assert.equal(await generatedReview().locator("#v4-context-title").textContent(), "15% promotion");
+  assert.equal(await page.getByLabel("Edit marketing content prompt").count(), 0);
   assert.equal(await channelButton.getAttribute("aria-checked"), "true");
 
   await suggestedFooterEdit().click();
@@ -146,7 +147,8 @@ async function verifyChannel(channel, index) {
   }
 
   await reviewBack().click();
-  await expectHeading("Suggested Marketing Content");
+  await generatedReview().locator("#v4-context-title").waitFor();
+  assert.equal(await generatedReview().locator("#v4-context-title").textContent(), "15% promotion");
   assert.ok((await generatedReview().locator(".v4-context-preview").textContent()).includes(saveMarker));
 
   if (channel.id === "instagram") {
@@ -178,13 +180,18 @@ try {
   await page.getByLabel("Add to your marketing calendar").fill("Five channel QA prompt");
   await page.getByRole("button", { name: "Generate suggested marketing content" }).click();
   await page.locator(".v4-summary-modal").getByRole("button", { name: "Review Drafts" }).click();
-  await expectHeading("Suggested Marketing Content");
+  await generatedReview().waitFor();
+  await expectHeading("15% promotion");
+  assert.equal(await page.locator(".v4-generated-flow-shell").count(), 0);
+  assert.equal(await page.getByLabel("Edit marketing content prompt").count(), 0);
 
   for (const [index, channel] of generatedChannels.entries()) {
     await verifyChannel(channel, index);
   }
 
-  await page.getByLabel("Close suggested marketing content").click();
+  await generatedReview().getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("dialog", { name: "Save generated content?" })
+    .getByRole("button", { name: "Save and exit", exact: true }).click();
   await page.locator(".combined-target-card").click();
   await page.locator(".v4-summary-modal").getByRole("button", { name: "Review Drafts" }).click();
   const modalSwitcher = page.locator(".channel-icon-switcher--modal-v4");

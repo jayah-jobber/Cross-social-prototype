@@ -7,7 +7,7 @@ const browser = await chromium.launch({ headless: true, executablePath });
 const page = await browser.newPage({ viewport: { width: 1440, height: 1100 } });
 
 const flow = () => page.locator(".v4-generated-flow-shell");
-const embeddedReview = () => flow().locator(".v4-generated-review");
+const embeddedReview = () => page.locator(".v4-generated-review");
 const context = () => page.locator(".v4-five-channel-modal:not(.v4-generated-review)");
 const summary = () => page.locator(".v4-summary-modal");
 const calendarDay = (name) => page.locator(".calendar-day").filter({
@@ -64,8 +64,10 @@ try {
   await channelReview.locator(".review-footer")
     .getByRole("button", { name: "Back", exact: true })
     .click();
-  await flow().waitFor();
-  await flow().getByLabel("Close suggested marketing content").click();
+  await embeddedReview().waitFor();
+  await embeddedReview().getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("dialog", { name: "Save generated content?" })
+    .getByRole("button", { name: "Save and exit", exact: true }).click();
 
   assert.equal(await generatedCard("Saturday, Nov 7").count(), 1);
   assert.equal(await generatedCard("Sunday, Nov 8").count(), 1);
@@ -110,6 +112,8 @@ try {
   await context().waitFor();
   await waitForPreviewReady(context());
   await context().getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("dialog", { name: "Save generated content?" })
+    .getByRole("button", { name: "Save and exit", exact: true }).click();
   assert.equal(await generatedCard("Sunday, Nov 8").count(), 0);
   assert.equal(await generatedCard("Saturday, Nov 7").locator(".calendar-channel-label").count(), 4);
 

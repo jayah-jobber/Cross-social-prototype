@@ -89,7 +89,7 @@ try {
   const summary = generatedFlow().locator(".v4-summary-modal--generated");
   await summary.waitFor({ timeout: 8000 });
   await summary.getByRole("button", { name: "Review Drafts", exact: true }).click();
-  const generatedContext = generatedFlow().locator(".v4-generated-review");
+  const generatedContext = page.locator(".v4-generated-review");
   await assertReadableBody(generatedContext, ".post-copy > p", ".post-header span");
   await generatedContext.locator(".v4-context-footer")
     .getByRole("button", { name: "Edit", exact: true })

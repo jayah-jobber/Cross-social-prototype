@@ -8,7 +8,7 @@ const page = await browser.newPage({ viewport: { width: 1440, height: 1100 } });
 
 const flow = () => page.locator(".v4-generated-flow-shell");
 const summary = () => flow().locator(".v4-summary-modal--generated");
-const generatedReview = () => flow().locator(".v4-generated-review");
+const generatedReview = () => page.locator(".v4-generated-review");
 const reopenedReview = () => page.locator(".v4-five-channel-modal:not(.v4-generated-review)");
 const generatedCard = () => page.locator(".generated-delivery-card");
 const originalCard = () => page.locator(".combined-target-card");
@@ -91,7 +91,7 @@ try {
   const firstLoadStartedAt = Date.now();
   const glimmer = generatedReview().locator(".v4-preview-glimmer");
   await generatedReview().getByRole("status", { name: "Loading Google preview" }).waitFor();
-  assert.equal(await flow().getByLabel("Edit marketing content prompt").count(), 1);
+  assert.equal(await page.getByLabel("Edit marketing content prompt").count(), 0);
   assert.equal(await generatedReview().getByRole("heading", { name: "15% promotion" }).count(), 1);
   assert.equal(await generatedReview().locator(".v4-context-facts").count(), 1);
   assert.equal(await generatedReview().locator(".v4-preview-glimmer-block").count(), 2);
@@ -115,23 +115,17 @@ try {
   await selectChannel(generatedReview(), "Instagram", true);
   await selectChannel(generatedReview(), "Google", false);
 
-  // Regeneration creates a fresh content instance and resets channel load history.
-  await flow().getByLabel("Edit marketing content prompt").fill("Create a fresh spring promotion");
-  await flow().getByRole("button", { name: "Regenerate suggestions" }).click();
-  await summary().waitFor({ timeout: 8000 });
-  await summary().getByRole("button", { name: "Review Drafts", exact: true }).click();
-  await generatedReview().waitFor();
-  await waitForFirstPreviewLoad(generatedReview(), "Google");
-
-  // Delivered status behavior remains intact alongside still-suggested channels.
+  // Delivered status behavior remains intact alongside still-draft channels.
   await generatedReview().locator(".v4-context-footer")
     .getByRole("button", { name: "Schedule Google post", exact: true })
     .click();
   assert.equal(await generatedCard().locator(".status-scheduled").count(), 1);
   assert.match(await generatedCard().locator(".calendar-card-details").textContent(), /Needs review/);
 
-  await flow().getByLabel("Close suggested marketing content").click();
-  await flow().waitFor({ state: "detached" });
+  await generatedReview().getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("dialog", { name: "Save generated content?" })
+    .getByRole("button", { name: "Save and exit", exact: true }).click();
+  await generatedReview().waitFor({ state: "detached" });
   assert.equal(await generatedCard().count(), 1);
 
   // Reopening the same accepted campaign preserves loaded channels.
@@ -142,8 +136,8 @@ try {
   await reopenedReview().waitFor();
   await expectPreviewImmediate(reopenedReview(), "Google");
 
-  // A channel not visited since regeneration still receives its one load after reopening.
-  await selectChannel(reopenedReview(), "Facebook", true);
+  // Previously visited channel previews remain immediate after reopening.
+  await selectChannel(reopenedReview(), "Facebook", false);
 
   // Deletion updates the persisted card and removing the final channel removes the campaign.
   await deleteCurrent(reopenedReview());

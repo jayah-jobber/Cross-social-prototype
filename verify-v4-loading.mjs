@@ -13,12 +13,12 @@ const stages = [
   ["Optimizing for channel visibility", "/assets/v4-loading-channel-visibility.svg"],
   ["Adding the finishing touches", "/assets/v4-loading-finishing-touches.svg"],
 ];
-const summaryArtworkPath = "/assets/v4-15-percent-promotion.png";
+const summaryArtworkPath = "/assets/v4-generated-summary-channel-artwork.png";
 
 const flow = () => page.locator(".v4-generated-flow-shell");
 const loading = () => flow().locator(".v4-loading-surface");
 const generatedSummary = () => flow().locator(".v4-summary-modal--generated");
-const generatedReview = () => flow().locator(".v4-generated-review");
+const generatedReview = () => page.locator(".v4-generated-review");
 const promptInput = () => flow().getByLabel("Edit marketing content prompt");
 const regenerate = () => flow().getByRole("button", { name: "Regenerate suggestions" });
 const outerClose = () => flow().getByRole("button", { name: "Close suggested marketing content" });
@@ -56,7 +56,6 @@ async function verifyLoadingSequence({ screenshots = false } = {}) {
 
 async function assertSingleGeneratedDialog() {
   assert.equal(await page.getByRole("dialog").count(), 1);
-  assert.equal(await flow().count(), 1);
   assert.equal(await page.locator("[aria-modal='true']").count(), 1);
 }
 
@@ -105,26 +104,14 @@ try {
   }).count(), 1);
   assert.equal(await generatedSummary().locator(".v4-summary-status-list > li").count(), 4);
   assert.equal(await generatedSummary().getByText("Website", { exact: true }).count(), 0);
-  const summaryArtwork = generatedSummary().locator(".v4-summary-artwork");
-  assert.equal(await summaryArtwork.count(), 1);
-  assert.equal(
-    new URL(await summaryArtwork.getAttribute("src"), baseUrl).pathname,
-    summaryArtworkPath,
-  );
-  assert.equal(
-    await generatedSummary().locator(`img[src="${summaryArtworkPath}"]`).count(),
-    1,
-  );
-  assert.deepEqual(
-    await summaryArtwork.evaluate((image) => {
-      const bounds = image.getBoundingClientRect();
-      return [Math.round(bounds.width), Math.round(bounds.height)];
-    }),
-    [430, 577],
-  );
+  assert.equal(await generatedSummary().locator(".v4-summary-artwork").count(), 1);
+  assert.equal(await generatedSummary().locator(`img[src="${summaryArtworkPath}"]`).count(), 1);
   assert.equal(await generatedSummary().locator(".v4-summary-collage").count(), 0);
   assert.equal(await generatedSummary().locator(".v4-summary-image-placeholder").count(), 0);
   assert.equal(await generatedSummary().locator(".v4-summary-body--text-only").count(), 0);
+  assert.equal(await generatedSummary().getByText("Suggested", { exact: true }).count(), 4);
+  assert.equal(await generatedSummary().getByText(/Recommended/).count(), 0);
+  assert.equal(await generatedSummary().getByText("Schedule date:", { exact: true }).count(), 0);
   await page.screenshot({ path: "/tmp/v4-generated-summary.png" });
   assert.equal(await generatedSummary().getByRole("button", { name: /close/i }).count(), 0);
   assert.equal(await promptInput().inputValue(), "Promote fall cleanup");
@@ -163,7 +150,7 @@ try {
   });
   assert.ok(generatedHeaderGeometry.leftDelta <= 1, JSON.stringify(generatedHeaderGeometry));
   assert.ok(generatedHeaderGeometry.centerDelta >= 40, JSON.stringify(generatedHeaderGeometry));
-  assert.equal(generatedHeaderGeometry.closeCount, 0);
+  assert.equal(generatedHeaderGeometry.closeCount, 1);
   await page.screenshot({ path: "/tmp/v4-generated-review.png" });
   assert.equal(
     await generatedReview().getByRole("radio", { name: "Google", exact: true })
@@ -175,33 +162,22 @@ try {
     4,
   );
   assert.equal(await generatedReview().getByRole("radio", { name: "Website", exact: true }).count(), 0);
-  assert.equal(await generatedReview().getByRole("button", { name: "Close", exact: true }).count(), 0);
+  assert.equal(await generatedReview().getByRole("button", { name: "Close", exact: true }).count(), 1);
   await assertSingleGeneratedDialog();
 
-  // Lifecycle state survives button regeneration from generated review.
+  // P2 has committed content and no longer exposes regeneration.
   await waitForGeneratedPreview();
-  await generatedReview().locator(".v4-context-footer")
-    .getByRole("button", { name: "Schedule Google post", exact: true }).click();
-  await generatedReview().getByRole("radio", { name: "Facebook", exact: true }).waitFor();
-  await promptInput().fill("Promote updated cleanup");
-  await regenerate().click();
-  await loading().getByRole("status", { name: stages[0][0] }).waitFor();
-  await verifyLoadingSequence();
-  await assertGeneratedStatusControlsAbsent();
-  assert.equal(
-    await generatedSummary().locator("[data-channel='google'] [data-status='scheduled']").count(),
-    1,
-  );
+  assert.equal(await promptInput().count(), 0);
+  assert.equal(await page.locator(".generated-delivery-card").count(), 1);
 
-  // Outer close owns Summary and review dismissal.
-  await outerClose().click();
-  await flow().waitFor({ state: "detached" });
+  // P2 close is guarded; Save preserves the generated calendar campaign.
+  await generatedReview().getByRole("button", { name: "Close", exact: true }).click();
+  const exitDialog = page.getByRole("dialog", { name: "Save generated content?" });
+  await exitDialog.getByRole("button", { name: "Save and exit", exact: true }).click();
+  await generatedReview().waitFor({ state: "detached" });
   assert.equal(await page.getByRole("heading", { name: "Marketing Plan" }).count(), 1);
   await submitFromCalendar("Review close behavior", "enter");
   await verifyLoadingSequence();
-  await generatedSummary().getByRole("button", { name: "Review Drafts" }).click();
-  await generatedReview().waitFor();
-  await assertGeneratedStatusControlsAbsent();
   await outerClose().click();
   await flow().waitFor({ state: "detached" });
 
@@ -259,7 +235,8 @@ try {
       .evaluate((node) => getComputedStyle(node, "::after").animationName),
     "none",
   );
-  await outerClose().click();
+  await generatedReview().getByRole("button", { name: "Close", exact: true }).click();
+  await exitDialog.getByRole("button", { name: "Discard and exit", exact: true }).click();
   await page.emulateMedia({ reducedMotion: "no-preference" });
 
   // V5 retains its original loader and vertical generated-content flow.

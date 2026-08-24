@@ -15,6 +15,7 @@
     "verify:v4-adhoc": "node verify-v4-adhoc.mjs",
     "verify:v4-adhoc-create": "node verify-v4-adhoc-create.mjs",
     "verify:v4-dashboard": "node verify-v4-dashboard.mjs",
+    "verify:v4-prompt-lifecycle": "node verify-v4-prompt-lifecycle.mjs",
     "verify:v4-generated-reopen": "node verify-v4-generated-reopen.mjs",
     "verify:v4-navigation": "node verify-v4-navigation-style.mjs",
     "verify:v4-review-typography": "node verify-v4-review-typography.mjs",

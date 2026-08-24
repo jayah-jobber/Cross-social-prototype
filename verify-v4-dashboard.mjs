@@ -13,7 +13,7 @@ const navigationControl = () => page.getByRole("group", {
 const dashboard = () => page.locator(".v4-dashboard-page");
 const generatedFlow = () => page.locator(".v4-generated-flow-shell");
 const generatedSummary = () => generatedFlow().locator(".v4-summary-modal--generated");
-const generatedReview = () => generatedFlow().locator(".v4-generated-review");
+const generatedReview = () => page.locator(".v4-generated-review");
 const promotionPrompt = "Create a 15% Christmas promotion for winter landscaping services across Google, Facebook, Instagram, and Email.";
 
 async function generateFromDashboard(prompt) {
@@ -266,8 +266,17 @@ try {
   await generatedSummary().getByRole("button", { name: "Review Drafts", exact: true }).click();
   await generatedReview().waitFor();
   assert.equal(await dashboard().count(), 1);
-  assert.equal(await generatedReview().getByText("1 of 4", { exact: true }).count(), 1);
-  await generatedFlow().getByLabel("Close suggested marketing content").click();
+  assert.equal(await generatedReview().locator(".channel-icon-switcher--modal-v4").count(), 1);
+  assert.equal(
+    await generatedReview().getByRole("radio", { name: "Google", exact: true })
+      .getAttribute("aria-checked"),
+    "true",
+  );
+  assert.equal(await generatedFlow().count(), 0);
+  assert.equal(await page.getByLabel("Edit marketing content prompt").count(), 0);
+  await generatedReview().getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("dialog", { name: "Save generated content?" })
+    .getByRole("button", { name: "Save and exit", exact: true }).click();
   await dashboard().waitFor();
 
   await entryControl().getByRole("button", { name: "Calendar", exact: true }).click();
@@ -287,7 +296,7 @@ try {
     "true",
   );
   assert.equal(
-    await navigationControl().getByRole("button", { name: "Arrow button", exact: true })
+    await navigationControl().getByRole("button", { name: "Icon button", exact: true })
       .getAttribute("aria-pressed"),
     "true",
   );

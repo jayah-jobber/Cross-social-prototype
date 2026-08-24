@@ -199,16 +199,20 @@ try {
     name: "About this Facebook post",
     exact: true,
   }).waitFor();
-  assert.equal(await context().locator(".v4-arrow-navigator").getByText("1 of 2").count(), 1);
-  await context().getByRole("button", { name: "Next channel", exact: true }).click();
+  assert.equal(
+    await context().getByRole("radio", { name: "Facebook", exact: true })
+      .getAttribute("aria-checked"),
+    "true",
+  );
+  await context().getByRole("radio", { name: "Email", exact: true }).click();
   await context().getByRole("heading", {
     name: "About this email campaign",
     exact: true,
   }).waitFor();
-  assert.equal(await context().locator(".v4-arrow-navigator").getByText("2 of 2").count(), 1);
   assert.equal(
-    await context().getByRole("button", { name: "Next channel", exact: true }).isDisabled(),
-    true,
+    await context().getByRole("radio", { name: "Email", exact: true })
+      .getAttribute("aria-checked"),
+    "true",
   );
   await context().getByRole("button", { name: "Close", exact: true }).click();
   assert.equal(await page.locator(".calendar-modal-overlay").count(), 0);
@@ -245,7 +249,11 @@ try {
     name: "About this email campaign",
     exact: true,
   }).waitFor();
-  assert.equal(await context().locator(".v4-arrow-navigator").getByText("2 of 2").count(), 1);
+  assert.equal(
+    await context().getByRole("radio", { name: "Email", exact: true })
+      .getAttribute("aria-checked"),
+    "true",
+  );
   await context().getByRole("button", { name: "Close", exact: true }).click();
 
   await createdRow().click({ position: { x: 450, y: 34 } });
