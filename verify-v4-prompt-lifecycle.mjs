@@ -7,7 +7,8 @@ const browser = await chromium.launch({ headless: true, executablePath });
 const page = await browser.newPage({ viewport: { width: 1440, height: 1100 } });
 
 const flow = () => page.locator(".v4-generated-flow-shell");
-const ideaSummary = () => flow().locator(".v4-summary-modal--generated");
+const calendarIdeaSummary = () => flow().locator(".v4-summary-modal--generated");
+const dashboardIdeaSummary = () => page.locator(".v4-dashboard-generated-summary");
 const draftReview = () => page.locator(".v4-generated-review");
 const exitDialog = () => page.getByRole("dialog", { name: "Save generated content?" });
 const generatedCard = () => page.locator(".generated-delivery-card");
@@ -41,11 +42,13 @@ async function generate(origin, prompt) {
       exact: true,
     }).click();
   }
-  await ideaSummary().waitFor({ timeout: 8000 });
+  await (origin === "dashboard" ? dashboardIdeaSummary() : calendarIdeaSummary())
+    .waitFor({ timeout: 8000 });
 }
 
-async function commitDrafts() {
-  await ideaSummary().getByRole("button", { name: "Review Drafts", exact: true }).click();
+async function commitDrafts(origin = "calendar") {
+  const summary = origin === "dashboard" ? dashboardIdeaSummary() : calendarIdeaSummary();
+  await summary.getByRole("button", { name: "Review Drafts", exact: true }).click();
   await draftReview().waitFor();
 }
 
@@ -86,28 +89,58 @@ async function discardAndExit() {
 async function assertIdeaOnly(origin) {
   await resetV4(origin);
   await generate(origin, `${origin} winter promotion`);
+  const summary = origin === "dashboard" ? dashboardIdeaSummary() : calendarIdeaSummary();
   assert.equal(await generatedCard().count(), 0);
-  assert.equal(await flow().getByLabel("Edit marketing content prompt").count(), 1);
-  assert.equal(await ideaSummary().getByText("Suggested channels:", { exact: true }).count(), 1);
-  assert.equal(await ideaSummary().getByText("Suggested", { exact: true }).count(), 4);
-  assert.equal(await ideaSummary().getByText(/Recommended/).count(), 0);
-  assert.equal(await ideaSummary().getByText("Schedule date:", { exact: true }).count(), 0);
-  assert.equal(await ideaSummary().locator(".v4-context-preview, .social-card").count(), 0);
-  assert.equal(await ideaSummary().getByText("Website", { exact: true }).count(), 0);
   assert.equal(
-    new URL(await ideaSummary().locator(".v4-summary-artwork").getAttribute("src"), baseUrl).pathname,
+    await page.getByLabel(
+      origin === "dashboard" ? "Describe your marketing idea" : "Edit marketing content prompt",
+    ).count(),
+    1,
+  );
+  assert.equal(
+    await summary.getByText(
+      origin === "dashboard" ? "Create drafts for:" : "Suggested channels:",
+      { exact: true },
+    ).count(),
+    1,
+  );
+  assert.equal(await summary.getByText(/Recommended/).count(), 0);
+  assert.equal(
+    await summary.getByText("Schedule date:", { exact: true }).count(),
+    origin === "dashboard" ? 1 : 0,
+  );
+  assert.equal(await summary.locator(".v4-context-preview, .social-card").count(), 0);
+  assert.equal(await summary.getByText("Website", { exact: true }).count(), 0);
+  assert.equal(
+    new URL(
+      await summary.locator(
+        origin === "dashboard"
+          ? ".v4-dashboard-generated-artwork"
+          : ".v4-summary-artwork",
+      ).getAttribute("src"),
+      baseUrl,
+    ).pathname,
     summaryArtworkPath,
   );
 
-  await flow().getByLabel("Edit marketing content prompt").fill(`${origin} regenerated idea`);
-  await flow().getByRole("button", { name: "Regenerate suggestions", exact: true }).click();
-  await ideaSummary().waitFor({ timeout: 8000 });
+  if (origin === "dashboard") {
+    await page.getByLabel("Describe your marketing idea").fill(`${origin} regenerated idea`);
+    await page.getByRole("button", { name: "Generate Content", exact: true }).click();
+  } else {
+    await flow().getByLabel("Edit marketing content prompt").fill(`${origin} regenerated idea`);
+    await flow().getByRole("button", { name: "Regenerate suggestions", exact: true }).click();
+  }
+  await summary.waitFor({ timeout: 8000 });
   assert.equal(await generatedCard().count(), 0);
-  assert.equal(await ideaSummary().getByText("Suggested", { exact: true }).count(), 4);
-  assert.equal(await ideaSummary().getByText(/Recommended/).count(), 0);
+  assert.equal(await summary.getByText(/Recommended/).count(), 0);
 
-  await flow().getByLabel("Close suggested marketing content").click();
-  await flow().waitFor({ state: "detached" });
+  if (origin === "dashboard") {
+    await page.getByRole("button", { name: "Calendar", exact: true }).click();
+    await page.locator(".calendar-page").waitFor();
+  } else {
+    await flow().getByLabel("Close suggested marketing content").click();
+    await flow().waitFor({ state: "detached" });
+  }
   assert.equal(await exitDialog().count(), 0);
   assert.equal(await generatedCard().count(), 0);
 }
@@ -122,7 +155,7 @@ try {
   // Dashboard-origin P2 is equally committed and returns to its own entry surface.
   await resetV4("dashboard");
   await generate("dashboard", "Dashboard committed lifecycle");
-  await commitDrafts();
+  await commitDrafts("dashboard");
   assert.equal(await page.getByLabel("Edit marketing content prompt").count(), 0);
   await page.getByRole("button", { name: "Calendar", exact: true }).click();
   await exitDialog().waitFor();
@@ -139,7 +172,7 @@ try {
   // P2 commits immediately, removes the prompt, and guards every external exit.
   await resetV4("calendar");
   await generate("calendar", "Guarded generated lifecycle");
-  await ideaSummary().getByRole("button", { name: "Review Drafts", exact: true })
+  await calendarIdeaSummary().getByRole("button", { name: "Review Drafts", exact: true })
     .evaluate((button) => {
       button.click();
       button.click();
@@ -219,7 +252,7 @@ try {
   await page.getByRole("button", { name: "Dashboard", exact: true }).click();
   await exitDialog().waitFor();
   await saveAndExit();
-  await page.getByRole("heading", { name: "Marketing Plan", exact: true }).waitFor();
+  await page.getByRole("heading", { name: "Marketing Dashboard", exact: true }).waitFor();
   assert.equal(await page.getByLabel("Describe your marketing idea").count(), 1);
   await page.getByRole("button", { name: "Calendar", exact: true }).click();
   assert.equal(await generatedCard().count(), 1);

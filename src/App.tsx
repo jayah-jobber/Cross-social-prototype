@@ -24,6 +24,7 @@ import { CSS } from "@dnd-kit/utilities";
 import {
   AppWindow,
   ArrowLeft,
+  ArrowRight,
   Bell,
   Bookmark,
   BriefcaseBusiness,
@@ -1328,14 +1329,133 @@ const V4_DASHBOARD_SUGGESTIONS = [
   },
 ];
 
-function VersionFourDashboard({
+type DashboardGenerationState = "idle" | "loading" | "summary";
+
+function DashboardPromptBar({
   prompt,
+  loading,
   onPromptChange,
   onGenerate,
 }: {
   prompt: string;
+  loading: boolean;
   onPromptChange: (value: string) => void;
   onGenerate: () => void;
+}) {
+  return (
+    <form
+      className="v4-dashboard-context-prompt"
+      aria-busy={loading}
+      onSubmit={(event) => {
+        event.preventDefault();
+        onGenerate();
+      }}
+    >
+      <label className="sr-only" htmlFor="v4-dashboard-context-prompt">
+        Describe your marketing idea
+      </label>
+      <input
+        id="v4-dashboard-context-prompt"
+        value={prompt}
+        onChange={(event) => onPromptChange(event.target.value)}
+        placeholder="Create a promotion post"
+      />
+      <button
+        type="submit"
+        aria-label={loading ? "Generating marketing content" : "Generate Content"}
+        disabled={!prompt.trim() || loading}
+      >
+        <ArrowRight size={18} aria-hidden="true" />
+      </button>
+    </form>
+  );
+}
+
+function DashboardGeneratedSummary({
+  selectedChannels,
+  onToggleChannel,
+  onReviewDrafts,
+}: {
+  selectedChannels: ContextualChannel[];
+  onToggleChannel: (channel: ContextualChannel) => void;
+  onReviewDrafts: () => void;
+}) {
+  return (
+    <section
+      className="v4-dashboard-generated-summary"
+      aria-label="Generated marketing summary"
+    >
+      <div className="v4-dashboard-generated-copy">
+        <h1>{GENERATED_V4_CAMPAIGN_TITLE}</h1>
+        <p>{GENERATED_V4_SUMMARY_COPY}</p>
+        <hr />
+        <p className="v4-dashboard-generated-schedule">
+          <strong>Schedule date:</strong> Nov 7th, 2026 9:00am
+        </p>
+        <p className="v4-dashboard-generated-label"><strong>Create drafts for:</strong></p>
+        <div className="v4-dashboard-generated-channels">
+          {GENERATED_V4_CHANNELS.map((channel) => {
+            const selected = selectedChannels.includes(channel);
+            const label = CONTEXTUAL_CHANNELS.find(({ id }) => id === channel)?.label ?? channel;
+            return (
+              <div className="v4-dashboard-generated-channel" key={channel}>
+                <span>
+                  <ContextualChannelArtwork channel={channel} iconStyle="jobber" />
+                  {label}
+                </span>
+                <button
+                  className={`channel-visibility-toggle ${selected ? "on" : "off"}`}
+                  type="button"
+                  role="switch"
+                  aria-checked={selected}
+                  aria-label={`${selected ? "Disable" : "Enable"} ${label}`}
+                  onClick={() => onToggleChannel(channel)}
+                >
+                  {selected ? <Check size={14} /> : <X size={14} />}
+                  <span />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+        <button
+          className="primary-button v4-dashboard-review-drafts"
+          type="button"
+          disabled={selectedChannels.length === 0}
+          onClick={onReviewDrafts}
+        >
+          Review Drafts
+        </button>
+      </div>
+      <img
+        className="v4-dashboard-generated-artwork"
+        src={GENERATED_V4_PROMOTION_ARTWORK.src}
+        alt={GENERATED_V4_PROMOTION_ARTWORK.alt}
+        width={315}
+        height={591}
+      />
+    </section>
+  );
+}
+
+function VersionFourDashboard({
+  prompt,
+  generationState,
+  loadingStage,
+  selectedChannels,
+  onPromptChange,
+  onGenerate,
+  onToggleChannel,
+  onReviewDrafts,
+}: {
+  prompt: string;
+  generationState: DashboardGenerationState;
+  loadingStage: number;
+  selectedChannels: ContextualChannel[];
+  onPromptChange: (value: string) => void;
+  onGenerate: () => void;
+  onToggleChannel: (channel: ContextualChannel) => void;
+  onReviewDrafts: () => void;
 }) {
   const toolGroups = [
     {
@@ -1404,7 +1524,7 @@ function VersionFourDashboard({
     <main className="v4-dashboard-page">
       <section className="marketing-page-header">
         <div className="marketing-title-row">
-          <h1>Marketing Plan</h1>
+          <h1>Marketing Dashboard</h1>
           <div className="static-header-actions" aria-hidden="true">
             <span>Give Feedback</span>
             <span className="create-new"><Plus size={18} /> Create New</span>
@@ -1427,52 +1547,81 @@ function VersionFourDashboard({
       </div>
 
       <div className="v4-dashboard-content">
-        <section className="v4-dashboard-idea-panel" aria-label="Start with your own idea">
-          <div className="v4-dashboard-prompt-card">
-            <div className="v4-dashboard-prompt-area">
-              <span className="v4-dashboard-ai-favicon" aria-hidden="true">
-                <Sparkles size={16} />
-              </span>
-              <label className="sr-only" htmlFor="v4-dashboard-prompt">
-                Describe your marketing idea
-              </label>
-              <textarea
-                id="v4-dashboard-prompt"
-                value={prompt}
-                placeholder="Describe your idea and we'll turn it into ready-to-send content for multiple channels"
-                onChange={(event) => onPromptChange(event.target.value)}
-              />
-            </div>
-            <div className="v4-dashboard-card-divider" />
-            <div className="v4-dashboard-channel-row">
-              <div className="v4-dashboard-channels" aria-label="Generated channels">
-                {generatedChannels.map((channel) => (
-                  <span key={channel}>
-                    <ContextualChannelArtwork channel={channel} iconStyle="jobber" />
-                    {CONTEXTUAL_CHANNELS.find(({ id }) => id === channel)?.label}
+        <section
+          className={`v4-dashboard-idea-panel${generationState === "idle"
+            ? ""
+            : " v4-dashboard-idea-panel--contextual"}`}
+          aria-label="Start with your own idea"
+        >
+          {generationState === "idle" ? (
+            <>
+              <div className="v4-dashboard-prompt-card">
+                <div className="v4-dashboard-prompt-area">
+                  <span className="v4-dashboard-ai-favicon" aria-hidden="true">
+                    <Sparkles size={16} />
                   </span>
+                  <label className="sr-only" htmlFor="v4-dashboard-prompt">
+                    Describe your marketing idea
+                  </label>
+                  <textarea
+                    id="v4-dashboard-prompt"
+                    value={prompt}
+                    placeholder="Describe your idea and we'll turn it into ready-to-send content for multiple channels"
+                    onChange={(event) => onPromptChange(event.target.value)}
+                  />
+                </div>
+                <div className="v4-dashboard-card-divider" />
+                <div className="v4-dashboard-channel-row">
+                  <div className="v4-dashboard-channels" aria-label="Generated channels">
+                    {generatedChannels.map((channel) => (
+                      <span key={channel}>
+                        <ContextualChannelArtwork channel={channel} iconStyle="jobber" />
+                        {CONTEXTUAL_CHANNELS.find(({ id }) => id === channel)?.label}
+                      </span>
+                    ))}
+                  </div>
+                  <button
+                    className="primary-button v4-dashboard-generate"
+                    type="button"
+                    disabled={!prompt.trim()}
+                    onClick={onGenerate}
+                  >
+                    Generate Content
+                  </button>
+                </div>
+              </div>
+
+              <div className="v4-dashboard-suggestions">
+                <strong>Try:</strong>
+                {V4_DASHBOARD_SUGGESTIONS.map(({ label, prompt: suggestion }) => (
+                  <button type="button" onClick={() => onPromptChange(suggestion)} key={label}>
+                    <Sparkles size={24} aria-hidden="true" />
+                    <span>{label}</span>
+                  </button>
                 ))}
               </div>
-              <button
-                className="primary-button v4-dashboard-generate"
-                type="button"
-                disabled={!prompt.trim()}
-                onClick={onGenerate}
-              >
-                Generate Content
-              </button>
-            </div>
-          </div>
-
-          <div className="v4-dashboard-suggestions">
-            <strong>Try:</strong>
-            {V4_DASHBOARD_SUGGESTIONS.map(({ label, prompt: suggestion }) => (
-              <button type="button" onClick={() => onPromptChange(suggestion)} key={label}>
-                <Sparkles size={24} aria-hidden="true" />
-                <span>{label}</span>
-              </button>
-            ))}
-          </div>
+            </>
+          ) : (
+            <>
+              <DashboardPromptBar
+                prompt={prompt}
+                loading={generationState === "loading"}
+                onPromptChange={onPromptChange}
+                onGenerate={onGenerate}
+              />
+              {generationState === "loading" ? (
+                <div className="v4-dashboard-context-loading">
+                  <VersionFourLoadingContent stage={loadingStage} />
+                </div>
+              ) : (
+                <DashboardGeneratedSummary
+                  selectedChannels={selectedChannels}
+                  onToggleChannel={onToggleChannel}
+                  onReviewDrafts={onReviewDrafts}
+                />
+              )}
+            </>
+          )}
         </section>
 
         <aside className="v4-dashboard-tools" aria-label="Marketing tools">
@@ -6550,6 +6699,8 @@ export default function App() {
   const [v4GeneratedFlowOrigin, setV4GeneratedFlowOrigin] =
     useState<V4GeneratedFlowOrigin>(prototypeEnv.entrySurface);
   const [v4DashboardPrompt, setV4DashboardPrompt] = useState("");
+  const [v4DashboardDraftChannels, setV4DashboardDraftChannels] =
+    useState<ContextualChannel[]>(() => [...GENERATED_V4_CHANNELS]);
   const [v2Drafts, setV2Drafts] = useState<V2Drafts>(createInitialV2Drafts);
   const [v3Drafts, setV3Drafts] = useState<V2Drafts>(createInitialV2Drafts);
   const [daisyVersionStates, setDaisyVersionStates] = useState(createInitialDaisyVersionStates);
@@ -7419,9 +7570,12 @@ export default function App() {
     )) return;
     advanceV4Review(channel, nextDeliveries, true);
   };
-  const acceptGeneratedV4Campaign = () => {
+  const acceptGeneratedV4Campaign = (
+    requestedChannels: ContextualChannel[] = GENERATED_V4_CHANNELS,
+  ) => {
     const fresh = createInitialGeneratedV4State();
     generatedV4CampaignSequenceRef.current += 1;
+    const requested = new Set(requestedChannels);
     const protectedChannels = GENERATED_V4_CHANNELS.filter((channel) => {
       const delivery = generatedV4CalendarDeliveries[channel];
       return delivery
@@ -7441,6 +7595,14 @@ export default function App() {
         fresh.emailSubject = generatedV4State.emailSubject;
       }
     });
+    GENERATED_V4_CHANNELS.forEach((channel) => {
+      if (!requested.has(channel) && !protectedChannels.includes(channel)) {
+        channelDeliveries[channel] = {
+          ...channelDeliveries[channel],
+          deleted: true,
+        };
+      }
+    });
     const nextState: GeneratedV4State = {
       ...fresh,
       campaignId: generatedV4CampaignSequenceRef.current,
@@ -7451,8 +7613,11 @@ export default function App() {
           ? "sent"
           : "suggested",
     };
+    const acceptedChannels = GENERATED_V4_CHANNELS.filter(
+      (channel) => requested.has(channel) || protectedChannels.includes(channel),
+    );
     const acceptedDeliveries = Object.fromEntries(
-      GENERATED_V4_CHANNELS.map((channel) => [
+      acceptedChannels.map((channel) => [
         channel,
         { ...nextState.channelDeliveries[channel] },
       ]),
@@ -7667,6 +7832,7 @@ export default function App() {
     setSuggestedPrompt("");
     setCalendarPrompt("");
     setV4DashboardPrompt("");
+    setV4DashboardDraftChannels([...GENERATED_V4_CHANNELS]);
     setGeneratedV4Phase("idle");
     setGeneratedV4ExitTarget(null);
     setGeneratedV4ExitVersionTarget(null);
@@ -7914,6 +8080,9 @@ export default function App() {
     }
     setV4GeneratedFlowOrigin(origin);
     setSuggestedPrompt(prompt);
+    if (origin === "dashboard") {
+      setV4DashboardDraftChannels([...GENERATED_V4_CHANNELS]);
+    }
     setV4SuggestedSummaryOpen(false);
     setSuggestedDialogOpen(false);
     setSuggestedPreviewIndex(0);
@@ -7926,6 +8095,24 @@ export default function App() {
     setV4LoadingStage(0);
     setV4Generating(true);
     setGeneratedV4Phase("idea-loading");
+  };
+  const toggleV4DashboardDraftChannel = (channel: ContextualChannel) => {
+    setV4DashboardDraftChannels((current) => current.includes(channel)
+      ? current.filter((candidate) => candidate !== channel)
+      : GENERATED_V4_CHANNELS.filter(
+          (candidate) => candidate === channel || current.includes(candidate),
+        ));
+  };
+  const reviewV4DashboardDrafts = () => {
+    if (v4DashboardDraftChannels.length === 0) return;
+    acceptGeneratedV4Campaign(v4DashboardDraftChannels);
+    setActiveV4GroupDate(V4_INITIAL_DATE);
+    setActiveV4CampaignSource("generated");
+    setPreferredV4EntryChannel(null);
+    setV4ReviewScopedChannels([...v4DashboardDraftChannels]);
+    setV4SuggestedSummaryOpen(false);
+    setSuggestedPreviewIndex(0);
+    setSuggestedDialogOpen(true);
   };
   const closeAdHocTransient = () => {
     if (adHocTimerRef.current !== null) {
@@ -8324,7 +8511,7 @@ export default function App() {
       setV4Generating(false);
       setV4LoadingStage(0);
       setCalendarPrompt("");
-      setV4DashboardPrompt("");
+      if (v4GeneratedFlowOrigin !== "dashboard") setV4DashboardPrompt("");
       setSuggestedPreviewIndex(0);
       setV4ReviewOrigin(null);
       setV4SuggestedSummaryOpen(true);
@@ -8336,7 +8523,7 @@ export default function App() {
       window.clearInterval(interval);
       if (suggestionTimerRef.current === interval) suggestionTimerRef.current = null;
     };
-  }, [version, v4Generating]);
+  }, [v4GeneratedFlowOrigin, version, v4Generating]);
 
   useEffect(() => {
     if (version !== "v4" || generatedV4Phase !== "draft-review") return;
@@ -8806,11 +8993,21 @@ export default function App() {
               ) : version === "v4" && v4EntrySurface === "dashboard" ? (
                 <VersionFourDashboard
                   prompt={v4DashboardPrompt}
+                  generationState={v4GeneratedFlowOrigin === "dashboard" && v4Generating
+                    ? "loading"
+                    : v4GeneratedFlowOrigin === "dashboard"
+                        && (v4SuggestedSummaryOpen || generatedV4Phase === "draft-review")
+                      ? "summary"
+                      : "idle"}
+                  loadingStage={v4LoadingStage}
+                  selectedChannels={v4DashboardDraftChannels}
                   onPromptChange={setV4DashboardPrompt}
                   onGenerate={() => beginV4SuggestionGeneration(
                     v4DashboardPrompt,
                     "dashboard",
                   )}
+                  onToggleChannel={toggleV4DashboardDraftChannel}
+                  onReviewDrafts={reviewV4DashboardDrafts}
                 />
               ) : (
                 <CalendarScreen
@@ -9101,6 +9298,7 @@ export default function App() {
                 />
               )}
               {version === "v4"
+                && v4GeneratedFlowOrigin !== "dashboard"
                 && (v4Generating || v4SuggestedSummaryOpen) && (
                 <VersionFourGeneratedFlowShell
                   prompt={suggestedPrompt}

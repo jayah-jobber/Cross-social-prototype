@@ -12,7 +12,8 @@ const navigationControl = () => page.getByRole("group", {
 });
 const dashboard = () => page.locator(".v4-dashboard-page");
 const generatedFlow = () => page.locator(".v4-generated-flow-shell");
-const generatedSummary = () => generatedFlow().locator(".v4-summary-modal--generated");
+const dashboardLoading = () => dashboard().locator(".v4-dashboard-context-loading");
+const dashboardSummary = () => dashboard().locator(".v4-dashboard-generated-summary");
 const generatedReview = () => page.locator(".v4-generated-review");
 const promotionPrompt = "Create a 15% Christmas promotion for winter landscaping services across Google, Facebook, Instagram, and Email.";
 
@@ -24,10 +25,38 @@ async function generateFromDashboard(prompt) {
   await dashboard().getByLabel("Describe your marketing idea").fill(prompt);
   assert.equal(await generateButton.isEnabled(), true);
   await generateButton.click();
-  await generatedFlow().waitFor();
-  assert.equal(await generatedFlow().getAttribute("data-generated-flow-origin"), "dashboard");
+  await dashboardLoading().waitFor();
+  const loadingGeometry = await dashboardLoading().evaluate((container) => {
+    const center = container.querySelector(".v4-loading-center");
+    if (!center) throw new Error("Dashboard loading center is missing");
+    const containerBox = container.getBoundingClientRect();
+    const centerBox = center.getBoundingClientRect();
+    return {
+      centerDeltaX: Math.abs(
+        (centerBox.left + centerBox.width / 2)
+        - (containerBox.left + containerBox.width / 2),
+      ),
+      centerDeltaY: Math.abs(
+        (centerBox.top + centerBox.height / 2)
+        - (containerBox.top + containerBox.height / 2),
+      ),
+      container: [Math.round(containerBox.width), Math.round(containerBox.height)],
+      center: [Math.round(centerBox.width), Math.round(centerBox.height)],
+    };
+  });
+  assert.ok(loadingGeometry.centerDeltaX <= 1, JSON.stringify(loadingGeometry));
+  assert.ok(loadingGeometry.centerDeltaY <= 1, JSON.stringify(loadingGeometry));
+  assert.ok(
+    loadingGeometry.center[0] >= loadingGeometry.container[0] - 2,
+    JSON.stringify(loadingGeometry),
+  );
+  assert.ok(
+    loadingGeometry.center[1] >= loadingGeometry.container[1] - 2,
+    JSON.stringify(loadingGeometry),
+  );
+  assert.equal(await generatedFlow().count(), 0);
   assert.equal(await dashboard().count(), 1);
-  await generatedSummary().waitFor({ timeout: 8000 });
+  await dashboardSummary().waitFor({ timeout: 8000 });
 }
 
 try {
@@ -246,11 +275,13 @@ try {
     assert.match(response.headers()["content-type"] ?? "", /image\/svg\+xml/);
   }
 
-  // A directly entered dashboard prompt reuses the existing loading and summary flow.
+  // A directly entered dashboard prompt keeps loading and summary in context.
   await generateFromDashboard("Promote winter landscaping from the dashboard");
-  await generatedSummary().getByRole("heading", { name: "15% promotion", exact: true }).waitFor();
-  await generatedFlow().getByLabel("Close suggested marketing content").click();
-  await generatedFlow().waitFor({ state: "detached" });
+  await dashboardSummary().getByRole("heading", { name: "15% promotion", exact: true }).waitFor();
+  assert.equal(await dashboardSummary().getByRole("switch").count(), 4);
+  await entryControl().getByRole("button", { name: "Calendar", exact: true }).click();
+  await page.locator(".calendar-page").waitFor();
+  await entryControl().getByRole("button", { name: "Dashboard", exact: true }).click();
   await dashboard().waitFor();
 
   // The promotion chip only prefills; generation remains an explicit action.
@@ -261,17 +292,27 @@ try {
   );
   assert.equal(await generatedFlow().count(), 0);
   await dashboard().getByRole("button", { name: "Generate Content", exact: true }).click();
-  await generatedSummary().waitFor({ timeout: 8000 });
+  await dashboardLoading().waitFor();
+  await dashboardSummary().waitFor({ timeout: 8000 });
   assert.equal(await dashboard().count(), 1);
-  await generatedSummary().getByRole("button", { name: "Review Drafts", exact: true }).click();
+  await dashboardSummary().getByRole("switch", { name: "Disable Instagram" }).click();
+  assert.equal(
+    await dashboardSummary().getByRole("switch", { name: "Enable Instagram" })
+      .getAttribute("aria-checked"),
+    "false",
+  );
+  await dashboardSummary().getByRole("button", { name: "Review Drafts", exact: true }).click();
   await generatedReview().waitFor();
   assert.equal(await dashboard().count(), 1);
+  assert.equal(await dashboardSummary().count(), 1);
   assert.equal(await generatedReview().locator(".channel-icon-switcher--modal-v4").count(), 1);
   assert.equal(
     await generatedReview().getByRole("radio", { name: "Google", exact: true })
       .getAttribute("aria-checked"),
     "true",
   );
+  assert.equal(await generatedReview().getByRole("radio").count(), 3);
+  assert.equal(await generatedReview().getByRole("radio", { name: "Instagram", exact: true }).count(), 0);
   assert.equal(await generatedFlow().count(), 0);
   assert.equal(await page.getByLabel("Edit marketing content prompt").count(), 0);
   await generatedReview().getByRole("button", { name: "Close", exact: true }).click();

@@ -478,6 +478,203 @@ button {
   box-shadow: 0 1px 1px rgb(0 0 0 / 5%);
 }
 
+.v4-dashboard-idea-panel--contextual {
+  min-height: 725px;
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid #dadfe2;
+  border-radius: 8px;
+  background: #f7f5f3;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 10%);
+}
+
+.v4-dashboard-context-prompt {
+  display: flex;
+  width: calc(100% - 48px);
+  height: 66px;
+  flex: 0 0 66px;
+  align-items: center;
+  gap: 12px;
+  margin: 24px;
+  padding: 16px;
+  border: 1px solid #dadfe2;
+  border-radius: 12px;
+  background: white;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 5%);
+}
+
+.v4-dashboard-context-prompt:focus-within {
+  border-color: #1676b9;
+  box-shadow: 0 0 0 3px rgb(22 118 185 / 16%);
+}
+
+.v4-dashboard-context-prompt input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  outline: 0;
+  color: #49646f;
+  background: transparent;
+  font: 400 14px/1.25 "Inter", sans-serif;
+}
+
+.v4-dashboard-context-prompt button {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  place-items: center;
+  border-radius: 8px;
+  color: white;
+  background: #388523;
+}
+
+.v4-dashboard-context-prompt button:disabled {
+  cursor: not-allowed;
+  background: #9cabb0;
+}
+
+.v4-dashboard-context-loading {
+  display: grid;
+  width: 100%;
+  height: 611px;
+  min-height: 0;
+  flex: 1 1 611px;
+  border-top: 1px solid #dadfe2;
+}
+
+.v4-dashboard-context-loading .v4-loading-surface {
+  height: 100%;
+  min-height: 100%;
+  grid-template-rows: minmax(0, 1fr);
+  border: 0;
+  border-radius: 0 0 8px 8px;
+  box-shadow: none;
+}
+
+.v4-dashboard-context-loading .v4-loading-header {
+  display: none;
+}
+
+.v4-dashboard-context-loading .v4-loading-center {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  align-self: stretch;
+  justify-self: stretch;
+  padding-bottom: 0;
+}
+
+.v4-dashboard-generated-summary {
+  display: grid;
+  min-height: 0;
+  flex: 1;
+  grid-template-columns: minmax(0, 394px) 315px;
+  align-items: stretch;
+  gap: 32px;
+  padding: 24px 29px 24px;
+  overflow: hidden;
+  border-top: 1px solid #dadfe2;
+}
+
+.v4-dashboard-generated-copy {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  color: #233d48;
+}
+
+.v4-dashboard-generated-copy h1 {
+  margin: 0 0 36px;
+  color: #032b3a;
+  font-family: "Jobber Pro", "Inter", sans-serif;
+  font-size: 36px;
+  font-weight: 900;
+  line-height: 1.11;
+}
+
+.v4-dashboard-generated-copy > p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.25;
+}
+
+.v4-dashboard-generated-copy hr {
+  width: 100%;
+  height: 1px;
+  margin: 24px 0;
+  border: 0;
+  background: #dadfe2;
+}
+
+.v4-dashboard-generated-copy .v4-dashboard-generated-schedule {
+  margin-bottom: 12px;
+}
+
+.v4-dashboard-generated-label {
+  margin-bottom: 12px !important;
+}
+
+.v4-dashboard-generated-channels {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.v4-dashboard-generated-channel {
+  display: flex;
+  min-height: 24px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.v4-dashboard-generated-channel > span {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+}
+
+.v4-dashboard-generated-channel .channel-icon {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+}
+
+.v4-dashboard-generated-channel .channel-icon > * {
+  width: 24px;
+  height: 24px;
+  max-width: 24px;
+  max-height: 24px;
+}
+
+.v4-dashboard-review-drafts {
+  width: 100%;
+  height: 40px;
+  margin-top: auto;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.v4-dashboard-review-drafts:disabled {
+  cursor: not-allowed;
+  color: #66757b;
+  background: #dadfe2;
+}
+
+.v4-dashboard-generated-artwork {
+  display: block;
+  width: 315px;
+  height: 100%;
+  min-height: 0;
+  border-radius: 8px;
+  background: #eeece7;
+  object-fit: contain;
+}
+
 .v4-dashboard-prompt-card {
   display: flex;
   width: 736px;
