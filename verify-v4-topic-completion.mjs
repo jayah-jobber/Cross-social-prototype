@@ -129,8 +129,8 @@ try {
     .getByRole("button", { name: "Schedule Google post", exact: true }).click();
   await page.locator(".v4-generated-review")
     .getByRole("button", { name: "Close", exact: true }).click();
-  await page.getByRole("dialog", { name: "Save generated content?" })
-    .getByRole("button", { name: "Save and exit", exact: true }).click();
+  await page.getByRole("dialog", { name: "Leave now" })
+    .getByRole("button", { name: "Save drafts and Exit", exact: true }).click();
   await originalCard().click();
   await summary().getByRole("button", { name: "Review Drafts", exact: true }).click();
   await context().waitFor();

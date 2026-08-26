@@ -87,8 +87,8 @@ try {
     true,
   );
   await arrowNavigator(modal()).getByRole("button", { name: "Next channel" }).click();
-  await assertArrowNavigation(modal(), 2, 5);
   await modal().getByRole("heading", { name: "About this Facebook post", exact: true }).waitFor();
+  await assertArrowNavigation(modal(), 2, 5);
 
   // The external toggle updates the open modal without changing its active channel.
   await navigationToggle().getByRole("button", { name: "Icon button", exact: true }).click();
@@ -142,8 +142,8 @@ try {
   await modal().locator(".v4-context-footer")
     .getByRole("button", { name: "Schedule Email", exact: true })
     .click();
-  await assertArrowNavigation(modal(), 4, 4);
   await modal().getByRole("heading", { name: "About this website page", exact: true }).waitFor();
+  await assertArrowNavigation(modal(), 4, 4);
   await modal().getByRole("button", { name: "Close", exact: true }).click();
 
   // Split-card entry honors the represented Email channel in both navigation styles.
@@ -161,10 +161,15 @@ try {
   await navigationToggle().getByRole("button", { name: "Arrow button", exact: true }).click();
   await assertArrowNavigation(modal(), 3, 4);
   await arrowNavigator(modal()).getByRole("button", { name: "Previous channel" }).click();
+  await modal().getByRole("heading", { name: "About this Instagram post", exact: true }).waitFor();
   await assertArrowNavigation(modal(), 2, 4);
   await arrowNavigator(modal()).getByRole("button", { name: "Previous channel" }).click();
+  await modal().getByRole("heading", { name: "About this Google post", exact: true }).waitFor();
   await assertArrowNavigation(modal(), 1, 4);
-  await modal().getByText("Nov 7, 2026 · 9:00 AM", { exact: true }).waitFor();
+  await modal()
+    .locator(".v4-sliding-panel--text.is-active")
+    .getByText("Nov 7, 2026 · 9:00 AM", { exact: true })
+    .waitFor();
   await modal().getByRole("button", { name: "Close", exact: true }).click();
 
   // Generated review uses its four-channel scope with matching arrow behavior.
@@ -182,14 +187,14 @@ try {
     true,
   );
   await arrowNavigator(generatedReview).getByRole("button", { name: "Next channel" }).click();
-  await assertArrowNavigation(generatedReview, 2, 4);
   await generatedReview.getByRole("heading", {
     name: "About this Facebook post",
     exact: true,
   }).waitFor();
+  await assertArrowNavigation(generatedReview, 2, 4);
   await generatedReview.getByRole("button", { name: "Close", exact: true }).click();
-  await page.getByRole("dialog", { name: "Save generated content?" })
-    .getByRole("button", { name: "Save and exit", exact: true }).click();
+  await page.getByRole("dialog", { name: "Leave now" })
+    .getByRole("button", { name: "Save drafts and Exit", exact: true }).click();
 
   // The experiment is isolated to V4 and resets to icons after version changes.
   await navigationToggle().getByRole("button", { name: "Arrow button", exact: true }).click();

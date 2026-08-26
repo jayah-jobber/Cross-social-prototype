@@ -24,6 +24,7 @@
     "verify:v4-suggested-persistence": "node verify-v4-suggested-persistence.mjs",
     "verify:v4-review-status": "node verify-v4-review-status.mjs",
     "verify:v4-lifecycle": "node verify-v4-lifecycle.mjs",
+    "verify:v4-modal-progress": "node verify-v4-modal-progress.mjs",
     "verify:v4-linked-split": "node verify-v4-linked-split.mjs",
     "verify:v4-delete-all": "node verify-v4-delete-all.mjs",
     "verify:v4-topic-completion": "node verify-v4-topic-completion.mjs",

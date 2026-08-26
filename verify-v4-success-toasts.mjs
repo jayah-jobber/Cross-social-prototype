@@ -145,6 +145,7 @@ try {
   // Reopened original calendar card: every delivery toast preserves its channel noun/action.
   await openOriginalCampaign();
   await deliverScheduledChannels(context(), channels);
+  await context().waitFor({ state: "detached" });
   assert.equal(await context().count(), 0);
 
   // Generated "Start from your own idea" flow covers its four supported channels.
@@ -165,6 +166,7 @@ try {
     .click();
   await context().waitFor();
   await deliverScheduledChannels(context(), generatedChannels);
+  await context().waitFor({ state: "detached" });
   assert.equal(await context().count(), 0);
 
   // The V4-only branch must not alter V5's existing generic schedule toast.

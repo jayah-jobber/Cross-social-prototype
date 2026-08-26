@@ -66,8 +66,8 @@ try {
     .click();
   await embeddedReview().waitFor();
   await embeddedReview().getByRole("button", { name: "Close", exact: true }).click();
-  await page.getByRole("dialog", { name: "Save generated content?" })
-    .getByRole("button", { name: "Save and exit", exact: true }).click();
+  await page.getByRole("dialog", { name: "Leave now" })
+    .getByRole("button", { name: "Save drafts and Exit", exact: true }).click();
 
   assert.equal(await generatedCard("Saturday, Nov 7").count(), 1);
   assert.equal(await generatedCard("Sunday, Nov 8").count(), 1);
@@ -81,10 +81,13 @@ try {
   await summary().getByRole("button", { name: "Review Drafts", exact: true }).click();
   await context().waitFor();
   await waitForPreviewReady(context());
+  await page.waitForTimeout(320);
   const reopenedGeometry = await context().evaluate((dialog) => {
     const dialogBox = dialog.getBoundingClientRect();
     const switcher = dialog.querySelector(".channel-icon-switcher")?.getBoundingClientRect();
-    const details = dialog.querySelector(".v4-context-details")?.getBoundingClientRect();
+    const details = dialog.querySelector(
+      ".v4-sliding-panel--text.is-active .v4-context-details",
+    )?.getBoundingClientRect();
     const close = dialog.querySelector(".context-navigation-close")?.getBoundingClientRect();
     return {
       leftDelta: Math.abs((switcher?.left ?? 0) - (details?.left ?? 0)),
@@ -112,8 +115,8 @@ try {
   await context().waitFor();
   await waitForPreviewReady(context());
   await context().getByRole("button", { name: "Close", exact: true }).click();
-  await page.getByRole("dialog", { name: "Save generated content?" })
-    .getByRole("button", { name: "Save and exit", exact: true }).click();
+  await page.getByRole("dialog", { name: "Leave now" })
+    .getByRole("button", { name: "Save drafts and Exit", exact: true }).click();
   assert.equal(await generatedCard("Sunday, Nov 8").count(), 0);
   assert.equal(await generatedCard("Saturday, Nov 7").locator(".calendar-channel-label").count(), 4);
 
@@ -132,9 +135,13 @@ try {
     .getByRole("button", { name: "Show publishing options" })
     .click();
   await context().getByRole("menuitem", { name: "Post now and view next", exact: true }).click();
-  assert.equal(await context().count(), 0);
+  await context().getByRole("heading", { name: "About this Google post", exact: true }).waitFor();
+  assert.equal(await context().count(), 1);
   assert.equal(await generatedCard("Friday, Nov 6").locator(".status-sent").count(), 1);
   assert.equal(await generatedCard("Saturday, Nov 7").locator(".calendar-channel-label").count(), 3);
+  await context().getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("dialog", { name: "Leave now" })
+    .getByRole("button", { name: "Save drafts and Exit", exact: true }).click();
 
   // Canceling a schedule returns the accepted channel to Suggested instead of deleting it.
   await generatedCard("Saturday, Nov 7").click();

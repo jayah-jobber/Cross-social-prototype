@@ -165,7 +165,13 @@ type GoogleLinkDestination = "external" | "booking" | "default-form" | "other-fo
 type EnabledChannels = Record<PreviewChannel, boolean>;
 type SchedulableVersion = PrototypeVersion;
 type ContextualAction = "schedule" | "post";
-type ContextualToast = { message: string; id: number; dark?: boolean };
+type ContextualToast = {
+  message: string;
+  id: number;
+  dark?: boolean;
+  deliveryMotion?: boolean;
+  fading?: boolean;
+};
 type SuggestedTextDraft = { title: string; message: string };
 type SuggestedCompletion = {
   card: CalendarItem;
@@ -2127,6 +2133,167 @@ function nextScopedReviewChannel(
     ?? null;
 }
 
+const V4_DELIVERY_HOLD_MS = 1400;
+const V4_CHANNEL_PANEL_TRANSITION =
+  "transform 460ms cubic-bezier(0.22, 1, 0.36, 1), opacity 460ms cubic-bezier(0.22, 1, 0.36, 1)";
+
+function nextPendingV4Channel(
+  actedOn: ContextualChannel,
+  activeChannels: ContextualChannel[],
+  deliveries: V4ChannelDeliveries,
+  googleState: GoogleContextDemoState,
+) {
+  const canonicalChannels = CONTEXTUAL_CHANNELS
+    .map(({ id }) => id)
+    .filter((channel) => (
+      activeChannels.includes(channel) && !deliveries[channel].deleted
+    ));
+  const actedIndex = canonicalChannels.indexOf(actedOn);
+  if (actedIndex < 0) return null;
+
+  for (let offset = 1; offset <= canonicalChannels.length; offset += 1) {
+    const candidate = canonicalChannels[
+      (actedIndex + offset) % canonicalChannels.length
+    ];
+    if (!isV4DeliveredChannel(candidate, deliveries[candidate], googleState)) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+function useV4DeliveryHold() {
+  const holdTimeoutRef = useRef<number | null>(null);
+  const pendingRef = useRef(false);
+  const mountedRef = useRef(true);
+  const [pending, setPending] = useState(false);
+
+  const clearTimers = () => {
+    if (holdTimeoutRef.current !== null) {
+      window.clearTimeout(holdTimeoutRef.current);
+      holdTimeoutRef.current = null;
+    }
+  };
+
+  const cancel = () => {
+    pendingRef.current = false;
+    clearTimers();
+    if (!mountedRef.current) return;
+    setPending(false);
+  };
+
+  const beginHold = (onElapsed: () => void) => {
+    if (pendingRef.current) return false;
+    pendingRef.current = true;
+    setPending(true);
+    const deadline = performance.now() + V4_DELIVERY_HOLD_MS;
+    const scheduleAtDeadline = (delay: number) => {
+      const timeout = window.setTimeout(() => {
+        if (!mountedRef.current || holdTimeoutRef.current !== timeout) return;
+        const remaining = deadline - performance.now();
+        if (remaining > 0) {
+          scheduleAtDeadline(remaining);
+          return;
+        }
+        holdTimeoutRef.current = null;
+        pendingRef.current = false;
+        setPending(false);
+        onElapsed();
+      }, delay);
+      holdTimeoutRef.current = timeout;
+    };
+    scheduleAtDeadline(V4_DELIVERY_HOLD_MS);
+    return true;
+  };
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      pendingRef.current = false;
+      clearTimers();
+    };
+  }, []);
+
+  return {
+    beginHold,
+    cancel,
+    pending,
+    pendingRef,
+  };
+}
+
+function V4SlidingPanel({
+  activeIndex,
+  children,
+  index,
+  layer,
+}: {
+  activeIndex: number;
+  children: React.ReactNode;
+  index: number;
+  layer: "text" | "card";
+}) {
+  const active = index === activeIndex;
+  return (
+    <div
+      className={`v4-sliding-panel v4-sliding-panel--${layer}${active ? " is-active" : ""}`}
+      data-active={active ? "true" : "false"}
+      data-index={index}
+      aria-hidden={!active}
+      inert={active ? undefined : true}
+      style={{
+        opacity: active ? 1 : 0,
+        pointerEvents: active ? "auto" : "none",
+        transform: `translateX(${(index - activeIndex) * 44}px)`,
+        transition: V4_CHANNEL_PANEL_TRANSITION,
+        zIndex: active ? (layer === "card" ? 20 : 5) : (layer === "card" ? 10 : 1),
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function V4DeliveryProgress({
+  channels,
+  deliveries,
+  googleState,
+}: {
+  channels: ContextualChannel[];
+  deliveries: V4ChannelDeliveries;
+  googleState: GoogleContextDemoState;
+}) {
+  const activeChannels = channels.filter((channel) => !deliveries[channel].deleted);
+  const delivered = activeChannels.filter((channel) => (
+    isV4DeliveredChannel(channel, deliveries[channel], googleState)
+  )).length;
+  const progressText = `${delivered}/${activeChannels.length} scheduled`;
+
+  return (
+    <div
+      className="v4-delivery-progress"
+      aria-live="polite"
+      aria-atomic="true"
+      data-delivered={delivered}
+      data-active={activeChannels.length}
+    >
+      {delivered > 0 && (
+        <span
+          className="v4-delivery-progress-check"
+          aria-hidden="true"
+          key={`check-${delivered}`}
+        >
+          <Check size={14} />
+        </span>
+      )}
+      <span className="v4-delivery-progress-text" key={progressText}>
+        {progressText}
+      </span>
+    </div>
+  );
+}
+
 function ContextualChannelIcon({ channel }: { channel: ContextualChannel }) {
   if (channel === "google") return <strong className="google-g">G</strong>;
   if (channel === "facebook") return <strong className="brand-facebook">f</strong>;
@@ -2379,6 +2546,7 @@ function VersionFourSummaryModal({
   images,
   channels,
   statuses,
+  selectedChannels,
   delivery,
   description = V4_SUMMARY_COPY,
   scheduleText,
@@ -2390,6 +2558,7 @@ function VersionFourSummaryModal({
   primaryActionLabel = "Review Drafts",
   campaignIdentity,
   onDeleteAll,
+  onToggleChannel,
   onStartReview,
   onClose,
 }: {
@@ -2397,6 +2566,7 @@ function VersionFourSummaryModal({
   images: GalleryImage[];
   channels: ContextualChannel[];
   statuses: Partial<Record<ContextualChannel, ChannelContentStatus>>;
+  selectedChannels?: ContextualChannel[];
   delivery: V4ChannelDelivery;
   description?: string;
   scheduleText?: string;
@@ -2408,6 +2578,7 @@ function VersionFourSummaryModal({
   primaryActionLabel?: string;
   campaignIdentity?: string;
   onDeleteAll?: () => void;
+  onToggleChannel?: (channel: ContextualChannel) => void;
   onStartReview: () => void;
   onClose: () => void;
 }) {
@@ -2415,6 +2586,7 @@ function VersionFourSummaryModal({
   const deleteButtonRef = useRef<HTMLButtonElement>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const orderedChannels = CONTEXTUAL_CHANNELS.filter(({ id }) => channels.includes(id));
+  const channelSelectionEnabled = selectedChannels !== undefined && onToggleChannel !== undefined;
   const collageImages = images.length > 0
     ? Array.from({ length: 3 }, (_, index) => images[index % images.length])
     : [];
@@ -2484,25 +2656,46 @@ function VersionFourSummaryModal({
                 </p>
               )}
               <p>
-                <strong>{recommendationOnly ? "Suggested channels:" : "Post to:"}</strong>
+                <strong>
+                  {recommendationOnly
+                    ? channelSelectionEnabled ? "Create drafts for:" : "Suggested channels:"
+                    : "Post to:"}
+                </strong>
               </p>
             </div>
             <ul
               className="v4-summary-status-list"
-              aria-label={recommendationOnly ? "Suggested channels" : "Channel statuses"}
+              aria-label={channelSelectionEnabled
+                ? "Draft channels"
+                : recommendationOnly ? "Suggested channels" : "Channel statuses"}
             >
               {orderedChannels.map(({ id, label }) => {
                 const status = versionFourSummaryStatus(statuses[id] ?? "suggested");
+                const selected = selectedChannels?.includes(id) ?? false;
                 return (
                   <li key={id} data-channel={id}>
                     <span className="v4-summary-channel">
                       <ContextualChannelArtwork channel={id} iconStyle={iconStyle} />
                       <span>{label}</span>
                     </span>
-                    <VersionFourContentStatusBadge
-                      status={status}
-                      suggestedAsDraft={suggestedAsDraft}
-                    />
+                    {channelSelectionEnabled ? (
+                      <button
+                        className={`channel-visibility-toggle ${selected ? "on" : "off"}`}
+                        type="button"
+                        role="switch"
+                        aria-checked={selected}
+                        aria-label={`${selected ? "Disable" : "Enable"} ${label}`}
+                        onClick={() => onToggleChannel(id)}
+                      >
+                        {selected ? <Check size={14} /> : <X size={14} />}
+                        <span />
+                      </button>
+                    ) : (
+                      <VersionFourContentStatusBadge
+                        status={status}
+                        suggestedAsDraft={suggestedAsDraft}
+                      />
+                    )}
                   </li>
                 );
               })}
@@ -2521,6 +2714,7 @@ function VersionFourSummaryModal({
               <button
                 type="button"
                 className="primary-button v4-summary-start"
+                disabled={channelSelectionEnabled && selectedChannels.length === 0}
                 onClick={onStartReview}
               >
                 {primaryActionLabel}
@@ -2530,6 +2724,7 @@ function VersionFourSummaryModal({
             <button
               type="button"
               className="primary-button v4-summary-start"
+              disabled={channelSelectionEnabled && selectedChannels.length === 0}
               onClick={onStartReview}
             >
               {primaryActionLabel}
@@ -3833,9 +4028,9 @@ function GeneratedV4ExitDialog({
         aria-labelledby="generated-v4-exit-title"
         aria-describedby="generated-v4-exit-description"
       >
-        <h2 id="generated-v4-exit-title">Save generated content?</h2>
+        <h2 id="generated-v4-exit-title">Leave now</h2>
         <p id="generated-v4-exit-description">
-          Do you want to save the generated drafts to your calendar? Discarding the drafts will not affected already scheduled or posted content.
+          Drafts are already saved to your calendar. Discarding them won’t affect content that’s already scheduled or posted.
         </p>
         <footer>
           <button
@@ -3843,7 +4038,7 @@ function GeneratedV4ExitDialog({
             className="secondary-button"
             onClick={() => runOnce(onDiscardAndExit)}
           >
-            Discard and exit
+            Discard and Exit
           </button>
           <button
             ref={saveButtonRef}
@@ -3851,7 +4046,7 @@ function GeneratedV4ExitDialog({
             className="primary-button"
             onClick={() => runOnce(onSaveAndExit)}
           >
-            Save and exit
+            Save drafts and Exit
           </button>
         </footer>
       </section>
@@ -3881,7 +4076,6 @@ function VersionFourContextModal({
   embedded = false,
   embeddedExitControls = false,
   enforceInstagramImageRequirement = false,
-  scopeDate,
   previewLoadingDuration = 0,
   loadedPreviewChannels = [],
   onPreviewLoaded,
@@ -3904,6 +4098,7 @@ function VersionFourContextModal({
     channel: ContextualChannel,
     action: V4LifecycleAction,
     advance?: boolean,
+    deferCompletion?: boolean,
   ) => unknown;
   googleDemoState: GoogleContextDemoState;
   onActiveChannelChange: (channel: ContextualChannel | null) => void;
@@ -3916,7 +4111,11 @@ function VersionFourContextModal({
   previewLoadingDuration?: number;
   loadedPreviewChannels?: ContextualChannel[];
   onPreviewLoaded?: (channel: ContextualChannel) => void;
-  onComplete?: (deliveries?: V4ChannelDeliveries) => void;
+  onComplete?: (
+    channel: ContextualChannel,
+    action: Extract<V4LifecycleAction, "schedule" | "send">,
+    deliveries: V4ChannelDeliveries,
+  ) => void;
 }) {
   const channels = channelDefinitions.filter(({ id }) => availableChannels.includes(id));
   const initialChannel = channels[Math.min(initialIndex, channels.length - 1)]?.id;
@@ -3929,6 +4128,7 @@ function VersionFourContextModal({
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [splitMenuOpen, setSplitMenuOpen] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(() => shouldLoadPreview(initialChannel));
+  const deliveryHold = useV4DeliveryHold();
   const splitMenuRef = useRef<HTMLDivElement>(null);
   const splitToggleRef = useRef<HTMLButtonElement>(null);
   const splitOptionRef = useRef<HTMLButtonElement>(null);
@@ -3936,22 +4136,9 @@ function VersionFourContextModal({
   const safeIndex = Math.min(activeIndex, channels.length - 1);
   const active = channels[safeIndex];
   const activePreviewLoaded = loadedPreviewChannels.includes(active.id);
-  const activeDelivery = channelDeliveries[active.id];
-  const activeState = activeDelivery.lifecycle;
   const instagramPublishingBlocked = enforceInstagramImageRequirement
     && active.id === "instagram"
     && drafts.instagram.images.length === 0;
-  const isGoogleDemo = active.id === "google";
-  const presentationState = isGoogleDemo
-    ? googleDemoState
-    : activeState;
-  const previewTitle = active.id === "email"
-    ? "Email Campaign Preview"
-    : active.id === "website"
-      ? "Website Page Preview"
-      : `${active.label} Post Preview`;
-  const hasOriginalScheduleDate = isGoogleDemo
-    && (googleDemoState === "missed" || googleDemoState === "error");
   const channelStatuses = Object.fromEntries(channels.map(({ id }) => [
     id,
     contextualContentStatus(id, channelDeliveries, googleDemoState),
@@ -3961,49 +4148,66 @@ function VersionFourContextModal({
     setPreviewLoading(shouldLoadPreview(channels[nextIndex]?.id));
     setActiveIndex(nextIndex);
   };
-  const selectChannel = (channel: ContextualChannel) => {
-    if (previewLoading) return;
+  const transitionToIndex = (index: number) => {
+    deliveryHold.cancel();
     setSplitMenuOpen(false);
-    showChannel(channels.findIndex(({ id }) => id === channel));
+    const nextIndex = Math.max(0, Math.min(channels.length - 1, index));
+    if (nextIndex === safeIndex) return;
+    showChannel(nextIndex);
+  };
+  const selectChannel = (channel: ContextualChannel) => {
+    transitionToIndex(channels.findIndex(({ id }) => id === channel));
   };
   const goPrevious = () => {
-    if (previewLoading) return;
-    setSplitMenuOpen(false);
-    showChannel(safeIndex - 1);
+    transitionToIndex(safeIndex - 1);
   };
   const goNext = () => {
-    if (previewLoading) return;
+    transitionToIndex(safeIndex + 1);
+  };
+  const deliverCurrent = (
+    action: Extract<V4LifecycleAction, "schedule" | "send">,
+  ) => {
+    if (
+      previewLoading
+      || instagramPublishingBlocked
+      || deliveryHold.pendingRef.current
+    ) return;
     setSplitMenuOpen(false);
-    showChannel(safeIndex + 1);
+    const nextDeliveries = onLifecycleAction(active.id, action, false, true);
+    if (nextDeliveries === false) return;
+    const deliveries = nextDeliveries as V4ChannelDeliveries;
+    const nextGoogleState = active.id === "google"
+      ? action === "schedule" ? "scheduled" : "sent"
+      : googleDemoState;
+    deliveryHold.beginHold(() => {
+      const nextChannel = nextPendingV4Channel(
+        active.id,
+        channels.map(({ id }) => id),
+        deliveries,
+        nextGoogleState,
+      );
+      if (nextChannel) {
+        showChannel(channels.findIndex(({ id }) => id === nextChannel));
+        return;
+      }
+      onComplete?.(active.id, action, deliveries);
+    });
   };
   const scheduleCurrent = () => {
-    if (previewLoading || instagramPublishingBlocked) return;
-    setSplitMenuOpen(false);
-    const nextDeliveries = onLifecycleAction(active.id, "schedule", true);
-    if (nextDeliveries === false) return;
-    if (embedded) {
-      const movedOutOfScope = Boolean(scopeDate && activeDelivery.date !== scopeDate);
-      if (movedOutOfScope && safeIndex < channels.length - 1) showChannel(safeIndex);
-      else if (!movedOutOfScope && safeIndex < channels.length - 1) showChannel(safeIndex + 1);
-      else onComplete?.(nextDeliveries as V4ChannelDeliveries);
-    }
+    deliverCurrent("schedule");
   };
   const sendCurrentNow = () => {
-    if (previewLoading || instagramPublishingBlocked) return;
-    setSplitMenuOpen(false);
-    const nextDeliveries = onLifecycleAction(active.id, "send", true);
-    if (nextDeliveries === false) return;
-    if (embedded) {
-      const movedOutOfScope = Boolean(scopeDate && V4_TODAY_DATE !== scopeDate);
-      if (movedOutOfScope && safeIndex < channels.length - 1) showChannel(safeIndex);
-      else if (!movedOutOfScope && safeIndex < channels.length - 1) showChannel(safeIndex + 1);
-      else onComplete?.(nextDeliveries as V4ChannelDeliveries);
-    }
+    deliverCurrent("send");
   };
   const editCurrent = () => {
     if (previewLoading) return;
+    deliveryHold.cancel();
     setSplitMenuOpen(false);
     onEdit(active.id);
+  };
+  const closeModal = () => {
+    deliveryHold.cancel();
+    onClose();
   };
   const closeDeleteDialog = () => {
     setDeleteDialogOpen(false);
@@ -4045,7 +4249,7 @@ function VersionFourContextModal({
         return;
       }
       if (previewLoading) return;
-      if (event.key === "Escape" && (!embedded || embeddedExitControls)) onClose();
+      if (event.key === "Escape" && (!embedded || embeddedExitControls)) closeModal();
       if (deleteDialogOpen) return;
       if (event.key === "ArrowLeft") goPrevious();
       if (event.key === "ArrowRight") goNext();
@@ -4070,6 +4274,270 @@ function VersionFourContextModal({
     document.addEventListener("mousedown", closeOnOutsideClick);
     return () => document.removeEventListener("mousedown", closeOnOutsideClick);
   }, [splitMenuOpen]);
+
+  const renderTextPanel = (channel: (typeof channels)[number], index: number) => {
+    const panelIsActive = index === safeIndex;
+    const panelDelivery = channelDeliveries[channel.id];
+    const panelState = panelDelivery.lifecycle;
+    const panelIsGoogle = channel.id === "google";
+    const panelPresentationState = panelIsGoogle ? googleDemoState : panelState;
+    const panelInstagramBlocked = enforceInstagramImageRequirement
+      && channel.id === "instagram"
+      && drafts.instagram.images.length === 0;
+    const panelHasOriginalScheduleDate = panelIsGoogle
+      && (googleDemoState === "missed" || googleDemoState === "error");
+
+    return (
+      <V4SlidingPanel
+        activeIndex={safeIndex}
+        index={index}
+        key={`text-${channel.id}`}
+        layer="text"
+      >
+        <section className="v4-context-details">
+          <div>
+            <div className="v4-content-title-row">
+              <h1 id={panelIsActive ? "v4-context-title" : `v4-context-title-${channel.id}`}>
+                {campaignTitle ?? (embedded
+                  ? GENERATED_V4_CAMPAIGN_TITLE
+                  : "Seasonal property clean up in Hamilton")}
+              </h1>
+            </div>
+            <section className="v4-about-copy">
+              <div className="v4-about-heading v4-status-heading-row">
+                <h2>{channel.about}</h2>
+                <VersionFourContentStatusBadge
+                  status={channelStatuses[channel.id] ?? "suggested"}
+                />
+              </div>
+              <p>{channel.rationale}</p>
+            </section>
+            <dl className="v4-context-facts">
+              <div>
+                <dt>{panelHasOriginalScheduleDate ? "Original schedule date" : "Schedule date"}</dt>
+                <dd className={panelHasOriginalScheduleDate ? "v4-warning-fact" : undefined}>
+                  {panelHasOriginalScheduleDate && <TriangleAlert size={16} aria-hidden="true" />}
+                  {formatV4DeliveryDateTime(panelDelivery)}
+                </dd>
+              </div>
+              <div><dt>{channel.destinationLabel}</dt><dd>{channel.destination}</dd></div>
+            </dl>
+          </div>
+          <div className="v4-context-actions">
+            {panelInstagramBlocked && (
+              <div className="v4-context-info-banner" role="status">
+                <Info size={22} aria-hidden="true" />
+                <span>{INSTAGRAM_IMAGE_REQUIRED_MESSAGE}</span>
+              </div>
+            )}
+            {panelIsGoogle && googleDemoState === "error" && (
+              <div className="v4-context-error-banner" role="alert">
+                <TriangleAlert size={18} aria-hidden="true" />
+                <span>Posting failed due to a connection issue.</span>
+              </div>
+            )}
+            <footer
+              className={`v4-context-footer${panelIsGoogle && googleDemoState === "sent"
+                ? " v4-context-footer--sent-google"
+                : ""}${panelIsActive && previewLoading ? " is-loading" : ""}`}
+              aria-busy={panelIsActive && previewLoading}
+              inert={deleteDialogOpen || (panelIsActive && previewLoading) ? true : undefined}
+            >
+              {!(panelIsGoogle && googleDemoState === "sent") && (
+                <button
+                  type="button"
+                  className="delete-post"
+                  onClick={() => {
+                    deliveryHold.cancel();
+                    setSplitMenuOpen(false);
+                    setDeleteDialogOpen(true);
+                  }}
+                >
+                  Delete
+                </button>
+              )}
+              <div>
+                {panelIsGoogle && googleDemoState === "sent" ? (
+                  <button type="button" className="primary-button v4-view-performance">
+                    View post
+                    <ExternalLink size={17} aria-hidden="true" />
+                  </button>
+                ) : panelIsGoogle
+                  && (googleDemoState === "missed" || googleDemoState === "error") ? (
+                  <>
+                    <button type="button" className="secondary-button" onClick={editCurrent}>
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      className="primary-button v4-send-now"
+                      disabled={deliveryHold.pending}
+                      onClick={sendCurrentNow}
+                    >
+                      {googleDemoState === "missed" ? "Send Now" : "Post Now"}
+                    </button>
+                  </>
+                ) : panelPresentationState === "unscheduled" || panelPresentationState === "suggested" ? (
+                  <>
+                    <button type="button" className="secondary-button" onClick={editCurrent}>
+                      Edit
+                    </button>
+                    <div
+                      className="v4-split-action"
+                      ref={panelIsActive ? splitMenuRef : undefined}
+                    >
+                      {panelIsActive && splitMenuOpen && !panelInstagramBlocked && (
+                        <div className="v4-split-menu" role="menu" aria-label="Publishing options">
+                          <button
+                            ref={splitOptionRef}
+                            type="button"
+                            role="menuitem"
+                            disabled={deliveryHold.pending}
+                            onClick={sendCurrentNow}
+                          >
+                            Post now and view next
+                          </button>
+                        </div>
+                      )}
+                      <span className={`v4-split-button v4-schedule-next-button${panelInstagramBlocked ? " is-disabled" : ""}`}>
+                        <button
+                          type="button"
+                          disabled={panelInstagramBlocked || deliveryHold.pending}
+                          onClick={scheduleCurrent}
+                        >
+                          {v4UnscheduledActionLabel(channel.id)}
+                        </button>
+                        <button
+                          ref={panelIsActive ? splitToggleRef : undefined}
+                          type="button"
+                          aria-label="Show publishing options"
+                          aria-haspopup="menu"
+                          aria-expanded={panelIsActive && splitMenuOpen}
+                          disabled={panelInstagramBlocked || deliveryHold.pending}
+                          onClick={() => {
+                            if (panelInstagramBlocked) return;
+                            setSplitMenuOpen((open) => !open);
+                          }}
+                        >
+                          <ChevronDown size={20} />
+                        </button>
+                      </span>
+                    </div>
+                  </>
+                ) : panelPresentationState === "scheduled" ? (
+                  <div
+                    className="v4-split-action"
+                    ref={panelIsActive ? splitMenuRef : undefined}
+                  >
+                    {panelIsActive && splitMenuOpen && (
+                      <div className="v4-split-menu" role="menu" aria-label="Scheduled post options">
+                        <button
+                          ref={splitOptionRef}
+                          type="button"
+                          role="menuitem"
+                          disabled={deliveryHold.pending}
+                          onClick={sendCurrentNow}
+                        >
+                          Send now
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            deliveryHold.cancel();
+                            setSplitMenuOpen(false);
+                            onLifecycleAction(active.id, "cancel");
+                          }}
+                        >
+                          Cancel schedule
+                        </button>
+                      </div>
+                    )}
+                    <span className="v4-split-button">
+                      <button type="button" onClick={editCurrent}>Edit</button>
+                      <button
+                        ref={panelIsActive ? splitToggleRef : undefined}
+                        type="button"
+                        aria-label="Show scheduled post options"
+                        aria-haspopup="menu"
+                        aria-expanded={panelIsActive && splitMenuOpen}
+                        disabled={deliveryHold.pending}
+                        onClick={() => setSplitMenuOpen((open) => !open)}
+                      >
+                        <ChevronDown size={20} />
+                      </button>
+                    </span>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className="primary-button v4-sent-edit-button"
+                    onClick={editCurrent}
+                  >
+                    Edit
+                  </button>
+                )}
+              </div>
+            </footer>
+          </div>
+        </section>
+      </V4SlidingPanel>
+    );
+  };
+
+  const renderCardPanel = (channel: (typeof channels)[number], index: number) => {
+    const panelIsActive = index === safeIndex;
+    const panelPreviewTitle = channel.id === "email"
+      ? "Email Campaign Preview"
+      : channel.id === "website"
+        ? "Website Page Preview"
+        : `${channel.label} Post Preview`;
+
+    return (
+      <V4SlidingPanel
+        activeIndex={safeIndex}
+        index={index}
+        key={`card-${channel.id}`}
+        layer="card"
+      >
+        <section
+          className="v4-context-preview"
+          aria-label={`${channel.label} content preview`}
+          aria-busy={panelIsActive && previewLoading}
+        >
+          <header>
+            <ContextualChannelArtwork channel={channel.id} iconStyle={iconStyle} previewTitle />
+            <strong>{panelPreviewTitle}</strong>
+          </header>
+          <div className="v4-context-preview-scroll">
+            {panelIsActive && previewLoading ? (
+              <div
+                className="v4-preview-glimmer"
+                role="status"
+                aria-live="polite"
+                aria-label={`Loading ${channel.label} preview`}
+              >
+                <span className="sr-only">Loading {channel.label} preview</span>
+                <span className="v4-preview-glimmer-block" aria-hidden="true" />
+                <span className="v4-preview-glimmer-block" aria-hidden="true" />
+              </div>
+            ) : (
+              <ContextualPreviewContent
+                channel={channel.id}
+                drafts={drafts}
+                emailMessage={emailMessage}
+                emailSubject={emailSubject}
+                websiteMessage={websiteMessage}
+                websiteTitle={websiteTitle}
+                campaignTitle={campaignTitle}
+                collapseEmptyMedia={enforceInstagramImageRequirement}
+              />
+            )}
+          </div>
+        </section>
+      </V4SlidingPanel>
+    );
+  };
 
   const modal = (
     <section
@@ -4100,226 +4568,35 @@ function VersionFourContextModal({
               className="channel-icon-switcher--modal-v4"
             />
           )}
+          <V4DeliveryProgress
+            channels={channels.map(({ id }) => id)}
+            deliveries={channelDeliveries}
+            googleState={googleDemoState}
+          />
           {(!embedded || embeddedExitControls) && (
             <button
               className="context-navigation-close"
               type="button"
               aria-label="Close"
-              onClick={onClose}
+              onClick={closeModal}
             >
               <X size={24} aria-hidden="true" />
             </button>
           )}
         </header>
 
-        <div className="v4-context-body" inert={deleteDialogOpen ? true : undefined}>
-          <section className="v4-context-details">
-            <div>
-              <div className="v4-content-title-row">
-                <h1 id="v4-context-title">
-                  {campaignTitle ?? (embedded
-                    ? GENERATED_V4_CAMPAIGN_TITLE
-                    : "Seasonal property clean up in Hamilton")}
-                </h1>
-              </div>
-              <section className="v4-about-copy">
-                <div className="v4-about-heading v4-status-heading-row">
-                  <h2>{active.about}</h2>
-                  <VersionFourContentStatusBadge
-                    status={channelStatuses[active.id] ?? "suggested"}
-                  />
-                </div>
-                <p>{active.rationale}</p>
-              </section>
-              <dl className="v4-context-facts">
-                <div>
-                  <dt>{hasOriginalScheduleDate ? "Original schedule date" : "Schedule date"}</dt>
-                  <dd className={hasOriginalScheduleDate ? "v4-warning-fact" : undefined}>
-                    {hasOriginalScheduleDate && <TriangleAlert size={16} aria-hidden="true" />}
-                    {formatV4DeliveryDateTime(activeDelivery)}
-                  </dd>
-                </div>
-                <div><dt>{active.destinationLabel}</dt><dd>{active.destination}</dd></div>
-              </dl>
-            </div>
-            <div className="v4-context-actions">
-              {instagramPublishingBlocked && (
-                <div className="v4-context-info-banner" role="status">
-                  <Info size={22} aria-hidden="true" />
-                  <span>{INSTAGRAM_IMAGE_REQUIRED_MESSAGE}</span>
-                </div>
-              )}
-              {isGoogleDemo && googleDemoState === "error" && (
-                <div className="v4-context-error-banner" role="alert">
-                  <TriangleAlert size={18} aria-hidden="true" />
-                  <span>Posting failed due to a connection issue.</span>
-                </div>
-              )}
-              <footer
-                className={`v4-context-footer${isGoogleDemo && googleDemoState === "sent"
-                  ? " v4-context-footer--sent-google"
-                  : ""}${previewLoading ? " is-loading" : ""}`}
-                aria-busy={previewLoading}
-                inert={deleteDialogOpen || previewLoading ? true : undefined}
-              >
-                {!(isGoogleDemo && googleDemoState === "sent") && (
-                  <button
-                    type="button"
-                    className="delete-post"
-                    onClick={() => {
-                      setSplitMenuOpen(false);
-                      setDeleteDialogOpen(true);
-                    }}
-                  >
-                    Delete
-                  </button>
-                )}
-                <div>
-                  {isGoogleDemo && googleDemoState === "sent" ? (
-                    <button type="button" className="primary-button v4-view-performance">
-                      View post
-                      <ExternalLink size={17} aria-hidden="true" />
-                    </button>
-                  ) : isGoogleDemo
-                    && (googleDemoState === "missed" || googleDemoState === "error") ? (
-                    <>
-                      <button type="button" className="secondary-button" onClick={editCurrent}>
-                        Edit
-                      </button>
-                      <button type="button" className="primary-button v4-send-now" onClick={sendCurrentNow}>
-                        {googleDemoState === "missed" ? "Send Now" : "Post Now"}
-                      </button>
-                    </>
-                  ) : presentationState === "unscheduled" || presentationState === "suggested" ? (
-                  <>
-                    <button type="button" className="secondary-button" onClick={editCurrent}>
-                      Edit
-                    </button>
-                    <div className="v4-split-action" ref={splitMenuRef}>
-                      {splitMenuOpen && !instagramPublishingBlocked && (
-                        <div className="v4-split-menu" role="menu" aria-label="Publishing options">
-                          <button
-                            ref={splitOptionRef}
-                            type="button"
-                            role="menuitem"
-                            onClick={sendCurrentNow}
-                          >
-                            Post now and view next
-                          </button>
-                        </div>
-                      )}
-                      <span className={`v4-split-button v4-schedule-next-button${instagramPublishingBlocked ? " is-disabled" : ""}`}>
-                        <button
-                          type="button"
-                          disabled={instagramPublishingBlocked}
-                          onClick={scheduleCurrent}
-                        >
-                          {v4UnscheduledActionLabel(active.id)}
-                        </button>
-                        <button
-                          ref={splitToggleRef}
-                          type="button"
-                          aria-label="Show publishing options"
-                          aria-haspopup="menu"
-                          aria-expanded={splitMenuOpen}
-                          disabled={instagramPublishingBlocked}
-                          onClick={() => {
-                            if (instagramPublishingBlocked) return;
-                            setSplitMenuOpen((open) => !open);
-                          }}
-                        >
-                          <ChevronDown size={20} />
-                        </button>
-                      </span>
-                    </div>
-                  </>
-                  ) : presentationState === "scheduled" ? (
-                  <div className="v4-split-action" ref={splitMenuRef}>
-                    {splitMenuOpen && (
-                      <div className="v4-split-menu" role="menu" aria-label="Scheduled post options">
-                        <button
-                          ref={splitOptionRef}
-                          type="button"
-                          role="menuitem"
-                          onClick={sendCurrentNow}
-                        >
-                          Send now
-                        </button>
-                        <button
-                          type="button"
-                          role="menuitem"
-                          onClick={() => {
-                            setSplitMenuOpen(false);
-                            onLifecycleAction(active.id, "cancel");
-                          }}
-                        >
-                          Cancel schedule
-                        </button>
-                      </div>
-                    )}
-                    <span className="v4-split-button">
-                      <button type="button" onClick={editCurrent}>Edit</button>
-                      <button
-                        ref={splitToggleRef}
-                        type="button"
-                        aria-label="Show scheduled post options"
-                        aria-haspopup="menu"
-                        aria-expanded={splitMenuOpen}
-                        onClick={() => setSplitMenuOpen((open) => !open)}
-                      >
-                        <ChevronDown size={20} />
-                      </button>
-                    </span>
-                  </div>
-                  ) : (
-                  <button
-                    type="button"
-                    className="primary-button v4-sent-edit-button"
-                    onClick={editCurrent}
-                  >
-                    Edit
-                  </button>
-                  )}
-                </div>
-              </footer>
-            </div>
-          </section>
-
-          <section
-            className="v4-context-preview"
-            aria-label={`${active.label} content preview`}
-            aria-busy={previewLoading}
-          >
-            <header>
-              <ContextualChannelArtwork channel={active.id} iconStyle={iconStyle} previewTitle />
-              <strong>{previewTitle}</strong>
-            </header>
-            <div className="v4-context-preview-scroll">
-              {previewLoading ? (
-                <div
-                  className="v4-preview-glimmer"
-                  role="status"
-                  aria-live="polite"
-                  aria-label={`Loading ${active.label} preview`}
-                >
-                  <span className="sr-only">Loading {active.label} preview</span>
-                  <span className="v4-preview-glimmer-block" aria-hidden="true" />
-                  <span className="v4-preview-glimmer-block" aria-hidden="true" />
-                </div>
-              ) : (
-                <ContextualPreviewContent
-                  channel={active.id}
-                  drafts={drafts}
-                  emailMessage={emailMessage}
-                  emailSubject={emailSubject}
-                  websiteMessage={websiteMessage}
-                  websiteTitle={websiteTitle}
-                  campaignTitle={campaignTitle}
-                  collapseEmptyMedia={enforceInstagramImageRequirement}
-                />
-              )}
-            </div>
-          </section>
+        <div
+          className="v4-context-body"
+          data-active-channel={active.id}
+          data-channel={active.id}
+          inert={deleteDialogOpen ? true : undefined}
+        >
+          <div className="v4-sliding-layer v4-sliding-layer--text">
+            {channels.map(renderTextPanel)}
+          </div>
+          <div className="v4-sliding-layer v4-sliding-layer--card">
+            {channels.map(renderCardPanel)}
+          </div>
         </div>
 
         {deleteDialogOpen && (
@@ -4327,6 +4604,7 @@ function VersionFourContextModal({
             channel={active.id}
             onCancel={closeDeleteDialog}
             onConfirm={() => {
+              deliveryHold.cancel();
               setDeleteDialogOpen(false);
               onDelete(active.id);
             }}
@@ -4342,7 +4620,7 @@ function VersionFourContextModal({
       className="calendar-modal-overlay v4-context-overlay"
       role="presentation"
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
+        if (event.target === event.currentTarget) closeModal();
       }}
     >
       {modal}
@@ -6701,6 +6979,8 @@ export default function App() {
   const [v4DashboardPrompt, setV4DashboardPrompt] = useState("");
   const [v4DashboardDraftChannels, setV4DashboardDraftChannels] =
     useState<ContextualChannel[]>(() => [...GENERATED_V4_CHANNELS]);
+  const [v4CalendarDraftChannels, setV4CalendarDraftChannels] =
+    useState<ContextualChannel[]>(() => [...GENERATED_V4_CHANNELS]);
   const [v2Drafts, setV2Drafts] = useState<V2Drafts>(createInitialV2Drafts);
   const [v3Drafts, setV3Drafts] = useState<V2Drafts>(createInitialV2Drafts);
   const [daisyVersionStates, setDaisyVersionStates] = useState(createInitialDaisyVersionStates);
@@ -6845,6 +7125,9 @@ export default function App() {
   const [reviewDeleteChannel, setReviewDeleteChannel] = useState<ContextualChannel | null>(null);
   const [scheduleToastVisible, setScheduleToastVisible] = useState(false);
   const [contextualToast, setContextualToast] = useState<ContextualToast | null>(null);
+  const contextualToastIdRef = useRef(0);
+  const contextualToastFadeTimerRef = useRef<number | null>(null);
+  const contextualToastRemoveTimerRef = useRef<number | null>(null);
   const [v4TopicCompletion, setV4TopicCompletion] =
     useState<V4TopicCompletionState | null>(null);
   const [saturdayCompletion, setSaturdayCompletion] = useState<
@@ -7183,9 +7466,40 @@ export default function App() {
   const suggestedFlowContentStatuses = isV4GeneratedEditor
     ? generatedV4ContentStatuses
     : suggestedContentStatuses;
-  const showContextualToast = (message: string, dark = false) => {
+  const showContextualToast = (
+    message: string,
+    dark = false,
+    deliveryMotion = false,
+  ) => {
+    if (contextualToastFadeTimerRef.current !== null) {
+      window.clearTimeout(contextualToastFadeTimerRef.current);
+    }
+    if (contextualToastRemoveTimerRef.current !== null) {
+      window.clearTimeout(contextualToastRemoveTimerRef.current);
+    }
+    contextualToastIdRef.current += 1;
+    const id = contextualToastIdRef.current;
     setScheduleToastVisible(false);
-    setContextualToast((current) => ({ message, dark, id: (current?.id ?? 0) + 1 }));
+    setContextualToast({
+      message,
+      dark,
+      deliveryMotion,
+      id,
+    });
+    if (deliveryMotion) {
+      contextualToastFadeTimerRef.current = window.setTimeout(() => {
+        setContextualToast((current) => (
+          current?.id === id ? { ...current, fading: true } : current
+        ));
+      }, 1960);
+      contextualToastRemoveTimerRef.current = window.setTimeout(() => {
+        setContextualToast((current) => current?.id === id ? null : current);
+      }, 2200);
+      return;
+    }
+    contextualToastRemoveTimerRef.current = window.setTimeout(() => {
+      setContextualToast((current) => current?.id === id ? null : current);
+    }, 4000);
   };
   const openV4TopicCompletionIfNeeded = ({
     source,
@@ -7399,6 +7713,7 @@ export default function App() {
     channel: ContextualChannel,
     action: V4LifecycleAction,
     returnToContext = false,
+    deferCompletion = false,
   ) => {
     const previousGoogleState = googleContextDemoState;
     const nextGoogleState = channel === "google"
@@ -7434,7 +7749,9 @@ export default function App() {
         [channel]: nextDelivery,
       });
     }
-    const completionOpened = action !== "cancel" && openV4TopicCompletionIfNeeded({
+    const completionOpened = !deferCompletion
+      && action !== "cancel"
+      && openV4TopicCompletionIfNeeded({
       source: "original",
       channel,
       action,
@@ -7442,17 +7759,22 @@ export default function App() {
       nextDeliveries,
       previousGoogleState,
       nextGoogleState,
-    });
+      });
     if (action === "schedule" && !completionOpened) {
       showContextualToast(
         version === "v4"
           ? contextualSuccessMessage(channel, "schedule")
           : "Your post is scheduled",
         true,
+        deferCompletion,
       );
     }
     if (action === "send" && !completionOpened) {
-      showContextualToast(contextualSuccessMessage(channel, "post"), true);
+      showContextualToast(
+        contextualSuccessMessage(channel, "post"),
+        true,
+        deferCompletion,
+      );
     }
     if (returnToContext && !completionOpened) {
       returnToV4ContextAfter(channel, originDate, nextDeliveries);
@@ -7639,6 +7961,7 @@ export default function App() {
     channel: ContextualChannel,
     action: V4LifecycleAction,
     returnToContext = false,
+    deferCompletion = false,
   ) => {
     if (channel === "instagram" && generatedV4State.drafts.instagram.images.length === 0) {
       return false;
@@ -7676,7 +7999,9 @@ export default function App() {
     const nextCalendarDeliveries = { ...generatedV4CalendarDeliveries };
     nextCalendarDeliveries[channel] = nextDelivery;
     setGeneratedV4CalendarDeliveries(nextCalendarDeliveries);
-    const completionOpened = action !== "cancel" && openV4TopicCompletionIfNeeded({
+    const completionOpened = !deferCompletion
+      && action !== "cancel"
+      && openV4TopicCompletionIfNeeded({
       source: "generated",
       channel,
       action,
@@ -7684,12 +8009,12 @@ export default function App() {
       nextDeliveries,
       previousGoogleState,
       nextGoogleState,
-    });
+      });
     if (action !== "cancel" && !completionOpened) {
       showContextualToast(contextualSuccessMessage(
         channel,
         action === "schedule" ? "schedule" : "post",
-      ), true);
+      ), true, deferCompletion);
     }
     if (
       activeV4CampaignSource === "generated"
@@ -7833,6 +8158,7 @@ export default function App() {
     setCalendarPrompt("");
     setV4DashboardPrompt("");
     setV4DashboardDraftChannels([...GENERATED_V4_CHANNELS]);
+    setV4CalendarDraftChannels([...GENERATED_V4_CHANNELS]);
     setGeneratedV4Phase("idle");
     setGeneratedV4ExitTarget(null);
     setGeneratedV4ExitVersionTarget(null);
@@ -7844,6 +8170,48 @@ export default function App() {
   };
   const closeGeneratedV4Session = () => {
     closeGeneratedV4WorkflowUi(v4GeneratedFlowOrigin);
+  };
+  const completeV4ModalDelivery = (
+    source: V4CampaignSource,
+    channel: ContextualChannel,
+    action: Extract<V4LifecycleAction, "schedule" | "send">,
+    nextDeliveries: V4ChannelDeliveries,
+  ) => {
+    const nextGoogleState: GoogleContextDemoState = channel === "google"
+      ? action === "schedule" ? "scheduled" : "sent"
+      : source === "generated"
+        ? generatedV4State.googleDemoState
+        : googleContextDemoState;
+    const previousDeliveries: V4ChannelDeliveries = {
+      ...nextDeliveries,
+      [channel]: {
+        ...nextDeliveries[channel],
+        lifecycle: "unscheduled",
+      },
+    };
+    const completionOpened = openV4TopicCompletionIfNeeded({
+      source,
+      channel,
+      action,
+      previousDeliveries,
+      nextDeliveries,
+      previousGoogleState: channel === "google" ? "suggested" : nextGoogleState,
+      nextGoogleState,
+    });
+    if (completionOpened) return;
+
+    if (source === "generated") {
+      closeGeneratedV4Session();
+      return;
+    }
+    setActiveV4ContextChannel(null);
+    setCombinedModalStartIndex(0);
+    setV4ReviewOrigin(null);
+    setActiveV4GroupDate(null);
+    setActiveV4CampaignSource(null);
+    setPreferredV4EntryChannel(null);
+    setV4ReviewScopedChannels(null);
+    setCombinedWorkflow(null);
   };
   const requestGeneratedV4Exit = (
     target: V4EntrySurface = v4GeneratedFlowOrigin,
@@ -8082,6 +8450,8 @@ export default function App() {
     setSuggestedPrompt(prompt);
     if (origin === "dashboard") {
       setV4DashboardDraftChannels([...GENERATED_V4_CHANNELS]);
+    } else {
+      setV4CalendarDraftChannels([...GENERATED_V4_CHANNELS]);
     }
     setV4SuggestedSummaryOpen(false);
     setSuggestedDialogOpen(false);
@@ -8103,6 +8473,13 @@ export default function App() {
           (candidate) => candidate === channel || current.includes(candidate),
         ));
   };
+  const toggleV4CalendarDraftChannel = (channel: ContextualChannel) => {
+    setV4CalendarDraftChannels((current) => current.includes(channel)
+      ? current.filter((candidate) => candidate !== channel)
+      : GENERATED_V4_CHANNELS.filter(
+          (candidate) => candidate === channel || current.includes(candidate),
+        ));
+  };
   const reviewV4DashboardDrafts = () => {
     if (v4DashboardDraftChannels.length === 0) return;
     acceptGeneratedV4Campaign(v4DashboardDraftChannels);
@@ -8110,6 +8487,17 @@ export default function App() {
     setActiveV4CampaignSource("generated");
     setPreferredV4EntryChannel(null);
     setV4ReviewScopedChannels([...v4DashboardDraftChannels]);
+    setV4SuggestedSummaryOpen(false);
+    setSuggestedPreviewIndex(0);
+    setSuggestedDialogOpen(true);
+  };
+  const reviewV4CalendarDrafts = () => {
+    if (v4CalendarDraftChannels.length === 0) return;
+    acceptGeneratedV4Campaign(v4CalendarDraftChannels);
+    setActiveV4GroupDate(V4_INITIAL_DATE);
+    setActiveV4CampaignSource("generated");
+    setPreferredV4EntryChannel(null);
+    setV4ReviewScopedChannels([...v4CalendarDraftChannels]);
     setV4SuggestedSummaryOpen(false);
     setSuggestedPreviewIndex(0);
     setSuggestedDialogOpen(true);
@@ -8267,6 +8655,7 @@ export default function App() {
     channel: ContextualChannel,
     action: V4LifecycleAction,
     advance = false,
+    fromContextModal = false,
   ) => {
     const showcase = adHocShowcases.find(({ id }) => id === showcaseId);
     if (!showcase) return false;
@@ -8301,9 +8690,17 @@ export default function App() {
         : candidate
     )));
     if (action === "schedule") {
-      showContextualToast(contextualSuccessMessage(channel, "schedule"), true);
+      showContextualToast(
+        contextualSuccessMessage(channel, "schedule"),
+        true,
+        fromContextModal,
+      );
     } else if (action === "send") {
-      showContextualToast(contextualSuccessMessage(channel, "post"), true);
+      showContextualToast(
+        contextualSuccessMessage(channel, "post"),
+        true,
+        fromContextModal,
+      );
     }
     if (advance) {
       const available = showcase.channels.filter(
@@ -8421,6 +8818,8 @@ export default function App() {
     setV4EntrySurface("calendar");
     setV4GeneratedFlowOrigin("calendar");
     setV4DashboardPrompt("");
+    setV4DashboardDraftChannels([...GENERATED_V4_CHANNELS]);
+    setV4CalendarDraftChannels([...GENERATED_V4_CHANNELS]);
     setVersion(nextVersion);
     setScreen("calendar");
     setCalendarModalOpen(false);
@@ -8578,6 +8977,12 @@ export default function App() {
     if (adHocTimerRef.current !== null) {
       window.clearInterval(adHocTimerRef.current);
     }
+    if (contextualToastFadeTimerRef.current !== null) {
+      window.clearTimeout(contextualToastFadeTimerRef.current);
+    }
+    if (contextualToastRemoveTimerRef.current !== null) {
+      window.clearTimeout(contextualToastRemoveTimerRef.current);
+    }
   }, []);
 
   useEffect(() => {
@@ -8586,12 +8991,6 @@ export default function App() {
     const timeout = window.setTimeout(() => setScheduleToastVisible(false), 4000);
     return () => window.clearTimeout(timeout);
   }, [scheduleToastVisible]);
-
-  useEffect(() => {
-    if (!contextualToast) return;
-    const timeout = window.setTimeout(() => setContextualToast(null), 4000);
-    return () => window.clearTimeout(timeout);
-  }, [contextualToast]);
 
   useEffect(() => {
     const fitPrototypeToViewport = () => {
@@ -9236,8 +9635,10 @@ export default function App() {
                       channel,
                       action,
                       advance,
+                      true,
                     )
                   )}
+                  onComplete={() => closeCreatedAdHocContext()}
                 />
               )}
               {v4CardSummaryOpen
@@ -9321,6 +9722,7 @@ export default function App() {
                         channel,
                         "suggested",
                       ]))}
+                      selectedChannels={v4CalendarDraftChannels}
                       delivery={createGeneratedV4ChannelDeliveries().google}
                       description={GENERATED_V4_SUMMARY_COPY}
                       artwork={GENERATED_V4_PROMOTION_ARTWORK}
@@ -9328,16 +9730,8 @@ export default function App() {
                       iconStyle="jobber"
                       recommendationOnly
                       campaignIdentity={`idea:${suggestedPrompt}`}
-                      onStartReview={() => {
-                        acceptGeneratedV4Campaign();
-                        setActiveV4GroupDate(V4_INITIAL_DATE);
-                        setActiveV4CampaignSource("generated");
-                        setPreferredV4EntryChannel(null);
-                        setV4ReviewScopedChannels(null);
-                        setV4SuggestedSummaryOpen(false);
-                        setSuggestedPreviewIndex(0);
-                        setSuggestedDialogOpen(true);
-                      }}
+                      onToggleChannel={toggleV4CalendarDraftChannel}
+                      onStartReview={reviewV4CalendarDrafts}
                       onClose={() => undefined}
                     />
                   ) : null}
@@ -9383,8 +9777,16 @@ export default function App() {
                         setV4ReviewOrigin("suggested-content");
                       }}
                       onDelete={deleteGeneratedV4Channel}
-                      onLifecycleAction={(channel, action) => {
-                        return performGeneratedV4LifecycleAction(channel, action);
+                      onLifecycleAction={(channel, action, advance, deferCompletion) => {
+                        return performGeneratedV4LifecycleAction(
+                          channel,
+                          action,
+                          advance,
+                          deferCompletion,
+                        );
+                      }}
+                      onComplete={(channel, action, deliveries) => {
+                        completeV4ModalDelivery("generated", channel, action, deliveries);
                       }}
                     />
                 </div>
@@ -9584,6 +9986,20 @@ export default function App() {
                   onLifecycleAction={activeV4CampaignSource === "generated"
                     ? performGeneratedV4LifecycleAction
                     : performV4LifecycleAction}
+                  {...(version === "v4"
+                    ? {
+                        onComplete: (
+                          channel: ContextualChannel,
+                          action: Extract<V4LifecycleAction, "schedule" | "send">,
+                          deliveries: V4ChannelDeliveries,
+                        ) => completeV4ModalDelivery(
+                          activeV4CampaignSource === "generated" ? "generated" : "original",
+                          channel,
+                          action,
+                          deliveries,
+                        ),
+                      }
+                    : {})}
                 />
               )}
               {combinedWorkflow === "modal"
@@ -9768,7 +10184,11 @@ export default function App() {
           )}
           {contextualToast && (
             <div
-              className={contextualToast.dark ? "google-delete-toast" : "schedule-success-toast"}
+              className={`${contextualToast.dark
+                ? "google-delete-toast"
+                : "schedule-success-toast"}${contextualToast.deliveryMotion
+                ? " v4-delivery-toast"
+                : ""}${contextualToast.fading ? " is-fading" : ""}`}
               role="status"
               aria-live="polite"
               key={contextualToast.id}

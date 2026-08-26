@@ -171,8 +171,8 @@ try {
     { exact: true },
   ).waitFor();
   await context().getByRole("button", { name: "Close", exact: true }).click();
-  await page.getByRole("dialog", { name: "Save generated content?" })
-    .getByRole("button", { name: "Save and exit", exact: true }).click();
+  await page.getByRole("dialog", { name: "Leave now" })
+    .getByRole("button", { name: "Save drafts and Exit", exact: true }).click();
 
   // Undelivered Instagram remains Suggested on the persisted campaign.
   await generatedCard().click();

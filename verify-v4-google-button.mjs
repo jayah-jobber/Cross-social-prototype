@@ -172,8 +172,8 @@ try {
   // Generated edits remain source-aware; the live original V4 campaign keeps its own defaults.
   await page.locator(".v4-generated-review")
     .getByRole("button", { name: "Close", exact: true }).click();
-  await page.getByRole("dialog", { name: "Save generated content?" })
-    .getByRole("button", { name: "Save and exit", exact: true }).click();
+  await page.getByRole("dialog", { name: "Leave now" })
+    .getByRole("button", { name: "Save drafts and Exit", exact: true }).click();
   await page.locator(".combined-target-card").click();
   await page.locator(".v4-summary-modal").getByRole("button", { name: "Review Drafts" }).click();
   await page.locator(".v4-context-preview")

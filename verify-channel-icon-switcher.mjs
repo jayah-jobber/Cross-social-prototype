@@ -13,6 +13,17 @@ const saturdayCard = () => page.locator(".calendar-day")
 const context = () => page.locator(".v4-five-channel-modal:not(.v4-generated-review)");
 const review = () => page.locator(".v4-channel-review");
 
+async function waitForContextChannel(channel) {
+  await page.waitForFunction(
+    (expected) => (
+      document.querySelector(
+        ".v4-five-channel-modal:not(.v4-generated-review) .v4-context-body",
+      )?.getAttribute("data-channel") === expected
+    ),
+    channel.toLowerCase(),
+  );
+}
+
 async function openV4Context() {
   await page.getByRole("button", { name: "Version 1", exact: true }).click();
   await page.getByRole("button", { name: "Version 4", exact: true }).click();
@@ -79,6 +90,7 @@ async function assertLeftAligned(scope, {
   contentSelector,
   closeInset,
 }) {
+  await page.waitForTimeout(320);
   const geometry = await scope.evaluate((surface, selectors) => {
     const surfaceBox = surface.getBoundingClientRect();
     const switcherBox = surface.querySelector(selectors.switcherSelector)?.getBoundingClientRect();
@@ -134,20 +146,24 @@ try {
 
   await google.focus();
   await google.press("ArrowRight");
+  await waitForContextChannel("Facebook");
   assert.equal(await facebook.getAttribute("aria-checked"), "true");
   assert.equal(await facebook.evaluate((node) => document.activeElement === node), true);
   await facebook.press("End");
+  await waitForContextChannel("Website");
   assert.equal(
     await switcher.getByRole("radio", { name: "Website", exact: true })
       .getAttribute("aria-checked"),
     "true",
   );
   await switcher.getByRole("radio", { name: "Website", exact: true }).press("Home");
+  await waitForContextChannel("Google");
   assert.equal(await google.getAttribute("aria-checked"), "true");
 
   await context().locator(".v4-context-footer")
     .getByRole("button", { name: "Schedule Google post", exact: true })
     .click();
+  await context().getByRole("heading", { name: "About this Facebook post", exact: true }).waitFor();
   switcher = context().locator(".channel-icon-switcher--modal-v4");
   google = switcher.getByRole("radio", { name: "Google", exact: true });
   facebook = switcher.getByRole("radio", { name: "Facebook", exact: true });

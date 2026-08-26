@@ -181,8 +181,8 @@ try {
     exact: true,
   }).click();
   await generatedReview().getByRole("button", { name: "Close", exact: true }).click();
-  await page.getByRole("dialog", { name: "Save generated content?" })
-    .getByRole("button", { name: "Save and exit", exact: true }).click();
+  await page.getByRole("dialog", { name: "Leave now" })
+    .getByRole("button", { name: "Save drafts and Exit", exact: true }).click();
   const sentGoogleCard = page.locator(".calendar-day").filter({
     has: page.getByRole("heading", { name: "Friday, Nov 6", exact: true }),
   }).locator(".generated-delivery-card");

@@ -81,8 +81,8 @@ try {
     version: "Version 4",
     modalSelector: ".v4-five-channel-modal",
     switcherSelector: ".channel-icon-switcher--modal-v4",
-    copySelector: ".v4-about-copy > p",
-    headingSelector: ".v4-about-heading h2",
+    copySelector: ".v4-sliding-panel--text.is-active .v4-about-copy > p",
+    headingSelector: ".v4-sliding-panel--text.is-active .v4-about-heading h2",
   });
 
   if (verifyV5) {

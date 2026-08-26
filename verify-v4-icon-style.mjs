@@ -193,6 +193,7 @@ try {
   await modal.locator(".v4-context-footer")
     .getByRole("button", { name: "Schedule Google post", exact: true })
     .click();
+  await modal.getByRole("heading", { name: "About this Facebook post", exact: true }).waitFor();
   modal = v4Modal();
   await modal.waitFor();
   switcher = modal.locator(".channel-icon-switcher--modal-v4");

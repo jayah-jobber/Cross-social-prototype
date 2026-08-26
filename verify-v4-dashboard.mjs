@@ -14,6 +14,7 @@ const dashboard = () => page.locator(".v4-dashboard-page");
 const generatedFlow = () => page.locator(".v4-generated-flow-shell");
 const dashboardLoading = () => dashboard().locator(".v4-dashboard-context-loading");
 const dashboardSummary = () => dashboard().locator(".v4-dashboard-generated-summary");
+const calendarSummary = () => generatedFlow().locator(".v4-summary-modal--generated");
 const generatedReview = () => page.locator(".v4-generated-review");
 const promotionPrompt = "Create a 15% Christmas promotion for winter landscaping services across Google, Facebook, Instagram, and Email.";
 
@@ -57,6 +58,52 @@ async function generateFromDashboard(prompt) {
   assert.equal(await generatedFlow().count(), 0);
   assert.equal(await dashboard().count(), 1);
   await dashboardSummary().waitFor({ timeout: 8000 });
+}
+
+async function assertGeneratedSummaryIconGeometry(scope, rowSelector) {
+  const geometry = await scope.locator(rowSelector).evaluateAll((rows) => rows.map((row) => {
+    const wrapper = row.querySelector(".channel-icon");
+    const glyph = wrapper?.querySelector("img, svg");
+    if (!wrapper || !glyph) throw new Error("Generated summary channel icon is incomplete");
+    const wrapperBox = wrapper.getBoundingClientRect();
+    const glyphBox = glyph.getBoundingClientRect();
+    const wrapperStyle = getComputedStyle(wrapper);
+    const glyphStyle = getComputedStyle(glyph);
+    return {
+      channel: wrapper.getAttribute("data-channel"),
+      wrapper: [wrapperStyle.width, wrapperStyle.height],
+      glyph: [glyphStyle.width, glyphStyle.height],
+      maxSize: [glyphStyle.maxWidth, glyphStyle.maxHeight],
+      transform: glyphStyle.transform,
+      centerDelta: [
+        Math.abs(
+          wrapperBox.left + wrapperBox.width / 2 - (glyphBox.left + glyphBox.width / 2),
+        ),
+        Math.abs(
+          wrapperBox.top + wrapperBox.height / 2 - (glyphBox.top + glyphBox.height / 2),
+        ),
+      ],
+    };
+  }));
+  assert.deepEqual(
+    geometry.map(({ channel, wrapper, glyph, maxSize, transform }) => ({
+      channel,
+      wrapper,
+      glyph,
+      maxSize,
+      transform,
+    })),
+    [
+      ...["google", "facebook", "instagram", "email"].map((channel) => ({
+        channel,
+        wrapper: ["24px", "24px"],
+        glyph: channel === "google" ? ["20px", "20px"] : ["24px", "24px"],
+        maxSize: ["none", "none"],
+        transform: "none",
+      })),
+    ],
+  );
+  assert.ok(geometry.every(({ centerDelta }) => centerDelta.every((delta) => delta <= 0.5)));
 }
 
 try {
@@ -279,6 +326,10 @@ try {
   await generateFromDashboard("Promote winter landscaping from the dashboard");
   await dashboardSummary().getByRole("heading", { name: "15% promotion", exact: true }).waitFor();
   assert.equal(await dashboardSummary().getByRole("switch").count(), 4);
+  await assertGeneratedSummaryIconGeometry(
+    dashboardSummary(),
+    ".v4-dashboard-generated-channel",
+  );
   await entryControl().getByRole("button", { name: "Calendar", exact: true }).click();
   await page.locator(".calendar-page").waitFor();
   await entryControl().getByRole("button", { name: "Dashboard", exact: true }).click();
@@ -316,13 +367,33 @@ try {
   assert.equal(await generatedFlow().count(), 0);
   assert.equal(await page.getByLabel("Edit marketing content prompt").count(), 0);
   await generatedReview().getByRole("button", { name: "Close", exact: true }).click();
-  await page.getByRole("dialog", { name: "Save generated content?" })
-    .getByRole("button", { name: "Save and exit", exact: true }).click();
+  await page.getByRole("dialog", { name: "Leave now" })
+    .getByRole("button", { name: "Save drafts and Exit", exact: true }).click();
   await dashboard().waitFor();
 
   await entryControl().getByRole("button", { name: "Calendar", exact: true }).click();
   await page.locator(".calendar-page").waitFor();
   assert.equal(await dashboard().count(), 0);
+
+  // Calendar and Dashboard proposal selections reset independently between entry surfaces.
+  await page.getByLabel("Add to your marketing calendar").fill("Calendar selection isolation");
+  await page.getByRole("button", { name: "Generate suggested marketing content" }).click();
+  await calendarSummary().waitFor({ timeout: 8000 });
+  assert.deepEqual(
+    await calendarSummary().getByRole("switch").evaluateAll((switches) => (
+      switches.map((toggle) => toggle.getAttribute("aria-label"))
+    )),
+    ["Disable Google", "Disable Facebook", "Disable Instagram", "Disable Email"],
+  );
+  await calendarSummary().getByRole("switch", { name: "Disable Facebook", exact: true }).click();
+  await entryControl().getByRole("button", { name: "Dashboard", exact: true }).click();
+  await generateFromDashboard("Dashboard selection isolation");
+  assert.deepEqual(
+    await dashboardSummary().getByRole("switch").evaluateAll((switches) => (
+      switches.map((toggle) => toggle.getAttribute("aria-label"))
+    )),
+    ["Disable Google", "Disable Facebook", "Disable Instagram", "Disable Email"],
+  );
 
   await page.getByRole("button", { name: "Version 5", exact: true }).click();
   assert.equal(await entryControl().count(), 0);

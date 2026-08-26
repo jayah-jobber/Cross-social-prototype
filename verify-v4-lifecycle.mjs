@@ -58,6 +58,16 @@ async function selectModalChannel(channel) {
   await modal().locator(".channel-icon-switcher--modal-v4")
     .getByRole("radio", { name: channel, exact: true })
     .click();
+  await page.waitForFunction(
+    (expected) => (
+      document.querySelector(".v4-five-channel-modal .v4-context-body")
+        ?.getAttribute("data-channel") === expected
+    ),
+    channel.toLowerCase(),
+  );
+  await modal().locator(".v4-context-body").evaluate(async (body) => {
+    await Promise.all(body.getAnimations().map((animation) => animation.finished));
+  });
 }
 
 async function deleteCurrentFromModal(buttonName = "Delete Post") {
@@ -224,6 +234,7 @@ try {
   await selectModalChannel("Instagram");
   await postCurrentNow();
   await page.getByText("Your Instagram post has been successfully posted.", { exact: true }).waitFor();
+  await modal().getByRole("heading", { name: "About this email campaign", exact: true }).waitFor();
   await expectSelection("4 of 5");
   await modal().getByRole("button", { name: "Close", exact: true }).click();
   assert.deepEqual(await cardChannels("Friday, Nov 6"), ["◎Instagram post"]);
@@ -266,6 +277,7 @@ try {
   for (let index = 0; index < 5; index += 1) {
     await postCurrentNow();
   }
+  await modal().waitFor({ state: "detached" });
   await page.getByRole("heading", { name: "Marketing Plan" }).waitFor();
   assert.equal(await modal().count(), 0);
   assert.equal(await campaignCard("Saturday, Nov 7").count(), 0);
@@ -293,6 +305,7 @@ try {
     "Your Google post has been successfully scheduled.",
     { exact: true },
   ).waitFor();
+  await modal().getByRole("heading", { name: "About this Facebook post", exact: true }).waitFor();
   await expectSelection("2 of 5");
   await selectModalChannel("Google");
   await modalFooter().getByRole("button", { name: "Show scheduled post options" }).click();

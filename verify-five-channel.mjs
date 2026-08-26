@@ -17,8 +17,11 @@ const generatedChannels = channels.filter(({ id }) => id !== "website");
 
 const generatedReview = () => page.locator(".v4-generated-review");
 const generatedSwitcher = () => generatedReview().locator(".channel-icon-switcher--modal-v4");
+const activePreview = (scope = page) => scope.locator(
+  ".v4-sliding-panel--card.is-active .v4-context-preview",
+);
 const suggestedFooterEdit = () => generatedReview()
-  .locator(".v4-context-footer")
+  .locator(".v4-sliding-panel--text.is-active .v4-context-footer")
   .getByRole("button", { name: "Edit" });
 const contentEdit = () => page.locator(".review-field").first().getByRole("button", { name: "Edit" });
 const reviewBack = () => page.locator(".review-footer").getByRole("button", { name: "Back" });
@@ -79,7 +82,7 @@ async function verifyChannel(channel, index) {
   await channelButton.click();
   if (channel.id === "instagram") {
     assert.equal(
-      (await generatedReview().locator(".v4-context-preview").textContent()).includes("facebook-saved"),
+      (await activePreview(generatedReview()).textContent()).includes("facebook-saved"),
       false,
       "Suggested Facebook edits must not change the Instagram draft",
     );
@@ -149,11 +152,11 @@ async function verifyChannel(channel, index) {
   await reviewBack().click();
   await generatedReview().locator("#v4-context-title").waitFor();
   assert.equal(await generatedReview().locator("#v4-context-title").textContent(), "15% promotion");
-  assert.ok((await generatedReview().locator(".v4-context-preview").textContent()).includes(saveMarker));
+  assert.ok((await activePreview(generatedReview()).textContent()).includes(saveMarker));
 
   if (channel.id === "instagram") {
     await generatedSwitcher().getByRole("radio", { name: "Facebook", exact: true }).click();
-    const facebookPreview = await generatedReview().locator(".v4-context-preview").textContent();
+    const facebookPreview = await activePreview(generatedReview()).textContent();
     assert.ok(facebookPreview.includes("facebook-saved"));
     assert.equal(
       facebookPreview.includes("instagram-saved"),
@@ -190,13 +193,14 @@ try {
   }
 
   await generatedReview().getByRole("button", { name: "Close", exact: true }).click();
-  await page.getByRole("dialog", { name: "Save generated content?" })
-    .getByRole("button", { name: "Save and exit", exact: true }).click();
+  await page.getByRole("dialog", { name: "Leave now" })
+    .getByRole("button", { name: "Save drafts and Exit", exact: true }).click();
   await page.locator(".combined-target-card").click();
   await page.locator(".v4-summary-modal").getByRole("button", { name: "Review Drafts" }).click();
   const modalSwitcher = page.locator(".channel-icon-switcher--modal-v4");
   await modalSwitcher.getByRole("radio", { name: "Facebook", exact: true }).click();
-  await page.locator(".v4-context-footer").getByRole("button", { name: "Edit" }).click();
+  await page.locator(".v4-sliding-panel--text.is-active .v4-context-footer")
+    .getByRole("button", { name: "Edit" }).click();
   await expectHeading("Review Facebook Post");
   await contentEdit().click();
   await page.locator("#v4-social-message").fill("saturday-facebook-saved");
@@ -216,11 +220,12 @@ try {
   assert.equal(await page.locator(".v4-context-navigation-controls").count(), 0);
   await modalSwitcher.getByRole("radio", { name: "Instagram", exact: true }).click();
   assert.equal(
-    (await page.locator(".v4-context-preview").textContent()).includes("saturday-facebook-saved"),
+    (await activePreview().textContent()).includes("saturday-facebook-saved"),
     false,
     "Saturday Facebook edits must not change the Instagram draft",
   );
-  await page.locator(".v4-context-footer").getByRole("button", { name: "Edit" }).click();
+  await page.locator(".v4-sliding-panel--text.is-active .v4-context-footer")
+    .getByRole("button", { name: "Edit" }).click();
   await expectHeading("Review Instagram Post");
   await contentEdit().click();
   await page.locator("#v4-social-message").fill("saturday-instagram-saved");
@@ -232,7 +237,7 @@ try {
   );
   await reviewBack().click();
   await modalSwitcher.getByRole("radio", { name: "Facebook", exact: true }).click();
-  const saturdayFacebookPreview = await page.locator(".v4-context-preview").textContent();
+  const saturdayFacebookPreview = await activePreview().textContent();
   assert.ok(saturdayFacebookPreview.includes("saturday-facebook-saved"));
   assert.equal(
     saturdayFacebookPreview.includes("saturday-instagram-saved"),

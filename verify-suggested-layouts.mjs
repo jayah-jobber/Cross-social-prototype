@@ -63,8 +63,8 @@ try {
   await page.locator(".review-footer").getByRole("button", { name: "Back" }).click();
   await generatedReview.getByRole("radio", { name: "Email", exact: true }).waitFor();
   await generatedReview.getByRole("button", { name: "Close", exact: true }).click();
-  await page.getByRole("dialog", { name: "Save generated content?" })
-    .getByRole("button", { name: "Save and exit", exact: true }).click();
+  await page.getByRole("dialog", { name: "Leave now" })
+    .getByRole("button", { name: "Save drafts and Exit", exact: true }).click();
 
   await selectVersion("Version 5");
   await openSuggested("V5 suggested layout prompt", "v5");

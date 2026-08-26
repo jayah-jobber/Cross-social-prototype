@@ -149,6 +149,7 @@ try {
     .getByRole("button", { name: "Show publishing options" })
     .click();
   await context().getByRole("menuitem", { name: "Post now and view next", exact: true }).click();
+  await context().getByRole("heading", { name: "About this email campaign", exact: true }).waitFor();
   assert.equal(
     await context().locator(".channel-icon-switcher--modal-v4").getByRole("radio").count(),
     5,
@@ -315,8 +316,8 @@ try {
     .getByRole("button", { name: "Schedule Email", exact: true })
     .click();
   await generatedReview.getByRole("button", { name: "Close", exact: true }).click();
-  await page.getByRole("dialog", { name: "Save generated content?" })
-    .getByRole("button", { name: "Save and exit", exact: true })
+  await page.getByRole("dialog", { name: "Leave now" })
+    .getByRole("button", { name: "Save drafts and Exit", exact: true })
     .click();
 
   assert.equal(await generatedCard("Saturday, Nov 7").count(), 1);
@@ -353,8 +354,8 @@ try {
       true,
     );
     await context().getByRole("button", { name: "Close", exact: true }).click();
-    await page.getByRole("dialog", { name: "Save generated content?" })
-      .getByRole("button", { name: "Save and exit", exact: true })
+    await page.getByRole("dialog", { name: "Leave now" })
+      .getByRole("button", { name: "Save drafts and Exit", exact: true })
       .click();
   }
 

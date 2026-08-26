@@ -121,7 +121,9 @@ try {
     .getByRole("radio", { name: "Facebook", exact: true })
     .click();
   assert.equal(
-    (await page.locator(".v4-context-preview").textContent()).includes("v5-only-contact"),
+    (await page.locator(
+      ".v4-sliding-panel--card.is-active .v4-context-preview",
+    ).textContent()).includes("v5-only-contact"),
     false,
     "V5 content must not leak into V4",
   );

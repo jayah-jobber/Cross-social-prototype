@@ -12,6 +12,12 @@ const generatedReview = () => page.locator(".v4-generated-review");
 const reopenedReview = () => page.locator(".v4-five-channel-modal:not(.v4-generated-review)");
 const generatedCard = () => page.locator(".generated-delivery-card");
 const originalCard = () => page.locator(".combined-target-card");
+const activePreview = (reviewer) => (
+  reviewer.locator(".v4-sliding-panel--card.is-active .v4-context-preview")
+);
+const activeFooter = (reviewer) => (
+  reviewer.locator(".v4-sliding-panel--text.is-active .v4-context-footer")
+);
 
 async function generateSuggestion(prompt) {
   await page.getByLabel("Add to your marketing calendar").fill(prompt);
@@ -24,17 +30,17 @@ async function waitForFirstPreviewLoad(reviewer, channel) {
   const startedAt = Date.now();
   await reviewer.getByRole("status", { name: `Loading ${channel} preview` }).waitFor();
   assert.equal(await glimmer.locator(".v4-preview-glimmer-block").count(), 2);
-  assert.equal(await reviewer.locator(".v4-context-preview").getAttribute("aria-busy"), "true");
+  assert.equal(await activePreview(reviewer).getAttribute("aria-busy"), "true");
   await glimmer.waitFor({ state: "detached", timeout: 4500 });
   const elapsed = Date.now() - startedAt;
   assert.ok(elapsed >= 2900, `preview loading ended too early (${elapsed}ms)`);
   assert.ok(elapsed < 3800, `preview loading ended too late (${elapsed}ms)`);
-  assert.equal(await reviewer.locator(".v4-context-preview").getAttribute("aria-busy"), "false");
+  assert.equal(await activePreview(reviewer).getAttribute("aria-busy"), "false");
 }
 
 async function expectPreviewImmediate(reviewer, channel) {
   assert.equal(await reviewer.locator(".v4-preview-glimmer").count(), 0);
-  assert.equal(await reviewer.locator(".v4-context-preview").getAttribute("aria-busy"), "false");
+  assert.equal(await activePreview(reviewer).getAttribute("aria-busy"), "false");
   assert.equal(
     await reviewer.getByRole("radio", { name: channel, exact: true })
       .getAttribute("aria-checked"),
@@ -51,7 +57,7 @@ async function selectChannel(reviewer, channel, firstLoad) {
 async function deleteCurrent(reviewer) {
   const glimmer = reviewer.locator(".v4-preview-glimmer");
   if (await glimmer.count()) await glimmer.waitFor({ state: "detached", timeout: 4500 });
-  await reviewer.locator(".v4-context-footer")
+  await activeFooter(reviewer)
     .getByRole("button", { name: "Delete", exact: true })
     .click();
   await page.getByRole("dialog", { name: "Improve future recommendations" })
@@ -93,11 +99,16 @@ try {
   await generatedReview().getByRole("status", { name: "Loading Google preview" }).waitFor();
   assert.equal(await page.getByLabel("Edit marketing content prompt").count(), 0);
   assert.equal(await generatedReview().getByRole("heading", { name: "15% promotion" }).count(), 1);
-  assert.equal(await generatedReview().locator(".v4-context-facts").count(), 1);
+  assert.equal(
+    await generatedReview()
+      .locator(".v4-sliding-panel--text.is-active .v4-context-facts")
+      .count(),
+    1,
+  );
   assert.equal(await generatedReview().locator(".v4-preview-glimmer-block").count(), 2);
   assert.equal(await generatedReview().locator(".context-navigation-header").evaluate((node) => node.inert), true);
-  assert.equal(await generatedReview().locator(".v4-context-footer").evaluate((node) => node.inert), true);
-  await generatedReview().locator(".v4-context-footer")
+  assert.equal(await activeFooter(generatedReview()).evaluate((node) => node.inert), true);
+  await activeFooter(generatedReview())
     .getByRole("button", { name: "Schedule Google post", exact: true })
     .evaluate((button) => button.click());
   assert.equal(await generatedCard().locator(".channel-status-dot").count(), 0);
@@ -106,7 +117,7 @@ try {
   const firstLoadElapsed = Date.now() - firstLoadStartedAt;
   assert.ok(firstLoadElapsed >= 2900, `preview loading ended too early (${firstLoadElapsed}ms)`);
   assert.ok(firstLoadElapsed < 3800, `preview loading ended too late (${firstLoadElapsed}ms)`);
-  assert.equal(await generatedReview().locator(".social-card").count(), 1);
+  assert.equal(await activePreview(generatedReview()).locator(".social-card").count(), 1);
 
   // Each channel loads once; revisiting Google or Facebook is immediate.
   await selectChannel(generatedReview(), "Facebook", true);
@@ -116,15 +127,15 @@ try {
   await selectChannel(generatedReview(), "Google", false);
 
   // Delivered status behavior remains intact alongside still-draft channels.
-  await generatedReview().locator(".v4-context-footer")
+  await activeFooter(generatedReview())
     .getByRole("button", { name: "Schedule Google post", exact: true })
     .click();
   assert.equal(await generatedCard().locator(".status-scheduled").count(), 1);
   assert.match(await generatedCard().locator(".calendar-card-details").textContent(), /Needs review/);
 
   await generatedReview().getByRole("button", { name: "Close", exact: true }).click();
-  await page.getByRole("dialog", { name: "Save generated content?" })
-    .getByRole("button", { name: "Save and exit", exact: true }).click();
+  await page.getByRole("dialog", { name: "Leave now" })
+    .getByRole("button", { name: "Save drafts and Exit", exact: true }).click();
   await generatedReview().waitFor({ state: "detached" });
   assert.equal(await generatedCard().count(), 1);
 

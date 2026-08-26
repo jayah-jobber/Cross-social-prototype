@@ -217,8 +217,8 @@ try {
     .click();
   await contextModal().getByRole("menuitem", { name: "Post now and view next", exact: true }).click();
   await contextModal().getByRole("button", { name: "Close", exact: true }).click();
-  await page.getByRole("dialog", { name: "Save generated content?" })
-    .getByRole("button", { name: "Save and exit", exact: true }).click();
+  await page.getByRole("dialog", { name: "Leave now" })
+    .getByRole("button", { name: "Save drafts and Exit", exact: true }).click();
   const sentGeneratedCard = page.locator(".calendar-day").filter({
     has: page.getByRole("heading", { name: "Friday, Nov 6", exact: true }),
   }).locator(".generated-delivery-card");
@@ -231,8 +231,8 @@ try {
 
   // Other prototype versions never receive the V4-only content badge.
   await page.getByRole("button", { name: "Version 5", exact: true }).click();
-  await page.getByRole("dialog", { name: "Save generated content?" })
-    .getByRole("button", { name: "Save and exit", exact: true }).click();
+  await page.getByRole("dialog", { name: "Leave now" })
+    .getByRole("button", { name: "Save drafts and Exit", exact: true }).click();
   assert.equal(await page.locator(".v4-content-status").count(), 0);
 
   console.log(

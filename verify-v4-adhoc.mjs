@@ -222,7 +222,10 @@ try {
     name: "About this Google post",
     exact: true,
   }).waitFor();
-  await contextModal().getByText("Suggested", { exact: true }).waitFor();
+  await contextModal()
+    .locator(".v4-sliding-panel--text.is-active")
+    .getByText("Suggested", { exact: true })
+    .waitFor();
   await contextModal().getByRole("button", { name: "Close", exact: true }).click();
   await adhoc().waitFor();
   assert.equal(await childRows().count(), 5);

@@ -109,7 +109,8 @@ try {
   assert.equal(await generatedSummary().locator(".v4-summary-collage").count(), 0);
   assert.equal(await generatedSummary().locator(".v4-summary-image-placeholder").count(), 0);
   assert.equal(await generatedSummary().locator(".v4-summary-body--text-only").count(), 0);
-  assert.equal(await generatedSummary().getByText("Suggested", { exact: true }).count(), 4);
+  assert.equal(await generatedSummary().getByRole("switch").count(), 4);
+  assert.equal(await generatedSummary().getByText("Suggested", { exact: true }).count(), 0);
   assert.equal(await generatedSummary().getByText(/Recommended/).count(), 0);
   assert.equal(await generatedSummary().getByText("Schedule date:", { exact: true }).count(), 0);
   await page.screenshot({ path: "/tmp/v4-generated-summary.png" });
@@ -125,6 +126,11 @@ try {
   await loading().getByRole("status", { name: stages[0][0] }).waitFor();
   await verifyLoadingSequence();
   assert.equal(await promptInput().inputValue(), "Promote spring cleanup");
+  assert.ok(
+    (await generatedSummary().getByRole("switch").evaluateAll((switches) => (
+      switches.map((toggle) => toggle.getAttribute("aria-checked"))
+    ))).every((checked) => checked === "true"),
+  );
   await generatedSummary().getByRole("button", { name: "Review Drafts", exact: true }).click();
   await generatedReview().waitFor();
   await assertGeneratedStatusControlsAbsent();
@@ -136,6 +142,7 @@ try {
     name: "REVIEW MULTIPLE CHANNELS",
     exact: true,
   }).count(), 0);
+  await page.waitForTimeout(320);
   const generatedHeaderGeometry = await generatedReview().evaluate((review) => {
     const modal = review.getBoundingClientRect();
     const switcher = review.querySelector(".channel-icon-switcher")?.getBoundingClientRect();
@@ -172,8 +179,8 @@ try {
 
   // P2 close is guarded; Save preserves the generated calendar campaign.
   await generatedReview().getByRole("button", { name: "Close", exact: true }).click();
-  const exitDialog = page.getByRole("dialog", { name: "Save generated content?" });
-  await exitDialog.getByRole("button", { name: "Save and exit", exact: true }).click();
+  const exitDialog = page.getByRole("dialog", { name: "Leave now" });
+  await exitDialog.getByRole("button", { name: "Save drafts and Exit", exact: true }).click();
   await generatedReview().waitFor({ state: "detached" });
   assert.equal(await page.getByRole("heading", { name: "Marketing Plan" }).count(), 1);
   await submitFromCalendar("Review close behavior", "enter");
@@ -236,7 +243,7 @@ try {
     "none",
   );
   await generatedReview().getByRole("button", { name: "Close", exact: true }).click();
-  await exitDialog.getByRole("button", { name: "Discard and exit", exact: true }).click();
+  await exitDialog.getByRole("button", { name: "Discard and Exit", exact: true }).click();
   await page.emulateMedia({ reducedMotion: "no-preference" });
 
   // V5 retains its original loader and vertical generated-content flow.

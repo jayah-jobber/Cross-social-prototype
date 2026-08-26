@@ -82,6 +82,63 @@ async function waitForGeneratedPreviewReady(review) {
   ).waitFor({ timeout: 4500 });
 }
 
+async function waitForContextChannel(channel) {
+  await page.waitForFunction(
+    (expected) => (
+      document.querySelector(".v4-five-channel-modal .v4-context-body")
+        ?.getAttribute("data-channel") === expected
+    ),
+    channel.toLowerCase(),
+  );
+}
+
+async function assertGeneratedSummaryIconGeometry(scope) {
+  const geometry = await scope.locator(".v4-summary-status-list > li")
+    .evaluateAll((rows) => rows.map((row) => {
+      const wrapper = row.querySelector(".channel-icon");
+      const glyph = wrapper?.querySelector("img, svg");
+      if (!wrapper || !glyph) throw new Error("Generated summary channel icon is incomplete");
+      const wrapperBox = wrapper.getBoundingClientRect();
+      const glyphBox = glyph.getBoundingClientRect();
+      const wrapperStyle = getComputedStyle(wrapper);
+      const glyphStyle = getComputedStyle(glyph);
+      return {
+        channel: wrapper.getAttribute("data-channel"),
+        wrapper: [wrapperStyle.width, wrapperStyle.height],
+        glyph: [glyphStyle.width, glyphStyle.height],
+        maxSize: [glyphStyle.maxWidth, glyphStyle.maxHeight],
+        transform: glyphStyle.transform,
+        centerDelta: [
+          Math.abs(
+            wrapperBox.left + wrapperBox.width / 2 - (glyphBox.left + glyphBox.width / 2),
+          ),
+          Math.abs(
+            wrapperBox.top + wrapperBox.height / 2 - (glyphBox.top + glyphBox.height / 2),
+          ),
+        ],
+      };
+    }));
+  assert.deepEqual(
+    geometry.map(({ channel, wrapper, glyph, maxSize, transform }) => ({
+      channel,
+      wrapper,
+      glyph,
+      maxSize,
+      transform,
+    })),
+    [
+      ...["google", "facebook", "instagram", "email"].map((channel) => ({
+        channel,
+        wrapper: ["24px", "24px"],
+        glyph: channel === "google" ? ["20px", "20px"] : ["24px", "24px"],
+        maxSize: ["none", "none"],
+        transform: "none",
+      })),
+    ],
+  );
+  assert.ok(geometry.every(({ centerDelta }) => centerDelta.every((delta) => delta <= 0.5)));
+}
+
 try {
   await page.goto(baseUrl, { waitUntil: "networkidle" });
   await page.getByRole("button", { name: "Version 4", exact: true }).click();
@@ -166,6 +223,7 @@ try {
     exact: true,
   }).count(), 0);
   assert.equal(await contextModal().getAttribute("aria-labelledby"), "v4-context-title");
+  await page.waitForTimeout(320);
   const reviewHeaderGeometry = await contextModal().evaluate((dialog) => {
     const modal = dialog.getBoundingClientRect();
     const switcher = dialog.querySelector(".channel-icon-switcher")?.getBoundingClientRect();
@@ -179,18 +237,23 @@ try {
       closeRightDelta: Math.abs((close?.right ?? 0) - (modal.right - 32)),
     };
   });
-  assert.ok(reviewHeaderGeometry.leftDelta <= 1);
+  assert.ok(
+    reviewHeaderGeometry.leftDelta <= 1,
+    JSON.stringify(reviewHeaderGeometry),
+  );
   assert.ok(reviewHeaderGeometry.centerDelta >= 40);
   assert.ok(reviewHeaderGeometry.closeRightDelta <= 1);
   const modalSwitcher = contextModal().locator(".channel-icon-switcher--modal-v4");
   await modalSwitcher.getByRole("radio", { name: "Google", exact: true }).focus();
   await page.keyboard.press("ArrowRight");
+  await waitForContextChannel("Facebook");
   assert.equal(
     await modalSwitcher.getByRole("radio", { name: "Facebook", exact: true })
       .getAttribute("aria-checked"),
     "true",
   );
   await modalSwitcher.getByRole("radio", { name: "Google", exact: true }).click();
+  await waitForContextChannel("Google");
   await page.screenshot({ path: "/tmp/v4-calendar-review.png" });
   assert.deepEqual(
     await contextModal().locator(".channel-icon-switcher--modal-v4 img").evaluateAll((images) => (
@@ -262,6 +325,7 @@ try {
   await startCardReview();
   await contextModal().locator(".channel-icon-switcher--modal-v4")
     .getByRole("radio", { name: "Facebook", exact: true }).click();
+  await waitForContextChannel("Facebook");
   await contextModal().locator(".v4-context-footer")
     .getByRole("button", { name: "Delete", exact: true }).click();
   await page.getByRole("dialog", { name: "Improve future recommendations" })
@@ -302,7 +366,25 @@ try {
     await page.locator(".v4-generated-flow-shell").getByLabel("Edit marketing content prompt").inputValue(),
     "Promote fall cleanup",
   );
-  assert.ok((await summaryRows().allTextContents()).every((text) => text.includes("Suggested")));
+  assert.equal(await summary().getByText("Create drafts for:", { exact: true }).count(), 1);
+  assert.equal(await summary().getByRole("switch").count(), 4);
+  assert.deepEqual(
+    await summary().getByRole("switch").evaluateAll((switches) => (
+      switches.map((toggle) => [
+        toggle.getAttribute("aria-label"),
+        toggle.getAttribute("aria-checked"),
+      ])
+    )),
+    [
+      ["Disable Google", "true"],
+      ["Disable Facebook", "true"],
+      ["Disable Instagram", "true"],
+      ["Disable Email", "true"],
+    ],
+  );
+  assert.equal(await summary().locator(".v4-content-status").count(), 0);
+  assert.equal(await summary().getByText("Suggested", { exact: true }).count(), 0);
+  await assertGeneratedSummaryIconGeometry(summary());
   assert.equal(await summary().getByText(/Recommended/).count(), 0);
   await summary().getByRole("button", { name: "Review Drafts", exact: true }).click();
   const generatedReview = page.locator(".v4-generated-review");
@@ -326,6 +408,7 @@ try {
   assert.equal(await generatedReview.locator(`img[src="${summaryArtworkPath}"]`).count(), 0);
   const generatedSwitcher = generatedReview.locator(".channel-icon-switcher--modal-v4");
   await generatedSwitcher.getByRole("radio", { name: "Facebook", exact: true }).click();
+  await waitForContextChannel("Facebook");
   await waitForGeneratedPreviewReady(generatedReview);
   assert.equal(
     await generatedReview.getByText(/Christmas Special: Save 15% on Winter Landscaping Services/).count(),
@@ -333,6 +416,7 @@ try {
   );
   assert.equal(await generatedReview.locator(".channel-image-grid").count(), 0);
   await generatedSwitcher.getByRole("radio", { name: "Instagram", exact: true }).click();
+  await waitForContextChannel("Instagram");
   await waitForGeneratedPreviewReady(generatedReview);
   assert.equal(
     await generatedReview.getByText(/Christmas Special: Save 15% on Winter Landscaping Services/).count(),
@@ -352,6 +436,7 @@ try {
     true,
   );
   await generatedSwitcher.getByRole("radio", { name: "Email", exact: true }).click();
+  await waitForContextChannel("Email");
   await waitForGeneratedPreviewReady(generatedReview);
   assert.equal(
     await generatedReview.getByText(/Subject: Save 15% on your next landscaping project/).count(),
@@ -363,16 +448,17 @@ try {
   );
   assert.equal(await generatedReview.locator(".email-hero").count(), 0);
   await generatedSwitcher.getByRole("radio", { name: "Google", exact: true }).click();
+  await waitForContextChannel("Google");
   await waitForGeneratedPreviewReady(generatedReview);
   assert.equal(await generatedReview.getByRole("button", { name: "Close", exact: true }).count(), 1);
   assert.equal(await page.getByLabel("Edit marketing content prompt").count(), 0);
   assert.equal(await page.locator(".prototype-status-controls").count(), 0);
   await generatedReview.locator(".v4-context-footer")
     .getByRole("button", { name: "Schedule Google post", exact: true }).click();
-  await generatedReview.getByRole("radio", { name: "Facebook", exact: true }).waitFor();
+  await waitForContextChannel("Facebook");
   await generatedReview.getByRole("button", { name: "Close", exact: true }).click();
-  await page.getByRole("dialog", { name: "Save generated content?" })
-    .getByRole("button", { name: "Save and exit", exact: true }).click();
+  await page.getByRole("dialog", { name: "Leave now" })
+    .getByRole("button", { name: "Save drafts and Exit", exact: true }).click();
 
   // V5 remains on its existing contextual modal and never renders Summary.
   await page.getByRole("button", { name: "Version 5", exact: true }).click();
