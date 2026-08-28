@@ -88,6 +88,10 @@ import {
   V4CalendarTaskModal,
   type V4CalendarTaskId,
 } from "./V4CalendarTasks";
+import {
+  deriveV4CampaignCardState,
+  type V4CampaignCardInputState,
+} from "./v4CampaignCardState";
 
 const INITIAL_MESSAGE = `This Hamilton property needed a seasonal refresh, starting with a clean up and mulching to bring the landscape back to a maintained state. 🌿
 
@@ -120,7 +124,7 @@ const INITIAL_IMAGES: GalleryImage[] = [
 const GENERATED_V4_PROMOTION_ARTWORK: GalleryImage = {
   id: "v4-15-percent-promotion",
   src: "/assets/v4-generated-summary-channel-artwork.png",
-  alt: "Marketing channels surrounding the Jobber logo",
+  alt: "Layered previews for Google, Facebook, Instagram, and Email",
 };
 
 const GENERATED_V4_BODY = `🎄 Christmas Special: Save 15% on Winter Landscaping Services
@@ -923,6 +927,31 @@ const CONTEXTUAL_TO_CALENDAR_CHANNEL: Record<ContextualChannel, CalendarChannel>
   website: "Website",
 };
 
+const V4_CALENDAR_CHANNEL_ORDER: CalendarChannel[] = [
+  "Google post",
+  "Instagram post",
+  "Facebook post",
+  "Email",
+  "Website",
+];
+
+const V4_CALENDAR_CHANNEL_NAMES: Record<CalendarChannel, string> = {
+  "Google post": "Google",
+  "Instagram post": "Instagram",
+  "Facebook post": "Facebook",
+  Email: "Email",
+  Website: "Website",
+};
+
+const V4_ADD_NEW_MENU_ITEMS = [
+  { id: "email", label: "Email campaign" },
+  { id: "website", label: "Website page" },
+  { id: "google", label: "Google post" },
+  { id: "facebook", label: "Facebook post" },
+  { id: "instagram", label: "Instagram post" },
+  { id: "multiple", label: "Create for Multiple Channels" },
+] as const;
+
 const STATUS_LABELS: Record<CalendarChannelStatus, string> = {
   scheduled: "Scheduled",
   sent: "Sent",
@@ -980,6 +1009,159 @@ function ChannelIcon({ channel }: { channel: CalendarChannel }) {
   return <WebsiteChannelIcon width={14} height={14} />;
 }
 
+const V4_CALENDAR_CHANNEL_ICON_SRC: Record<CalendarChannel, string> = {
+  "Google post": "/assets/v4-calendar-google.svg",
+  "Instagram post": "/assets/v4-calendar-instagram.svg",
+  "Facebook post": "/assets/v4-calendar-facebook.svg",
+  Email: "/assets/v4-calendar-email.svg",
+  Website: "/assets/v4-calendar-website.svg",
+};
+
+function V4CalendarChannelIcon({ channel }: { channel: CalendarChannel }) {
+  return (
+    <span
+      className="calendar-channel-label v4-calendar-channel-icon"
+      data-channel={V4_CALENDAR_CHANNEL_NAMES[channel].toLowerCase()}
+      aria-hidden="true"
+    >
+      <img src={V4_CALENDAR_CHANNEL_ICON_SRC[channel]} width={18} height={18} alt="" />
+    </span>
+  );
+}
+
+function V4AddNewMenuIcon({
+  item,
+}: {
+  item: (typeof V4_ADD_NEW_MENU_ITEMS)[number]["id"];
+}) {
+  if (item === "email") return <Mail size={24} strokeWidth={2} aria-hidden="true" />;
+  if (item === "website") {
+    return <WebsiteChannelIcon width={24} height={22} />;
+  }
+  if (item === "multiple") return <Sparkles size={24} strokeWidth={2} aria-hidden="true" />;
+
+  return (
+    <img
+      className="v4-add-new-social-icon"
+      src={`/assets/jobber-${item}-channel-icon.svg`}
+      width={24}
+      height={24}
+      alt=""
+      aria-hidden="true"
+    />
+  );
+}
+
+function calendarItemV4State(status: CalendarItem["status"]): V4CampaignCardInputState {
+  if (status === "Failed") return "error";
+  if (status === "Sent" || status === "Published") return "sent";
+  if (status === "Missed") return "missed";
+  if (status === "Scheduled") return "scheduled";
+  return "suggested";
+}
+
+function v4AggregateCalendarItemStatus(
+  states: readonly V4CampaignCardInputState[],
+): CalendarItem["status"] {
+  const aggregate = deriveV4CampaignCardState(states);
+  if (aggregate.state === "failed") return "Failed";
+  if (aggregate.state === "sent") return "Sent";
+  if (aggregate.state === "missed") return "Missed";
+  if (aggregate.state === "scheduled") return "Scheduled";
+  return "Needs review";
+}
+
+function V4CampaignCalendarCard({
+  title,
+  channels,
+  channelStates,
+  dateLabel,
+  className,
+  interactive,
+  onOpen,
+}: {
+  title: string;
+  channels: CalendarChannel[];
+  channelStates: V4CampaignCardInputState[];
+  dateLabel: string;
+  className: string;
+  interactive: boolean;
+  onOpen: () => void;
+}) {
+  const orderedChannels = V4_CALENDAR_CHANNEL_ORDER.filter((channel) => (
+    channels.includes(channel)
+  ));
+  const stateByChannel = new Map(channels.map((channel, index) => (
+    [channel, channelStates[index]] as const
+  )));
+  const visualState = deriveV4CampaignCardState(
+    orderedChannels.map((channel) => stateByChannel.get(channel)),
+  );
+  const singleChannel = orderedChannels.length === 1 ? orderedChannels[0] : null;
+  const accessibleName = singleChannel ? undefined : [
+    title,
+    `Channels: ${orderedChannels.map((channel) => V4_CALENDAR_CHANNEL_NAMES[channel]).join(", ")}`,
+    `Date: ${dateLabel}`,
+    `Status: ${visualState.label}`,
+  ].join(". ");
+  const content = (
+    <>
+      <span className="calendar-card-title">{title}</span>
+      <span className="v4-calendar-card-supporting">
+        <span
+          className={`v4-calendar-card-channels${singleChannel ? " is-single-channel" : ""}`}
+          aria-hidden={singleChannel ? undefined : true}
+        >
+          {orderedChannels.map((channel) => (
+            <V4CalendarChannelIcon channel={channel} key={channel} />
+          ))}
+          {singleChannel && (
+            <span className="v4-calendar-single-channel-label">
+              {V4_CALENDAR_CHANNEL_NAMES[singleChannel]}
+            </span>
+          )}
+        </span>
+        <span className="calendar-card-details v4-calendar-card-details">
+          <span className="v4-calendar-card-metadata-row">
+            <img src="/assets/v4-calendar-date.svg" width={16} height={16} alt="" aria-hidden="true" />
+            <span>{dateLabel}</span>
+          </span>
+          <span className="v4-calendar-card-metadata-row">
+            <img src="/assets/v4-calendar-status.svg" width={16} height={16} alt="" aria-hidden="true" />
+            <span>{visualState.label}</span>
+          </span>
+        </span>
+      </span>
+      {visualState.state === "sent" && (
+        <CheckCircle2
+          className="card-success v4-calendar-card-success"
+          size={16}
+          fill="#388523"
+          color="white"
+          strokeWidth={2}
+          aria-hidden="true"
+        />
+      )}
+    </>
+  );
+  const sharedProps = {
+    className,
+    "data-card-state": visualState.state,
+    "data-failed-count": visualState.state === "failed"
+      ? String(visualState.failedCount)
+      : undefined,
+    "aria-label": accessibleName,
+  };
+
+  return interactive ? (
+    <button {...sharedProps} type="button" onClick={onOpen}>
+      {content}
+    </button>
+  ) : (
+    <div {...sharedProps}>{content}</div>
+  );
+}
+
 function MarketingCalendarCard({
   item,
   onOpen,
@@ -991,6 +1173,8 @@ function MarketingCalendarCard({
   targetChannels,
   combinedChannels,
   channelStatuses,
+  v4CampaignDesign = false,
+  calendarDateLabel = "Nov 9",
 }: {
   item: CalendarItem;
   onOpen: () => void;
@@ -1002,6 +1186,8 @@ function MarketingCalendarCard({
   targetChannels?: CalendarChannel[];
   combinedChannels?: CalendarChannel[];
   channelStatuses?: CalendarCardStatuses;
+  v4CampaignDesign?: boolean;
+  calendarDateLabel?: string;
 }) {
   const channels = item.combinedTarget && combinedChannels
     ? combinedChannels
@@ -1017,6 +1203,40 @@ function MarketingCalendarCard({
   const statusKey = calendarCardStatusKey(item);
   const cardStatuses = item.channelStatuses
     ?? (statusKey ? channelStatuses?.[statusKey] : undefined);
+  const isInteractive = !inert && (
+    item.target
+      || (item.combinedTarget && combinedInteractive)
+      || Boolean(item.generatedDelivery)
+  );
+  const sharedClasses = [
+    "marketing-calendar-card",
+    v4CampaignDesign ? "v4-campaign-calendar-card" : "",
+    item.target || item.combinedTarget || item.generatedDelivery ? "target-card" : "",
+    item.combinedTarget ? "combined-target-card" : "",
+    updated ? "updated-card" : "",
+    item.generatedSuggestion ? "generated-suggestion-card" : "",
+    item.generatedDelivery ? "generated-delivery-card" : "",
+  ].filter(Boolean).join(" ");
+
+  if (v4CampaignDesign) {
+    const channelStates = channels.map((channel) => (
+      cardStatuses === undefined
+        ? calendarItemV4State(status)
+        : cardStatuses[channel] ?? "suggested"
+    ));
+    return (
+      <V4CampaignCalendarCard
+        title={item.title}
+        channels={channels}
+        channelStates={channelStates}
+        dateLabel={calendarDateLabel}
+        className={sharedClasses}
+        interactive={isInteractive}
+        onOpen={onOpen}
+      />
+    );
+  }
+
   const content = (
     <>
       <span className="calendar-card-title">{item.title}</span>
@@ -1038,12 +1258,6 @@ function MarketingCalendarCard({
         <CheckCircle2 className="card-success" size={15} fill="#388523" color="white" />
       )}
     </>
-  );
-
-  const isInteractive = !inert && (
-    item.target
-      || (item.combinedTarget && combinedInteractive)
-      || Boolean(item.generatedDelivery)
   );
   const interactiveClasses = [
     "marketing-calendar-card target-card",
@@ -1102,6 +1316,9 @@ function CalendarScreen({
   channelStatuses,
   v4CampaignCards,
   inertPostTitleOne = false,
+  v4CampaignDesign = false,
+  v4AddNewMenu = false,
+  onCreateMultipleChannels,
 }: {
   onOpenPost: () => void;
   onOpenCombinedPost: (
@@ -1128,7 +1345,15 @@ function CalendarScreen({
   channelStatuses?: CalendarCardStatuses;
   v4CampaignCards?: V4CampaignCalendarCard[];
   inertPostTitleOne?: boolean;
+  v4CampaignDesign?: boolean;
+  v4AddNewMenu?: boolean;
+  onCreateMultipleChannels?: (prompt: string) => void;
 }) {
+  const [addNewMenuOpen, setAddNewMenuOpen] = useState(false);
+  const [startIdeaOpen, setStartIdeaOpen] = useState(false);
+  const addNewTriggerRef = useRef<HTMLButtonElement>(null);
+  const addNewMenuRef = useRef<HTMLDivElement>(null);
+  const addNewItemRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const baseColumns = v4CampaignCards
     ? [
         ...UPDATED_CALENDAR_COLUMNS
@@ -1171,7 +1396,71 @@ function CalendarScreen({
       ))
     : baseColumns;
 
+  const closeAddNewMenu = (returnFocus = false) => {
+    setAddNewMenuOpen(false);
+    if (returnFocus) {
+      window.requestAnimationFrame(() => addNewTriggerRef.current?.focus());
+    }
+  };
+
+  useLayoutEffect(() => {
+    if (addNewMenuOpen) addNewItemRefs.current[0]?.focus();
+  }, [addNewMenuOpen]);
+
+  useEffect(() => {
+    if (!v4AddNewMenu) {
+      setAddNewMenuOpen(false);
+      setStartIdeaOpen(false);
+    }
+  }, [v4AddNewMenu]);
+
+  useEffect(() => {
+    if (!addNewMenuOpen) return;
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (
+        addNewTriggerRef.current?.contains(target)
+        || addNewMenuRef.current?.contains(target)
+      ) return;
+      setAddNewMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOnOutsidePointer);
+    return () => document.removeEventListener("pointerdown", closeOnOutsidePointer);
+  }, [addNewMenuOpen]);
+
+  const handleAddNewMenuKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const currentIndex = addNewItemRefs.current.findIndex(
+      (item) => item === document.activeElement,
+    );
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeAddNewMenu(true);
+      return;
+    }
+    if (event.key === "Tab") {
+      window.setTimeout(() => setAddNewMenuOpen(false), 0);
+      return;
+    }
+    if (event.key === "Home" || event.key === "End") {
+      event.preventDefault();
+      const nextIndex = event.key === "Home" ? 0 : V4_ADD_NEW_MENU_ITEMS.length - 1;
+      addNewItemRefs.current[nextIndex]?.focus();
+      return;
+    }
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      const direction = event.key === "ArrowDown" ? 1 : -1;
+      const nextIndex = (
+        (currentIndex < 0 ? 0 : currentIndex)
+        + direction
+        + V4_ADD_NEW_MENU_ITEMS.length
+      ) % V4_ADD_NEW_MENU_ITEMS.length;
+      addNewItemRefs.current[nextIndex]?.focus();
+    }
+  };
+
   return (
+    <>
     <main className={`calendar-page ${updated ? "updated-calendar-page" : ""}`}>
       <section className="marketing-page-header">
         <div className="marketing-title-row">
@@ -1240,7 +1529,64 @@ function CalendarScreen({
             <span className="active">Week</span><span>Month</span><span>List</span>
           </div>
           <SlidersHorizontal size={21} />
-          <span className="add-new"><Plus size={20} /> Add New</span>
+          {v4AddNewMenu ? (
+            <div className="v4-add-new-control">
+              <button
+                className="add-new"
+                type="button"
+                ref={addNewTriggerRef}
+                aria-haspopup="menu"
+                aria-expanded={addNewMenuOpen}
+                aria-controls="v4-calendar-add-new-menu"
+                onClick={() => setAddNewMenuOpen((open) => !open)}
+              >
+                <Plus size={20} aria-hidden="true" />
+                Add New
+              </button>
+              {addNewMenuOpen && (
+                <div
+                  className="v4-add-new-menu"
+                  id="v4-calendar-add-new-menu"
+                  role="menu"
+                  aria-label="Add new marketing content"
+                  ref={addNewMenuRef}
+                  onKeyDown={handleAddNewMenuKeyDown}
+                >
+                  {V4_ADD_NEW_MENU_ITEMS.map((item, index) => (
+                    <span key={item.id}>
+                      {index === 5 && (
+                        <span className="v4-add-new-menu-divider" role="separator" />
+                      )}
+                      <button
+                        className="v4-add-new-menu-item"
+                        type="button"
+                        role="menuitem"
+                        data-menu-action={item.id}
+                        ref={(node) => {
+                          addNewItemRefs.current[index] = node;
+                        }}
+                        onClick={() => {
+                          if (item.id === "multiple" && onCreateMultipleChannels) {
+                            setAddNewMenuOpen(false);
+                            setStartIdeaOpen(true);
+                            return;
+                          }
+                          closeAddNewMenu(true);
+                        }}
+                      >
+                        <span className="v4-add-new-menu-icon" aria-hidden="true">
+                          <V4AddNewMenuIcon item={item.id} />
+                        </span>
+                        <span>{item.label}</span>
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <span className="add-new"><Plus size={20} /> Add New</span>
+          )}
         </header>
         <div className="calendar-grid">
           {columns.map((column) => (
@@ -1264,7 +1610,10 @@ function CalendarScreen({
                   className="v4-pending-task-card"
                   type="button"
                   ref={taskButtonRef}
-                  onClick={onOpenTasks}
+                  onClick={() => {
+                    setAddNewMenuOpen(false);
+                    onOpenTasks();
+                  }}
                 >
                   <span className="v4-pending-task-icon" aria-hidden="true">
                     <img
@@ -1291,12 +1640,18 @@ function CalendarScreen({
                       item={item}
                       inert={inertPostTitleOne && item.title === "Post title 1"}
                       onOpen={item.combinedTarget || item.generatedDelivery
-                        ? () => onOpenCombinedPost(
-                            item.campaignDate,
-                            item.campaignSource,
-                            item.channels,
-                          )
-                        : onOpenPost}
+                        ? () => {
+                            setAddNewMenuOpen(false);
+                            onOpenCombinedPost(
+                              item.campaignDate,
+                              item.campaignSource,
+                              item.channels,
+                            );
+                          }
+                        : () => {
+                            setAddNewMenuOpen(false);
+                            onOpenPost();
+                          }}
                       combinedInteractive={combinedInteractive}
                       updated={updated}
                       targetPublished={targetPublished}
@@ -1304,6 +1659,9 @@ function CalendarScreen({
                       targetChannels={targetChannels}
                       combinedChannels={combinedChannels}
                       channelStatuses={channelStatuses}
+                      v4CampaignDesign={v4CampaignDesign}
+                      calendarDateLabel={column.day.match(/([A-Z][a-z]{2}) (\d+)/)?.slice(1).join(" ")
+                        ?? "Nov 9"}
                     />
                   ))}
                 </div>
@@ -1313,6 +1671,20 @@ function CalendarScreen({
         </div>
       </section>
     </main>
+    {startIdeaOpen && onCreateMultipleChannels && (
+      <V4StartIdeaPromptModal
+        onClose={() => {
+          setStartIdeaOpen(false);
+          window.requestAnimationFrame(() => addNewTriggerRef.current?.focus());
+        }}
+        onSubmit={(prompt) => {
+          setStartIdeaOpen(false);
+          setAddNewMenuOpen(false);
+          onCreateMultipleChannels(prompt);
+        }}
+      />
+    )}
+    </>
   );
 }
 
@@ -1334,6 +1706,158 @@ const V4_DASHBOARD_SUGGESTIONS = [
     prompt: "Create a campaign asking happy landscaping customers to leave a review across Google, Facebook, Instagram, and Email.",
   },
 ];
+
+function V4StartIdeaPromptModal({
+  onClose,
+  onSubmit,
+}: {
+  onClose: () => void;
+  onSubmit: (prompt: string) => void;
+}) {
+  const [prompt, setPrompt] = useState("");
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const trimmedPrompt = prompt.trim();
+  const generatedChannels: ContextualChannel[] = [
+    "google",
+    "facebook",
+    "instagram",
+    "email",
+    "website",
+  ];
+  const submit = () => {
+    if (!trimmedPrompt) return;
+    onSubmit(trimmedPrompt);
+  };
+
+  useLayoutEffect(() => {
+    textareaRef.current?.focus();
+  }, []);
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (
+      event.key === "Enter"
+      && (event.metaKey || event.ctrlKey)
+      && event.target === textareaRef.current
+    ) {
+      event.preventDefault();
+      submit();
+      return;
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      onClose();
+      return;
+    }
+    if (event.key !== "Tab") return;
+
+    const focusable = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>(
+      'textarea, button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
+    ) ?? []);
+    if (focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
+
+  return (
+    <div
+      className="calendar-modal-overlay v4-start-idea-overlay"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div
+        className="v4-start-idea-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="v4-start-idea-title"
+        ref={dialogRef}
+        onKeyDown={handleKeyDown}
+      >
+        <h1 id="v4-start-idea-title">Start with your own idea</h1>
+        <div className="v4-start-idea-prompt-card">
+          <div className="v4-start-idea-prompt-area">
+            <span className="v4-start-idea-ai-favicon" aria-hidden="true">
+              <img src="/assets/v4-task-ai-sparkle.svg" width={16} height={16} alt="" />
+            </span>
+            <label className="sr-only" htmlFor="v4-start-idea-prompt">
+              Describe your marketing idea
+            </label>
+            <textarea
+              id="v4-start-idea-prompt"
+              ref={textareaRef}
+              value={prompt}
+              placeholder="Describe your idea and we'll turn it into ready-to-send content for multiple channels"
+              onChange={(event) => setPrompt(event.target.value)}
+            />
+          </div>
+          <div className="v4-start-idea-divider" />
+          <div className="v4-start-idea-action-row">
+            <div
+              className="v4-start-idea-channels"
+              role="group"
+              aria-label="Channels"
+            >
+              {generatedChannels.map((channel) => (
+                <span key={channel}>
+                  <span aria-hidden="true">
+                    <ContextualChannelArtwork channel={channel} iconStyle="jobber" />
+                  </span>
+                  {CONTEXTUAL_CHANNELS.find(({ id }) => id === channel)?.label}
+                </span>
+              ))}
+            </div>
+            <button
+              className="primary-button v4-start-idea-generate"
+              type="button"
+              disabled={!trimmedPrompt}
+              onClick={submit}
+            >
+              Generate Content
+            </button>
+          </div>
+        </div>
+        <section className="v4-start-idea-suggestions" aria-labelledby="v4-start-idea-suggestions">
+          <strong id="v4-start-idea-suggestions">TRY ONE OF THESE</strong>
+          <div>
+            {V4_DASHBOARD_SUGGESTIONS.map(({ label, prompt: suggestion }) => (
+              <button
+                type="button"
+                onClick={() => setPrompt(suggestion)}
+                key={label}
+              >
+                <img
+                  src="/assets/v4-task-ai-sparkle.svg"
+                  width={20}
+                  height={20}
+                  alt=""
+                  aria-hidden="true"
+                />
+                <span>{label}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+        <button
+          className="v4-start-idea-close"
+          type="button"
+          aria-label="Close start with your own idea"
+          onClick={onClose}
+        >
+          <X size={24} aria-hidden="true" />
+        </button>
+      </div>
+    </div>
+  );
+}
 
 type DashboardGenerationState = "idle" | "loading" | "summary";
 
@@ -2259,15 +2783,24 @@ function V4DeliveryProgress({
   channels,
   deliveries,
   googleState,
+  statuses,
 }: {
   channels: ContextualChannel[];
-  deliveries: V4ChannelDeliveries;
-  googleState: GoogleContextDemoState;
+  deliveries?: V4ChannelDeliveries;
+  googleState?: GoogleContextDemoState;
+  statuses?: Partial<Record<ContextualChannel, ChannelContentStatus>>;
 }) {
-  const activeChannels = channels.filter((channel) => !deliveries[channel].deleted);
-  const delivered = activeChannels.filter((channel) => (
-    isV4DeliveredChannel(channel, deliveries[channel], googleState)
-  )).length;
+  const activeChannels = deliveries
+    ? channels.filter((channel) => !deliveries[channel].deleted)
+    : channels;
+  const delivered = activeChannels.filter((channel) => {
+    if (statuses) {
+      return statuses[channel] === "scheduled" || statuses[channel] === "sent";
+    }
+    return deliveries && googleState
+      ? isV4DeliveredChannel(channel, deliveries[channel], googleState)
+      : false;
+  }).length;
   const progressText = `${delivered}/${activeChannels.length} scheduled`;
 
   return (
@@ -4028,9 +4561,9 @@ function GeneratedV4ExitDialog({
         aria-labelledby="generated-v4-exit-title"
         aria-describedby="generated-v4-exit-description"
       >
-        <h2 id="generated-v4-exit-title">Leave now</h2>
+        <h2 id="generated-v4-exit-title">Save or discard draft</h2>
         <p id="generated-v4-exit-description">
-          Drafts are already saved to your calendar. Discarding them won’t affect content that’s already scheduled or posted.
+          Select whether you want to save this draft to your calendar or discard it. By discarding, you will remove it from your calendar.
         </p>
         <footer>
           <button
@@ -4038,7 +4571,7 @@ function GeneratedV4ExitDialog({
             className="secondary-button"
             onClick={() => runOnce(onDiscardAndExit)}
           >
-            Discard and Exit
+            Discard Draft
           </button>
           <button
             ref={saveButtonRef}
@@ -4046,7 +4579,7 @@ function GeneratedV4ExitDialog({
             className="primary-button"
             onClick={() => runOnce(onSaveAndExit)}
           >
-            Save drafts and Exit
+            Save Draft
           </button>
         </footer>
       </section>
@@ -4669,7 +5202,7 @@ function VersionFourGeneratedFlowShell({
         aria-labelledby="v4-generated-flow-title"
       >
         <SuggestedPromptSection
-          title="Suggested Marketing Content"
+          title="Start with your own idea"
           titleId="v4-generated-flow-title"
           prompt={prompt}
           onPromptChange={onPromptChange}
@@ -5294,6 +5827,10 @@ function VersionFourChannelReview({
               className="channel-icon-switcher--review"
             />
           )}
+          <V4DeliveryProgress
+            channels={availableChannels}
+            statuses={channelStatuses}
+          />
         </header>
         <div className="review-scroll">
           <div className="v4-content-title-row">
@@ -7068,6 +7605,7 @@ export default function App() {
   const [v4Generating, setV4Generating] = useState(false);
   const [v4LoadingStage, setV4LoadingStage] = useState(0);
   const suggestionTimerRef = useRef<number | null>(null);
+  const preserveCalendarPromptRef = useRef(false);
   const [suggestedReviewChannel, setSuggestedReviewChannel] = useState<ContextualChannel | null>(null);
   const [suggestedEditor, setSuggestedEditor] = useState<ContextualChannel | null>(null);
   const [suggestedGoogleDrafts, setSuggestedGoogleDrafts] = useState<V2Drafts | null>(null);
@@ -7282,18 +7820,10 @@ export default function App() {
       generatedV4CalendarDeliveries[channel]?.date === date
       && !generatedV4State.channelDeliveries[channel].deleted
     ));
-    const allSent = channels.every((channel) => (
-      generatedV4CalendarDeliveries[channel]?.lifecycle === "sent"
+    const channelStates = channels.map((channel) => (
+      v4CalendarStatus(generatedV4CalendarDeliveries[channel]!)
     ));
-    const allScheduledOrSent = channels.every((channel) => {
-      const lifecycle = generatedV4CalendarDeliveries[channel]?.lifecycle;
-      return lifecycle === "scheduled" || lifecycle === "sent";
-    });
-    const status: CalendarItem["status"] = allSent
-      ? "Sent"
-      : allScheduledOrSent
-        ? "Scheduled"
-        : "Needs review";
+    const status = v4AggregateCalendarItemStatus(channelStates);
     return {
       date,
       source: "generated",
@@ -7326,16 +7856,12 @@ export default function App() {
         !v4ChannelDeliveries[channel].deleted
         && v4CalendarDeliveries[channel].date === date
       ));
-    const allSent = channels.every((channel) => v4ChannelDeliveries[channel].lifecycle === "sent");
-    const allScheduledOrSent = channels.every((channel) => (
-      v4ChannelDeliveries[channel].lifecycle === "scheduled"
-      || v4ChannelDeliveries[channel].lifecycle === "sent"
+    const channelStates = channels.map((channel) => (
+      channel === "google"
+        ? googleDemoCalendarStatus(googleContextDemoState)
+        : v4CalendarStatus(v4ChannelDeliveries[channel])
     ));
-    const status: CalendarItem["status"] = allSent
-      ? "Sent"
-      : allScheduledOrSent
-        ? "Scheduled"
-        : "Needs review";
+    const status = v4AggregateCalendarItemStatus(channelStates);
     return {
       date,
       source: "original",
@@ -8131,6 +8657,7 @@ export default function App() {
       window.clearInterval(suggestionTimerRef.current);
       suggestionTimerRef.current = null;
     }
+    preserveCalendarPromptRef.current = false;
     setV4Generating(false);
     setV4LoadingStage(0);
   };
@@ -8439,6 +8966,7 @@ export default function App() {
   const beginV4SuggestionGeneration = (
     value: string,
     origin: V4GeneratedFlowOrigin = v4GeneratedFlowOrigin,
+    preserveCalendarPrompt = false,
   ) => {
     const prompt = value.trim();
     if (!prompt || v4Generating) return;
@@ -8446,6 +8974,7 @@ export default function App() {
       window.clearInterval(suggestionTimerRef.current);
       suggestionTimerRef.current = null;
     }
+    preserveCalendarPromptRef.current = preserveCalendarPrompt;
     setV4GeneratedFlowOrigin(origin);
     setSuggestedPrompt(prompt);
     if (origin === "dashboard") {
@@ -8909,7 +9438,8 @@ export default function App() {
       if (suggestionTimerRef.current === interval) suggestionTimerRef.current = null;
       setV4Generating(false);
       setV4LoadingStage(0);
-      setCalendarPrompt("");
+      if (!preserveCalendarPromptRef.current) setCalendarPrompt("");
+      preserveCalendarPromptRef.current = false;
       if (v4GeneratedFlowOrigin !== "dashboard") setV4DashboardPrompt("");
       setSuggestedPreviewIndex(0);
       setV4ReviewOrigin(null);
@@ -8956,12 +9486,8 @@ export default function App() {
       setAdHocGenerating(false);
       setAdHocLoadingStage(0);
       setPendingAdHocShowcase(null);
-      setAdHocSummaryId(null);
-      setAdHocContext({
-        showcaseId: completed.id,
-        startIndex: 0,
-        returnToSummary: false,
-      });
+      setAdHocContext(null);
+      setAdHocSummaryId(completed.id);
     }, 1000);
     adHocTimerRef.current = interval;
     return () => {
@@ -9510,6 +10036,11 @@ export default function App() {
                 }}
                 combinedInteractive={version === "v3" || isDaisyVersion}
                 inertPostTitleOne={version === "v4"}
+                v4CampaignDesign={version === "v4"}
+                v4AddNewMenu={version === "v4"}
+                onCreateMultipleChannels={version === "v4"
+                  ? (prompt) => beginV4SuggestionGeneration(prompt, "calendar", true)
+                  : undefined}
                 combinedChannels={currentSaturdayCompletion ?? undefined}
                 generatedSuggestionCard={version === "v5" ? suggestedCompletion?.card : undefined}
                 channelStatuses={calendarStatuses[version]}

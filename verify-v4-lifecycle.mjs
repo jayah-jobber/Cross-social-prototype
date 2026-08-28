@@ -94,7 +94,9 @@ async function postCurrentNow() {
 }
 
 async function cardChannels(day) {
-  return campaignCard(day).locator(".calendar-channel-label").allTextContents();
+  return campaignCard(day).locator(".calendar-channel-label").evaluateAll(
+    (icons) => icons.map((icon) => icon.getAttribute("data-channel")),
+  );
 }
 
 try {
@@ -205,7 +207,7 @@ try {
   await reviewFooter().getByRole("button", { name: "Back" }).click();
   await expectSelection("2 of 5");
   await modal().getByRole("button", { name: "Close", exact: true }).click();
-  assert.deepEqual(await cardChannels("Thursday, Nov 5"), ["GGoogle post"]);
+  assert.deepEqual(await cardChannels("Thursday, Nov 5"), ["google"]);
   assert.equal((await cardChannels("Saturday, Nov 7")).length, 4);
 
   // Rescheduling from a one-channel split card still uses campaign-wide review.
@@ -237,12 +239,12 @@ try {
   await modal().getByRole("heading", { name: "About this email campaign", exact: true }).waitFor();
   await expectSelection("4 of 5");
   await modal().getByRole("button", { name: "Close", exact: true }).click();
-  assert.deepEqual(await cardChannels("Friday, Nov 6"), ["◎Instagram post"]);
+  assert.deepEqual(await cardChannels("Friday, Nov 6"), ["instagram"]);
   assert.match(
     await campaignCard("Friday, Nov 6").locator(".calendar-card-details").textContent(),
     /Sent/,
   );
-  assert.equal(await campaignCard("Friday, Nov 6").locator(".status-sent").count(), 1);
+  assert.equal(await campaignCard("Friday, Nov 6").getAttribute("data-card-state"), "sent");
   assert.equal((await cardChannels("Saturday, Nov 7")).length, 4);
 
   // Single-channel date cards open Summary and retain full campaign scope.
@@ -267,8 +269,8 @@ try {
   await postCurrentNow();
   await page.getByText("Your Facebook post has been successfully posted.", { exact: true }).waitFor();
   await modal().getByRole("button", { name: "Close", exact: true }).click();
-  assert.deepEqual(await cardChannels("Friday, Nov 6"), ["fFacebook post", "◎Instagram post"]);
-  assert.equal(await campaignCard("Friday, Nov 6").locator(".status-sent").count(), 2);
+  assert.deepEqual(await cardChannels("Friday, Nov 6"), ["instagram", "facebook"]);
+  assert.equal(await campaignCard("Friday, Nov 6").getAttribute("data-card-state"), "sent");
   assert.equal((await cardChannels("Saturday, Nov 7")).length, 3);
 
   // All five Post now actions collapse into one Nov 6 Sent card and remove Nov 7.
@@ -282,7 +284,7 @@ try {
   assert.equal(await modal().count(), 0);
   assert.equal(await campaignCard("Saturday, Nov 7").count(), 0);
   assert.equal((await cardChannels("Friday, Nov 6")).length, 5);
-  assert.equal(await campaignCard("Friday, Nov 6").locator(".status-sent").count(), 5);
+  assert.equal(await campaignCard("Friday, Nov 6").getAttribute("data-card-state"), "sent");
 
   // Prototype mixed-status controls update the active channel's current date card.
   await selectVersionFour();
@@ -291,10 +293,13 @@ try {
     .getByRole("button", { name: "Missed" })
     .click();
   await modal().getByRole("button", { name: "Close", exact: true }).click();
-  assert.equal(await campaignCard("Saturday, Nov 7").locator(".status-missed").count(), 1);
+  assert.equal(
+    await campaignCard("Saturday, Nov 7").getAttribute("data-card-state"),
+    "suggested",
+  );
   assert.match(
     await campaignCard("Saturday, Nov 7").locator(".calendar-card-details").textContent(),
-    /Needs review/,
+    /Suggested/,
   );
 
   // Scheduled Send now also moves a channel to Nov 6.
@@ -312,7 +317,7 @@ try {
   await modal().getByRole("menuitem", { name: "Send now", exact: true }).click();
   await page.getByText("Your Google post has been successfully posted.", { exact: true }).waitFor();
   await modal().getByRole("button", { name: "Close", exact: true }).click();
-  assert.deepEqual(await cardChannels("Friday, Nov 6"), ["GGoogle post"]);
+  assert.deepEqual(await cardChannels("Friday, Nov 6"), ["google"]);
 
   // A middle-channel date change keeps the same channel/count; its green CTA advances.
   await selectVersionFour();
@@ -350,7 +355,10 @@ try {
   assert.equal(await reviewSwitcher.getByRole("radio").count(), 5);
   await reviewFooter().getByRole("button", { name: "Back" }).click();
   await modal().getByRole("button", { name: "Close", exact: true }).click();
-  assert.equal(await campaignCard("Sunday, Nov 8").locator(".status-scheduled").count(), 1);
+  assert.equal(
+    await campaignCard("Sunday, Nov 8").getAttribute("data-card-state"),
+    "scheduled",
+  );
 
   await selectVersionFour();
   await openSaturday();
@@ -368,7 +376,7 @@ try {
   await expectSelection("3 of 5");
   await page.getByText("Your Facebook post has been successfully posted.", { exact: true }).waitFor();
   await modal().getByRole("button", { name: "Close", exact: true }).click();
-  assert.deepEqual(await cardChannels("Friday, Nov 6"), ["fFacebook post"]);
+  assert.deepEqual(await cardChannels("Friday, Nov 6"), ["facebook"]);
   assert.equal(await campaignCard("Sunday, Nov 8").count(), 0);
 
   // Moving the final review channel with Post now exits to Calendar.
@@ -381,7 +389,7 @@ try {
   await page.getByRole("menuitem", { name: "Publish now", exact: true }).click();
   await page.getByRole("heading", { name: "Marketing Plan" }).waitFor();
   assert.equal(await modal().count(), 0);
-  assert.deepEqual(await cardChannels("Friday, Nov 6"), ["Website"]);
+  assert.deepEqual(await cardChannels("Friday, Nov 6"), ["website"]);
   assert.equal((await cardChannels("Saturday, Nov 7")).length, 4);
 
   // Deleting a middle review item immediately opens the next scoped preview.
@@ -438,7 +446,7 @@ try {
   await modal().waitFor();
   await modal().getByRole("button", { name: "Close", exact: true }).click();
   assert.equal(await campaignCard("Thursday, Nov 5").count(), 0);
-  assert.deepEqual(await cardChannels("Wednesday, Nov 4"), ["GGoogle post"]);
+  assert.deepEqual(await cardChannels("Wednesday, Nov 4"), ["google"]);
   assert.equal(await page.getByText("Your post is rescheduled", { exact: true }).count(), 0);
 
   // Reset restores five Nov 7 channels; V1 keeps its original static week.

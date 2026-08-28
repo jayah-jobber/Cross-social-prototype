@@ -47,6 +47,15 @@ async function imageSource(locator) {
   return locator.locator("img").evaluate((image) => new URL(image.src).pathname);
 }
 
+async function activeContextPreview(modal) {
+  const isVersionFour = await modal.evaluate((element) => (
+    element.classList.contains("v4-five-channel-modal")
+  ));
+  return isVersionFour
+    ? modal.locator(".v4-sliding-panel--card.is-active .v4-context-preview")
+    : modal.locator(".v4-context-preview");
+}
+
 async function socialSwitcherSources(switcher) {
   return switcher.getByRole("radio").evaluateAll((options) => (
     options.slice(0, 3).map((option) => {
@@ -110,9 +119,10 @@ async function assertIconFootprints(modal, switcherSelector) {
     JSON.stringify(switcherFootprints),
   );
 
-  const headerIcon = modal.locator(".v4-context-preview .channel-preview-title-icon");
+  const contextPreview = await activeContextPreview(modal);
+  const headerIcon = contextPreview.locator(".channel-preview-title-icon");
   if (await headerIcon.count()) {
-    const alignment = await modal.locator(".v4-context-preview > header").evaluate((header) => {
+    const alignment = await contextPreview.locator(":scope > header").evaluate((header) => {
       const wrapper = header.querySelector(".channel-preview-title-icon");
       const artwork = wrapper?.firstElementChild;
       const title = header.querySelector("strong");
@@ -147,7 +157,7 @@ try {
   assert.equal(await iconControls().count(), 0);
   assert.deepEqual(await socialSwitcherSources(switcher), jobberSources);
   assert.equal(
-    await imageSource(modal.locator(".v4-context-preview .channel-preview-title-icon")),
+    await imageSource((await activeContextPreview(modal)).locator(".channel-preview-title-icon")),
     jobberSources[0],
   );
   await assertIconFootprints(modal, ".channel-icon-switcher--modal-v4");
@@ -164,7 +174,7 @@ try {
   for (const [index, channel] of ["Google", "Facebook", "Instagram"].entries()) {
     await switcher.getByRole("radio", { name: channel, exact: true }).click();
     assert.equal(
-      await imageSource(modal.locator(".v4-context-preview .channel-preview-title-icon")),
+      await imageSource((await activeContextPreview(modal)).locator(".channel-preview-title-icon")),
       jobberSources[index],
     );
     await assertIconFootprints(modal, ".channel-icon-switcher--modal-v4");
@@ -185,7 +195,7 @@ try {
   switcher = modal.locator(".channel-icon-switcher--modal-v4");
   await switcher.getByRole("radio", { name: "Google", exact: true }).click();
   assert.equal(
-    await imageSource(modal.locator(".v4-context-preview .channel-preview-title-icon")),
+    await imageSource((await activeContextPreview(modal)).locator(".channel-preview-title-icon")),
     jobberSources[0],
   );
 
@@ -200,7 +210,7 @@ try {
   await assertNeutral(switcher.getByRole("radio", { name: "Google", exact: true }));
   await assertActive(switcher.getByRole("radio", { name: "Facebook", exact: true }));
   assert.equal(
-    await imageSource(modal.locator(".v4-context-preview .channel-preview-title-icon")),
+    await imageSource((await activeContextPreview(modal)).locator(".channel-preview-title-icon")),
     jobberSources[1],
   );
   await page.screenshot({ path: "/tmp/v4-icons-facebook-active-google-scheduled.png" });

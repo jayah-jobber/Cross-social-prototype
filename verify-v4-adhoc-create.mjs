@@ -38,7 +38,7 @@ async function chooseChannels(labels) {
   }
 }
 
-async function waitForGeneratedContext() {
+async function waitForGeneratedSummary() {
   await page.getByRole("dialog", { name: "Generating job showcase" }).waitFor();
   assert.equal(await page.getByText("Suggested Marketing Content", { exact: true }).count(), 0);
   assert.equal(await page.locator(".suggested-prompt-section, textarea").count(), 0);
@@ -46,8 +46,8 @@ async function waitForGeneratedContext() {
     await page.getByRole("status", { name: "Understanding your marketing plan" }).count(),
     1,
   );
-  await context().waitFor({ timeout: 8_000 });
-  assert.equal(await page.locator(".v4-summary-modal").count(), 0);
+  await summary().waitFor({ timeout: 8_000 });
+  assert.equal(await context().count(), 0);
 }
 
 try {
@@ -193,8 +193,20 @@ try {
 
   await chooseChannels(["Email", "Facebook"]);
   await createButton.click();
-  await waitForGeneratedContext();
+  await waitForGeneratedSummary();
   assert.equal(await createdRows().count(), 1);
+  assert.equal(
+    await summary().getByRole("heading", {
+      name: "Seasonal Property Clean Up in Hamilton",
+      exact: true,
+    }).count(),
+    1,
+  );
+  assert.deepEqual(
+    await summary().locator(".v4-summary-status-list .v4-summary-status").allTextContents(),
+    ["Draft", "Draft"],
+  );
+  await summary().getByRole("button", { name: "Start Review", exact: true }).click();
   await context().getByRole("heading", {
     name: "About this Facebook post",
     exact: true,
@@ -215,8 +227,9 @@ try {
     "true",
   );
   await context().getByRole("button", { name: "Close", exact: true }).click();
+  await summary().waitFor();
+  await summary().getByRole("button", { name: "Close summary" }).click();
   assert.equal(await page.locator(".calendar-modal-overlay").count(), 0);
-  assert.equal(await summary().count(), 0);
   await adhoc().waitFor();
   assert.equal(await createdRows().count(), 1);
 
@@ -314,7 +327,8 @@ try {
   await creation().getByRole("button", { name: /^Next/ }).click();
   await chooseChannels(["Google"]);
   await creation().getByRole("button", { name: "Create Draft Post", exact: true }).click();
-  await waitForGeneratedContext();
+  await waitForGeneratedSummary();
+  await summary().getByRole("button", { name: "Start Review", exact: true }).click();
   const iconGeometry = await context().evaluate((dialog) => {
     const dialogBox = dialog.getBoundingClientRect();
     const switcher = dialog.querySelector(".channel-icon-switcher")?.getBoundingClientRect();
@@ -333,8 +347,9 @@ try {
   assert.ok(iconGeometry.centerDelta >= 40, JSON.stringify(iconGeometry));
   assert.ok(iconGeometry.closeRightDelta <= 1, JSON.stringify(iconGeometry));
   await page.keyboard.press("Escape");
+  await summary().waitFor();
+  await summary().getByRole("button", { name: "Close summary" }).click();
   assert.equal(await page.locator(".calendar-modal-overlay").count(), 0);
-  assert.equal(await summary().count(), 0);
   assert.equal(await createdRows().count(), 2);
 
   await page.getByRole("group", { name: "Version 4 entry surface" })
@@ -354,7 +369,7 @@ try {
   assert.equal(await createdRows().count(), 0);
 
   console.log(
-    "Verified Ad-hoc selection, direct canonical context handoff, X/Escape dismissal, table persistence, later summary reopening, lifecycle/deletion, switching, and reset.",
+    "Verified Ad-hoc selection, generated summary checkpoint, canonical context handoff, X/Escape dismissal, table persistence, lifecycle/deletion, switching, and reset.",
   );
 } finally {
   await browser.close();

@@ -6,7 +6,9 @@ const executablePath = "/Applications/Google Chrome.app/Contents/MacOS/Google Ch
 const browser = await chromium.launch({ headless: true, executablePath });
 const page = await browser.newPage({ viewport: { width: 1440, height: 1100 } });
 const modal = () => page.locator(".v4-five-channel-modal");
-const footer = () => modal().locator(".v4-context-footer");
+const footer = () => modal().locator(
+  ".v4-sliding-panel--text.is-active .v4-context-footer",
+);
 const controls = () => page.getByRole("group", {
   name: "Google contextual modal demo status",
 });
@@ -23,7 +25,7 @@ async function openSaturdayReview() {
 }
 
 async function expectFacts(dateLabel) {
-  const facts = modal().locator(".v4-context-facts");
+  const facts = modal().locator(".v4-sliding-panel--text.is-active .v4-context-facts");
   await facts.getByText(dateLabel, { exact: true }).waitFor();
   await facts.getByText("Post to", { exact: true }).waitFor();
 }
@@ -137,7 +139,7 @@ try {
   await modal().locator(".channel-icon-switcher--modal-v4")
     .getByRole("radio", { name: "Facebook", exact: true })
     .click();
-  assert.equal(await controls().count(), 0, "Controls must hide on Facebook");
+  await controls().waitFor({ state: "detached" });
   await modal().locator(".channel-icon-switcher--modal-v4")
     .getByRole("radio", { name: "Google", exact: true })
     .click();
@@ -149,7 +151,8 @@ try {
 
   await modal().getByRole("button", { name: "Close", exact: true }).click();
   assert.equal(await controls().count(), 0, "Controls must hide while the modal is closed");
-  assert.equal(await saturdayCard().locator(".status-error").count(), 1);
+  assert.equal(await saturdayCard().getAttribute("data-card-state"), "failed");
+  assert.match(await saturdayCard().locator(".calendar-card-details").textContent(), /1 failed/);
   await openSaturdayReview();
   await modal().getByText("Error", { exact: true }).waitFor();
 
@@ -181,8 +184,8 @@ try {
     exact: true,
   }).click();
   await generatedReview().getByRole("button", { name: "Close", exact: true }).click();
-  await page.getByRole("dialog", { name: "Leave now" })
-    .getByRole("button", { name: "Save drafts and Exit", exact: true }).click();
+  await page.getByRole("dialog", { name: "Save or discard draft" })
+    .getByRole("button", { name: "Save Draft", exact: true }).click();
   const sentGoogleCard = page.locator(".calendar-day").filter({
     has: page.getByRole("heading", { name: "Friday, Nov 6", exact: true }),
   }).locator(".generated-delivery-card");

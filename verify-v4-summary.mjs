@@ -68,8 +68,8 @@ async function assertSummaryArtwork(locator) {
     };
   });
   assert.deepEqual(geometry, {
-    naturalWidth: 430,
-    naturalHeight: 577,
+    naturalWidth: 763,
+    naturalHeight: 1024,
     renderedWidth: 430,
     renderedHeight: 577,
     objectFit: "contain",
@@ -78,7 +78,7 @@ async function assertSummaryArtwork(locator) {
 
 async function waitForGeneratedPreviewReady(review) {
   await review.locator(
-    ".v4-context-preview[aria-busy='false']:not(:has(.v4-preview-glimmer))",
+    ".v4-sliding-panel--card.is-active .v4-context-preview[aria-busy='false']:not(:has(.v4-preview-glimmer))",
   ).waitFor({ timeout: 4500 });
 }
 
@@ -401,7 +401,8 @@ try {
   );
   assert.equal(await generatedReview.getByRole("radio", { name: "Website", exact: true }).count(), 0);
   assert.equal(
-    await generatedReview.getByText(/Christmas Special: Save 15% on Winter Landscaping Services/).count(),
+    await generatedReview.locator(".v4-sliding-panel--card.is-active")
+      .getByText(/Christmas Special: Save 15% on Winter Landscaping Services/).count(),
     1,
   );
   assert.equal(await generatedReview.locator(".post-image, .empty-post-image").count(), 0);
@@ -411,7 +412,8 @@ try {
   await waitForContextChannel("Facebook");
   await waitForGeneratedPreviewReady(generatedReview);
   assert.equal(
-    await generatedReview.getByText(/Christmas Special: Save 15% on Winter Landscaping Services/).count(),
+    await generatedReview.locator(".v4-sliding-panel--card.is-active")
+      .getByText(/Christmas Special: Save 15% on Winter Landscaping Services/).count(),
     1,
   );
   assert.equal(await generatedReview.locator(".channel-image-grid").count(), 0);
@@ -419,7 +421,8 @@ try {
   await waitForContextChannel("Instagram");
   await waitForGeneratedPreviewReady(generatedReview);
   assert.equal(
-    await generatedReview.getByText(/Christmas Special: Save 15% on Winter Landscaping Services/).count(),
+    await generatedReview.locator(".v4-sliding-panel--card.is-active")
+      .getByText(/Christmas Special: Save 15% on Winter Landscaping Services/).count(),
     1,
   );
   assert.equal(await generatedReview.locator(".instagram-post-image, .empty-post-image").count(), 0);
@@ -443,7 +446,8 @@ try {
     1,
   );
   assert.equal(
-    await generatedReview.getByText(/reserve your spot before our schedule fills up/).count(),
+    await generatedReview.locator(".v4-sliding-panel--card.is-active")
+      .getByText(/reserve your spot before our schedule fills up/).count(),
     1,
   );
   assert.equal(await generatedReview.locator(".email-hero").count(), 0);
@@ -457,8 +461,8 @@ try {
     .getByRole("button", { name: "Schedule Google post", exact: true }).click();
   await waitForContextChannel("Facebook");
   await generatedReview.getByRole("button", { name: "Close", exact: true }).click();
-  await page.getByRole("dialog", { name: "Leave now" })
-    .getByRole("button", { name: "Save drafts and Exit", exact: true }).click();
+  await page.getByRole("dialog", { name: "Save or discard draft" })
+    .getByRole("button", { name: "Save Draft", exact: true }).click();
 
   // V5 remains on its existing contextual modal and never renders Summary.
   await page.getByRole("button", { name: "Version 5", exact: true }).click();

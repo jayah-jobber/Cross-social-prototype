@@ -72,7 +72,8 @@ async function selectContextChannel(channel) {
 }
 
 async function editSchedule(channel, date, time) {
-  await context().locator(".v4-context-footer").getByRole("button", { name: "Edit" }).click();
+  await context().locator(".v4-sliding-panel--text.is-active .v4-context-footer")
+    .getByRole("button", { name: "Edit" }).click();
   await review().getByRole("heading", { name: new RegExp(`Review ${channel}`) }).waitFor();
   const scheduleField = review().locator(".review-field").filter({
     hasText: /Schedule (Post|Campaign)/,
@@ -85,10 +86,26 @@ async function editSchedule(channel, date, time) {
 }
 
 async function deleteCurrent() {
-  await context().locator(".v4-context-footer").getByRole("button", { name: "Delete" }).click();
+  await context().locator(".v4-sliding-panel--text.is-active .v4-context-footer")
+    .getByRole("button", { name: "Delete" }).click();
   await page.getByRole("dialog", { name: "Improve future recommendations" })
     .getByRole("button", { name: /Delete (Post|Campaign|Page)/ })
     .click();
+}
+
+async function assertSingleChannelCard(card, channel) {
+  assert.equal(
+    await card.locator(".v4-calendar-single-channel-label").textContent(),
+    channel,
+  );
+  assert.equal(
+    await card.locator(".v4-calendar-card-channels").getAttribute("aria-hidden"),
+    null,
+  );
+  assert.equal(await card.getAttribute("aria-label"), null);
+  assert.equal(await card.evaluate((element, label) => (
+    element.innerText.split(label).length - 1
+  ), channel), 1);
 }
 
 try {
@@ -145,7 +162,7 @@ try {
   await openSummary(originalCard("Saturday, Nov 7"), 5, "Various dates");
   await startCampaignReview(5, "Facebook");
   await selectContextChannel("Instagram");
-  await context().locator(".v4-context-footer")
+  await context().locator(".v4-sliding-panel--text.is-active .v4-context-footer")
     .getByRole("button", { name: "Show publishing options" })
     .click();
   await context().getByRole("menuitem", { name: "Post now and view next", exact: true }).click();
@@ -161,13 +178,19 @@ try {
   await context().getByRole("button", { name: "Close", exact: true }).click();
 
   assert.deepEqual(
-    await originalCard("Thursday, Nov 5").locator(".calendar-channel-label").allTextContents(),
-    ["GGoogle post"],
+    await originalCard("Thursday, Nov 5").locator(".calendar-channel-label").evaluateAll(
+      (icons) => icons.map((icon) => icon.getAttribute("data-channel")),
+    ),
+    ["google"],
   );
+  await assertSingleChannelCard(originalCard("Thursday, Nov 5"), "Google");
   assert.deepEqual(
-    await originalCard("Friday, Nov 6").locator(".calendar-channel-label").allTextContents(),
-    ["◎Instagram post"],
+    await originalCard("Friday, Nov 6").locator(".calendar-channel-label").evaluateAll(
+      (icons) => icons.map((icon) => icon.getAttribute("data-channel")),
+    ),
+    ["instagram"],
   );
+  await assertSingleChannelCard(originalCard("Friday, Nov 6"), "Instagram");
   assert.equal(
     await originalCard("Saturday, Nov 7").locator(".calendar-channel-label").count(),
     3,
@@ -185,18 +208,21 @@ try {
     assert.ok(statuses.some((row) => row.includes("Instagram") && row.includes("Sent")));
     await startCampaignReview(5, expectedStart);
     await selectContextChannel("Google");
-    await context().getByText("Nov 5, 2026 · 2:30 PM", { exact: true }).waitFor();
+    await context().locator(".v4-sliding-panel--text.is-active")
+      .getByText("Nov 5, 2026 · 2:30 PM", { exact: true }).waitFor();
     await selectContextChannel("Instagram");
-    await context().getByText("Nov 6, 2026 · 9:00 AM", { exact: true }).waitFor();
+    await context().locator(".v4-sliding-panel--text.is-active")
+      .getByText("Nov 6, 2026 · 9:00 AM", { exact: true }).waitFor();
     await selectContextChannel("Email");
-    await context().getByText("Nov 7, 2026 · 9:00 AM", { exact: true }).waitFor();
+    await context().locator(".v4-sliding-panel--text.is-active")
+      .getByText("Nov 7, 2026 · 9:00 AM", { exact: true }).waitFor();
     await context().getByRole("button", { name: "Close", exact: true }).click();
   }
 
   // A mixed split card starts at its first represented channel in canonical order.
   await openSummary(originalCard("Saturday, Nov 7"), 5, "Various dates");
   await startCampaignReview(5, "Facebook");
-  await context().locator(".v4-context-footer")
+  await context().locator(".v4-sliding-panel--text.is-active .v4-context-footer")
     .getByRole("button", { name: "Show publishing options" })
     .click();
   await context().getByRole("menuitem", { name: "Post now and view next", exact: true }).click();
@@ -220,23 +246,28 @@ try {
     .click();
   await review().locator(".review-footer").getByRole("button", { name: "Back" }).click();
   await selectContextChannel("Instagram");
-  await context().locator(".v4-context-footer")
+  await context().locator(".v4-sliding-panel--text.is-active .v4-context-footer")
     .getByRole("button", { name: "Show publishing options" })
     .click();
   await context().getByRole("menuitem", { name: "Post now and view next", exact: true }).click();
+  await context().getByRole("heading", { name: "About this email campaign", exact: true }).waitFor();
   await editSchedule("Email", "2026-11-08", "09:00");
   await review().locator(".review-footer")
     .getByRole("button", { name: "Schedule Email", exact: true })
     .click();
   await review().locator(".review-footer").getByRole("button", { name: "Back" }).click();
-  await context().locator(".v4-context-footer")
+  await context().locator(".v4-sliding-panel--text.is-active .v4-context-footer")
     .getByRole("button", { name: "Show publishing options" })
     .click();
   await context().getByRole("menuitem", { name: "Post now and view next", exact: true }).click();
   assert.deepEqual(
-    await originalCard("Saturday, Nov 7").locator(".calendar-channel-label").allTextContents(),
-    ["fFacebook post"],
+    await originalCard("Saturday, Nov 7").locator(".calendar-channel-label").evaluateAll(
+      (icons) => icons.map((icon) => icon.getAttribute("data-channel")),
+    ),
+    ["facebook"],
   );
+  await assertSingleChannelCard(originalCard("Saturday, Nov 7"), "Facebook");
+  await context().getByRole("button", { name: "Close", exact: true }).click();
   await openSummary(originalCard("Saturday, Nov 7"), 5, "Various dates");
   await startCampaignReview(5, "Facebook");
   assert.equal(
@@ -278,6 +309,9 @@ try {
         await context().locator(".channel-icon-switcher--modal-v4").getByRole("radio").count(),
         remaining,
       );
+      if (remaining === 1) {
+        await assertSingleChannelCard(originalCard("Saturday, Nov 7"), "Website");
+      }
     }
   }
   assert.equal(await page.locator(".combined-target-card").count(), 0);
@@ -298,7 +332,8 @@ try {
   await generatedReview.getByRole("radio", { name: "Email", exact: true }).click();
   await generatedReview.getByRole("status", { name: "Loading Email preview" }).waitFor();
   await generatedReview.locator(".v4-preview-glimmer").waitFor({ state: "detached", timeout: 4500 });
-  await generatedReview.locator(".v4-context-footer").getByRole("button", { name: "Edit" }).click();
+  await generatedReview.locator(".v4-sliding-panel--text.is-active .v4-context-footer")
+    .getByRole("button", { name: "Edit" }).click();
   const generatedCampaignSchedule = review().locator(".review-field").filter({
     hasText: "Schedule Campaign",
   });
@@ -312,12 +347,12 @@ try {
     await generatedReview.locator(".channel-icon-switcher--modal-v4").getByRole("radio").count(),
     4,
   );
-  await generatedReview.locator(".v4-context-footer")
+  await generatedReview.locator(".v4-sliding-panel--text.is-active .v4-context-footer")
     .getByRole("button", { name: "Schedule Email", exact: true })
     .click();
   await generatedReview.getByRole("button", { name: "Close", exact: true }).click();
-  await page.getByRole("dialog", { name: "Leave now" })
-    .getByRole("button", { name: "Save drafts and Exit", exact: true })
+  await page.getByRole("dialog", { name: "Save or discard draft" })
+    .getByRole("button", { name: "Save Draft", exact: true })
     .click();
 
   assert.equal(await generatedCard("Saturday, Nov 7").count(), 1);
@@ -354,8 +389,8 @@ try {
       true,
     );
     await context().getByRole("button", { name: "Close", exact: true }).click();
-    await page.getByRole("dialog", { name: "Leave now" })
-      .getByRole("button", { name: "Save drafts and Exit", exact: true })
+    await page.getByRole("dialog", { name: "Save or discard draft" })
+      .getByRole("button", { name: "Save Draft", exact: true })
       .click();
   }
 

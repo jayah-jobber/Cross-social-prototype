@@ -81,7 +81,7 @@ try {
   await assertSingleGeneratedDialog();
   await assertGeneratedStatusControlsAbsent();
   assert.equal(await flow().getByRole("heading", {
-    name: "Suggested Marketing Content",
+    name: "Start with your own idea",
     exact: true,
   }).count(), 1);
   assert.equal(await promptInput().inputValue(), "Promote fall cleanup");
@@ -179,8 +179,8 @@ try {
 
   // P2 close is guarded; Save preserves the generated calendar campaign.
   await generatedReview().getByRole("button", { name: "Close", exact: true }).click();
-  const exitDialog = page.getByRole("dialog", { name: "Leave now" });
-  await exitDialog.getByRole("button", { name: "Save drafts and Exit", exact: true }).click();
+  const exitDialog = page.getByRole("dialog", { name: "Save or discard draft" });
+  await exitDialog.getByRole("button", { name: "Save Draft", exact: true }).click();
   await generatedReview().waitFor({ state: "detached" });
   assert.equal(await page.getByRole("heading", { name: "Marketing Plan" }).count(), 1);
   await submitFromCalendar("Review close behavior", "enter");
@@ -238,12 +238,12 @@ try {
     "none",
   );
   assert.equal(
-    await generatedReview().locator(".v4-context-footer")
+    await generatedReview().locator(".v4-sliding-panel--text.is-active .v4-context-footer")
       .evaluate((node) => getComputedStyle(node, "::after").animationName),
     "none",
   );
   await generatedReview().getByRole("button", { name: "Close", exact: true }).click();
-  await exitDialog.getByRole("button", { name: "Discard and Exit", exact: true }).click();
+  await exitDialog.getByRole("button", { name: "Discard Draft", exact: true }).click();
   await page.emulateMedia({ reducedMotion: "no-preference" });
 
   // V5 retains its original loader and vertical generated-content flow.

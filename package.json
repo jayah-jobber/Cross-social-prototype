@@ -29,6 +29,9 @@
     "verify:v4-delete-all": "node verify-v4-delete-all.mjs",
     "verify:v4-topic-completion": "node verify-v4-topic-completion.mjs",
     "verify:v4-calendar-tasks": "node verify-v4-calendar-tasks.mjs",
+    "verify:v4-calendar-campaign-cards": "node verify-v4-calendar-campaign-cards.mjs",
+    "verify:v4-calendar-add-new": "node verify-v4-calendar-add-new.mjs",
+    "verify:v4-calendar-start-idea": "node verify-v4-calendar-start-idea.mjs",
     "verify:research": "node verify-research-mode.mjs"
   },
   "dependencies": {

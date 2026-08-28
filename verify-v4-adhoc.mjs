@@ -312,8 +312,9 @@ try {
   assert.equal(await adhoc().count(), 0);
   assert.equal(await calendar().locator(".combined-target-card").count(), 1);
   assert.equal(
-    await calendar().locator(".combined-target-card .calendar-channel-label")
-      .filter({ hasText: "Instagram" }).count(),
+    await calendar().locator(
+      '.combined-target-card .calendar-channel-label[data-channel="instagram"]',
+    ).count(),
     0,
   );
 

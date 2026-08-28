@@ -88,7 +88,7 @@ try {
   await summary().getByRole("button", { name: "Review Drafts", exact: true }).click();
   await generatedReview().waitFor();
   assert.equal(await generatedCard().count(), 1);
-  assert.match(await generatedCard().locator(".calendar-card-details").textContent(), /Needs review/);
+  assert.match(await generatedCard().locator(".calendar-card-details").textContent(), /Suggested/);
   assert.equal(await generatedCard().locator(".channel-status-dot").count(), 0);
   assert.equal(await generatedCard().locator(".calendar-channel-label").count(), 4);
   assert.equal(await generatedCard().evaluate((card) => card.classList.contains("published-card")), false);
@@ -130,12 +130,12 @@ try {
   await activeFooter(generatedReview())
     .getByRole("button", { name: "Schedule Google post", exact: true })
     .click();
-  assert.equal(await generatedCard().locator(".status-scheduled").count(), 1);
-  assert.match(await generatedCard().locator(".calendar-card-details").textContent(), /Needs review/);
+  assert.equal(await generatedCard().getAttribute("data-card-state"), "suggested");
+  assert.match(await generatedCard().locator(".calendar-card-details").textContent(), /Suggested/);
 
   await generatedReview().getByRole("button", { name: "Close", exact: true }).click();
-  await page.getByRole("dialog", { name: "Leave now" })
-    .getByRole("button", { name: "Save drafts and Exit", exact: true }).click();
+  await page.getByRole("dialog", { name: "Save or discard draft" })
+    .getByRole("button", { name: "Save Draft", exact: true }).click();
   await generatedReview().waitFor({ state: "detached" });
   assert.equal(await generatedCard().count(), 1);
 
@@ -153,7 +153,7 @@ try {
   // Deletion updates the persisted card and removing the final channel removes the campaign.
   await deleteCurrent(reopenedReview());
   assert.equal(await generatedCard().locator(".calendar-channel-label").count(), 3);
-  assert.equal(await generatedCard().locator(".status-scheduled").count(), 1);
+  assert.equal(await generatedCard().getAttribute("data-card-state"), "suggested");
   for (let remaining = 2; remaining >= 0; remaining -= 1) {
     await dismissTopicCompletionIfPresent();
     if (await reopenedReview().count() === 0) {

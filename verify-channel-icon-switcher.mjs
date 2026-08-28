@@ -125,6 +125,10 @@ try {
 
   await openV4Context();
   let switcher = await assertSwitcher(context(), ".channel-icon-switcher--modal-v4");
+  assert.equal(
+    (await context().locator(".v4-delivery-progress").textContent()).trim(),
+    "0/5 scheduled",
+  );
   await assertLeftAligned(context(), {
     switcherSelector: ".channel-icon-switcher--modal-v4",
     contentSelector: ".v4-context-details",
@@ -170,12 +174,20 @@ try {
   assert.equal(await google.getAttribute("aria-checked"), "false");
   assert.notEqual((await optionStyle(google)).border, "rgb(56, 133, 35)");
   assert.equal(await facebook.getAttribute("aria-checked"), "true");
+  assert.equal(
+    (await context().locator(".v4-delivery-progress").textContent()).trim(),
+    "1/5 scheduled",
+  );
 
   await context().locator(".v4-context-footer")
     .getByRole("button", { name: "Edit", exact: true })
     .click();
   await review().waitFor();
   const reviewSwitcher = await assertSwitcher(review(), ".channel-icon-switcher--review");
+  const reviewProgress = review().locator(".v4-delivery-progress");
+  assert.equal((await reviewProgress.textContent()).trim(), "1/5 scheduled");
+  assert.equal(await reviewProgress.getAttribute("data-delivered"), "1");
+  assert.equal(await reviewProgress.getAttribute("data-active"), "5");
   await assertLeftAligned(review(), {
     switcherSelector: ".channel-icon-switcher--review",
     contentSelector: ".review-scroll h1",

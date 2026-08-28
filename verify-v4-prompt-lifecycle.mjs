@@ -10,11 +10,18 @@ const flow = () => page.locator(".v4-generated-flow-shell");
 const calendarIdeaSummary = () => flow().locator(".v4-summary-modal--generated");
 const dashboardIdeaSummary = () => page.locator(".v4-dashboard-generated-summary");
 const draftReview = () => page.locator(".v4-generated-review");
-const exitDialog = () => page.getByRole("dialog", { name: "Leave now" });
+const exitDialog = () => page.getByRole("dialog", { name: "Save or discard draft" });
 const generatedCard = () => page.locator(".generated-delivery-card");
 const originalCard = () => page.locator(".combined-target-card");
 const summaryArtworkPath = "/assets/v4-generated-summary-channel-artwork.png";
-const exitBody = "Drafts are already saved to your calendar. Discarding them won’t affect content that’s already scheduled or posted.";
+const exitBody = "Select whether you want to save this draft to your calendar or discard it. By discarding, you will remove it from your calendar.";
+const staleExitCopy = [
+  "Leave now",
+  "Leave this modal",
+  "Drafts are already saved to your calendar. Discarding them won’t affect content that’s already scheduled or posted.",
+  "Discard and Exit",
+  "Save drafts and Exit",
+];
 const calendarDay = (name) => page.locator(".calendar-day").filter({
   has: page.getByRole("heading", { name, exact: true }),
 });
@@ -65,20 +72,120 @@ async function requestExitWithClose() {
 async function assertExitCopy() {
   assert.equal(await exitDialog().getAttribute("aria-labelledby"), "generated-v4-exit-title");
   assert.equal(
-    await exitDialog().getByRole("heading", { name: "Leave now", exact: true })
+    await exitDialog().getByRole("heading", { name: "Save or discard draft", exact: true })
       .getAttribute("id"),
     "generated-v4-exit-title",
   );
   assert.equal(await exitDialog().getByText(exitBody, { exact: true }).count(), 1);
   assert.equal(await exitDialog().locator("p").count(), 1);
   assert.equal(
-    await exitDialog().getByRole("button", { name: "Discard and Exit", exact: true }).count(),
+    await exitDialog().getByRole("button", { name: "Discard Draft", exact: true }).count(),
     1,
   );
   assert.equal(
-    await exitDialog().getByRole("button", { name: "Save drafts and Exit", exact: true }).count(),
+    await exitDialog().getByRole("button", { name: "Save Draft", exact: true }).count(),
     1,
   );
+  assert.deepEqual(
+    await exitDialog().getByRole("button").allTextContents(),
+    ["Discard Draft", "Save Draft"],
+  );
+  for (const staleCopy of staleExitCopy) {
+    assert.equal(await page.getByText(staleCopy, { exact: true }).count(), 0);
+  }
+
+  const styles = await exitDialog().evaluate((dialog) => {
+    const heading = dialog.querySelector("h2");
+    const body = dialog.querySelector("p");
+    const footer = dialog.querySelector("footer");
+    const [secondary, primary] = dialog.querySelectorAll("button");
+    const read = (node) => getComputedStyle(node);
+    const dialogBox = dialog.getBoundingClientRect();
+    return {
+      dialog: {
+        width: dialogBox.width,
+        padding: read(dialog).padding,
+        border: read(dialog).border,
+        borderRadius: read(dialog).borderRadius,
+        boxShadow: read(dialog).boxShadow,
+      },
+      heading: {
+        color: read(heading).color,
+        fontFamily: read(heading).fontFamily,
+        fontSize: read(heading).fontSize,
+        fontWeight: read(heading).fontWeight,
+        lineHeight: read(heading).lineHeight,
+      },
+      body: {
+        color: read(body).color,
+        fontFamily: read(body).fontFamily,
+        fontSize: read(body).fontSize,
+        fontWeight: read(body).fontWeight,
+        lineHeight: read(body).lineHeight,
+      },
+      footer: {
+        gap: read(footer).gap,
+        justifyContent: read(footer).justifyContent,
+        marginTop: read(footer).marginTop,
+      },
+      secondary: {
+        height: read(secondary).height,
+        backgroundColor: read(secondary).backgroundColor,
+        border: read(secondary).border,
+        fontSize: read(secondary).fontSize,
+        fontWeight: read(secondary).fontWeight,
+      },
+      primary: {
+        height: read(primary).height,
+        color: read(primary).color,
+        backgroundColor: read(primary).backgroundColor,
+        fontSize: read(primary).fontSize,
+        fontWeight: read(primary).fontWeight,
+      },
+    };
+  });
+  assert.deepEqual(styles, {
+    dialog: {
+      width: 400,
+      padding: "16px",
+      border: "1px solid rgb(218, 223, 226)",
+      borderRadius: "8px",
+      boxShadow: "rgba(0, 0, 0, 0.1) 0px 1px 4px 0px, rgba(0, 0, 0, 0.05) 0px 4px 12px 0px",
+    },
+    heading: {
+      color: "rgb(3, 43, 58)",
+      fontFamily: "Inter, sans-serif",
+      fontSize: "24px",
+      fontWeight: "700",
+      lineHeight: "31.92px",
+    },
+    body: {
+      color: "rgb(35, 61, 72)",
+      fontFamily: "Inter, sans-serif",
+      fontSize: "14px",
+      fontWeight: "400",
+      lineHeight: "17.5px",
+    },
+    footer: {
+      gap: "8px",
+      justifyContent: "flex-end",
+      marginTop: "16px",
+    },
+    secondary: {
+      height: "40px",
+      backgroundColor: "rgb(255, 255, 255)",
+      border: "1px solid rgb(218, 223, 226)",
+      fontSize: "14px",
+      fontWeight: "600",
+    },
+    primary: {
+      height: "40px",
+      color: "rgb(255, 255, 255)",
+      backgroundColor: "rgb(46, 134, 31)",
+      fontSize: "14px",
+      fontWeight: "600",
+    },
+  });
 }
 
 async function dismissExit() {
@@ -90,13 +197,13 @@ async function dismissExit() {
 
 async function saveAndExit() {
   await assertExitCopy();
-  await exitDialog().getByRole("button", { name: "Save drafts and Exit", exact: true }).click();
+  await exitDialog().getByRole("button", { name: "Save Draft", exact: true }).click();
   await exitDialog().waitFor({ state: "detached" });
 }
 
 async function discardAndExit() {
   await assertExitCopy();
-  await exitDialog().getByRole("button", { name: "Discard and Exit", exact: true }).click();
+  await exitDialog().getByRole("button", { name: "Discard Draft", exact: true }).click();
   await exitDialog().waitFor({ state: "detached" });
 }
 
@@ -232,9 +339,9 @@ try {
   assert.equal(await generatedCard().locator(".calendar-channel-label").count(), 2);
   assert.deepEqual(
     await generatedCard().locator(".calendar-channel-label").evaluateAll((labels) => (
-      labels.map((label) => label.lastChild?.textContent?.trim())
+      labels.map((label) => label.getAttribute("data-channel"))
     )),
-    ["Google post", "Instagram post"],
+    ["google", "instagram"],
   );
   await draftReview().getByRole("status", { name: "Loading Google preview" }).waitFor();
   assert.equal(await draftReview().getByRole("status", { name: "Loading Facebook preview" }).count(), 0);
@@ -344,12 +451,12 @@ try {
   assert.equal(await exitDialog().locator("p").count(), 1);
   assert.equal(
     await page.evaluate(() => document.activeElement?.textContent?.trim()),
-    "Save drafts and Exit",
+    "Save Draft",
   );
   await page.keyboard.press("Tab");
   assert.equal(
     await page.evaluate(() => document.activeElement?.textContent?.trim()),
-    "Discard and Exit",
+    "Discard Draft",
   );
   await dismissExit();
 
@@ -425,7 +532,7 @@ try {
   await discardAndExit();
   assert.equal(await generatedCard().count(), 1);
   assert.equal(await generatedCard().locator(".calendar-channel-label").count(), 1);
-  assert.equal(await generatedCard().locator(".status-scheduled").count(), 1);
+  assert.equal(await generatedCard().getAttribute("data-card-state"), "scheduled");
   await generatedCard().click();
   await calendarSummary.waitFor();
   assert.equal(await calendarSummary.locator(".v4-summary-status-list > li").count(), 1);

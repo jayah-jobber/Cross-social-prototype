@@ -90,7 +90,7 @@ try {
   await summary().getByRole("button", { name: "Review Drafts", exact: true }).click();
   await context().waitFor();
   assert.equal(await generatedCard().count(), 1);
-  assert.match(await generatedCard().locator(".calendar-card-details").textContent(), /Needs review/);
+  assert.match(await generatedCard().locator(".calendar-card-details").textContent(), /Suggested/);
   assert.equal(await generatedCard().locator(".calendar-channel-label").count(), 4);
   await waitForPreviewReady();
 
@@ -132,7 +132,7 @@ try {
     "true",
   );
   assert.equal(await generatedCard().count(), 1);
-  assert.match(await generatedCard().locator(".calendar-card-details").textContent(), /Needs review/);
+  assert.match(await generatedCard().locator(".calendar-card-details").textContent(), /Suggested/);
 
   // Adding media unlocks Instagram; removing the final image relocks both delivery actions.
   const added = await editInstagramImages("add");
@@ -171,8 +171,8 @@ try {
     { exact: true },
   ).waitFor();
   await context().getByRole("button", { name: "Close", exact: true }).click();
-  await page.getByRole("dialog", { name: "Leave now" })
-    .getByRole("button", { name: "Save drafts and Exit", exact: true }).click();
+  await page.getByRole("dialog", { name: "Save or discard draft" })
+    .getByRole("button", { name: "Save Draft", exact: true }).click();
 
   // Undelivered Instagram remains Suggested on the persisted campaign.
   await generatedCard().click();

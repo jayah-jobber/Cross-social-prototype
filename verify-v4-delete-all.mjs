@@ -62,8 +62,8 @@ async function persistGeneratedCampaign() {
   await generatedReview.locator(".v4-context-footer")
     .getByRole("button", { name: "Schedule Google post", exact: true }).click();
   await generatedReview.getByRole("button", { name: "Close", exact: true }).click();
-  await page.getByRole("dialog", { name: "Leave now" })
-    .getByRole("button", { name: "Save drafts and Exit", exact: true }).click();
+  await page.getByRole("dialog", { name: "Save or discard draft" })
+    .getByRole("button", { name: "Save Draft", exact: true }).click();
   await generatedCards().first().waitFor();
 }
 

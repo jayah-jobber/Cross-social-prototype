@@ -139,8 +139,8 @@ try {
   ).waitFor();
   await review().locator(".review-footer").getByRole("button", { name: "Back", exact: true }).click();
   await generatedReview.getByRole("button", { name: "Close", exact: true }).click();
-  await page.getByRole("dialog", { name: "Leave now" })
-    .getByRole("button", { name: "Save drafts and Exit", exact: true }).click();
+  await page.getByRole("dialog", { name: "Save or discard draft" })
+    .getByRole("button", { name: "Save Draft", exact: true }).click();
 
   const generatedCard = page.locator(".calendar-day")
     .filter({ has: page.getByRole("heading", { name: "Saturday, Nov 7", exact: true }) })

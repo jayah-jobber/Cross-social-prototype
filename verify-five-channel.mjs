@@ -193,8 +193,8 @@ try {
   }
 
   await generatedReview().getByRole("button", { name: "Close", exact: true }).click();
-  await page.getByRole("dialog", { name: "Leave now" })
-    .getByRole("button", { name: "Save drafts and Exit", exact: true }).click();
+  await page.getByRole("dialog", { name: "Save or discard draft" })
+    .getByRole("button", { name: "Save Draft", exact: true }).click();
   await page.locator(".combined-target-card").click();
   await page.locator(".v4-summary-modal").getByRole("button", { name: "Review Drafts" }).click();
   const modalSwitcher = page.locator(".channel-icon-switcher--modal-v4");

@@ -66,12 +66,15 @@ try {
     .click();
   await embeddedReview().waitFor();
   await embeddedReview().getByRole("button", { name: "Close", exact: true }).click();
-  await page.getByRole("dialog", { name: "Leave now" })
-    .getByRole("button", { name: "Save drafts and Exit", exact: true }).click();
+  await page.getByRole("dialog", { name: "Save or discard draft" })
+    .getByRole("button", { name: "Save Draft", exact: true }).click();
 
   assert.equal(await generatedCard("Saturday, Nov 7").count(), 1);
   assert.equal(await generatedCard("Sunday, Nov 8").count(), 1);
-  assert.equal(await generatedCard("Sunday, Nov 8").locator(".status-scheduled").count(), 1);
+  assert.equal(
+    await generatedCard("Sunday, Nov 8").getAttribute("data-card-state"),
+    "scheduled",
+  );
 
   // Reopening a split card enters the linked campaign Summary before generated review.
   await generatedCard("Sunday, Nov 8").click();
@@ -115,8 +118,8 @@ try {
   await context().waitFor();
   await waitForPreviewReady(context());
   await context().getByRole("button", { name: "Close", exact: true }).click();
-  await page.getByRole("dialog", { name: "Leave now" })
-    .getByRole("button", { name: "Save drafts and Exit", exact: true }).click();
+  await page.getByRole("dialog", { name: "Save or discard draft" })
+    .getByRole("button", { name: "Save Draft", exact: true }).click();
   assert.equal(await generatedCard("Sunday, Nov 8").count(), 0);
   assert.equal(await generatedCard("Saturday, Nov 7").locator(".calendar-channel-label").count(), 4);
 
@@ -137,11 +140,11 @@ try {
   await context().getByRole("menuitem", { name: "Post now and view next", exact: true }).click();
   await context().getByRole("heading", { name: "About this Google post", exact: true }).waitFor();
   assert.equal(await context().count(), 1);
-  assert.equal(await generatedCard("Friday, Nov 6").locator(".status-sent").count(), 1);
+  assert.equal(await generatedCard("Friday, Nov 6").getAttribute("data-card-state"), "sent");
   assert.equal(await generatedCard("Saturday, Nov 7").locator(".calendar-channel-label").count(), 3);
   await context().getByRole("button", { name: "Close", exact: true }).click();
-  await page.getByRole("dialog", { name: "Leave now" })
-    .getByRole("button", { name: "Save drafts and Exit", exact: true }).click();
+  await page.getByRole("dialog", { name: "Save or discard draft" })
+    .getByRole("button", { name: "Save Draft", exact: true }).click();
 
   // Canceling a schedule returns the accepted channel to Suggested instead of deleting it.
   await generatedCard("Saturday, Nov 7").click();
@@ -152,7 +155,10 @@ try {
   await context().getByRole("button", { name: "Show scheduled post options" }).click();
   await context().getByRole("menuitem", { name: "Cancel schedule", exact: true }).click();
   assert.equal(await generatedCard("Saturday, Nov 7").locator(".calendar-channel-label").count(), 3);
-  assert.equal(await generatedCard("Saturday, Nov 7").locator(".status-scheduled").count(), 0);
+  assert.equal(
+    await generatedCard("Saturday, Nov 7").getAttribute("data-card-state"),
+    "suggested",
+  );
 
   console.log(
     "Verified generated V4 direct reopen, suggested persistence, rescheduling, post-now regrouping, and schedule cancellation.",

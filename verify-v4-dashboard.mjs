@@ -367,8 +367,8 @@ try {
   assert.equal(await generatedFlow().count(), 0);
   assert.equal(await page.getByLabel("Edit marketing content prompt").count(), 0);
   await generatedReview().getByRole("button", { name: "Close", exact: true }).click();
-  await page.getByRole("dialog", { name: "Leave now" })
-    .getByRole("button", { name: "Save drafts and Exit", exact: true }).click();
+  await page.getByRole("dialog", { name: "Save or discard draft" })
+    .getByRole("button", { name: "Save Draft", exact: true }).click();
   await dashboard().waitFor();
 
   await entryControl().getByRole("button", { name: "Calendar", exact: true }).click();

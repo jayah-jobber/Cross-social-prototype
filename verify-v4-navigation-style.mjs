@@ -193,8 +193,8 @@ try {
   }).waitFor();
   await assertArrowNavigation(generatedReview, 2, 4);
   await generatedReview.getByRole("button", { name: "Close", exact: true }).click();
-  await page.getByRole("dialog", { name: "Leave now" })
-    .getByRole("button", { name: "Save drafts and Exit", exact: true }).click();
+  await page.getByRole("dialog", { name: "Save or discard draft" })
+    .getByRole("button", { name: "Save Draft", exact: true }).click();
 
   // The experiment is isolated to V4 and resets to icons after version changes.
   await navigationToggle().getByRole("button", { name: "Arrow button", exact: true }).click();
