@@ -50,7 +50,8 @@ async function snapshotCalendar() {
           .map((icon) => icon.getAttribute("data-channel")),
       }))
     )),
-    prompt: await page.getByLabel("Add to your marketing calendar").inputValue(),
+    promptCount: await page.getByLabel("Add to your marketing calendar").count(),
+    createNewCount: await page.locator(".marketing-page-header .create-new").count(),
     tasks: await page.locator(".v4-pending-task-card").count(),
     overlays: await page.locator(".calendar-modal-overlay").count(),
     heading: await page.getByRole("heading", { name: "Marketing Plan", exact: true }).count(),
@@ -74,8 +75,9 @@ try {
   assert.equal(await addNew().getAttribute("aria-haspopup"), "menu");
   assert.equal(await addNew().getAttribute("aria-expanded"), "false");
   assert.equal(await addNew().getAttribute("aria-controls"), "v4-calendar-add-new-menu");
+  assert.equal(await page.getByLabel("Add to your marketing calendar").count(), 0);
+  assert.equal(await page.locator(".marketing-page-header .create-new").count(), 0);
 
-  await page.getByLabel("Add to your marketing calendar").fill("Keep this prompt intact");
   const initialCalendar = await snapshotCalendar();
   await openMenu();
 
@@ -281,7 +283,7 @@ try {
   assert.deepEqual(await snapshotCalendar(), resetCalendar);
 
   console.log(
-    "Verified the V4-only Add New menu order, icons, Figma geometry, accessibility, keyboard behavior, dismissal paths, placeholder immutability, modal layering, and version/surface isolation.",
+    "Verified the V4-only Add New menu, removed legacy creation controls, Figma geometry, accessibility, keyboard behavior, dismissal paths, modal layering, and version/surface isolation.",
   );
 } finally {
   await browser.close();

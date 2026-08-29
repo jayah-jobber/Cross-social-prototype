@@ -1318,6 +1318,8 @@ function CalendarScreen({
   inertPostTitleOne = false,
   v4CampaignDesign = false,
   v4AddNewMenu = false,
+  hideHeaderCreateNew = false,
+  hideCalendarPrompt = false,
   onCreateMultipleChannels,
 }: {
   onOpenPost: () => void;
@@ -1347,6 +1349,8 @@ function CalendarScreen({
   inertPostTitleOne?: boolean;
   v4CampaignDesign?: boolean;
   v4AddNewMenu?: boolean;
+  hideHeaderCreateNew?: boolean;
+  hideCalendarPrompt?: boolean;
   onCreateMultipleChannels?: (prompt: string) => void;
 }) {
   const [addNewMenuOpen, setAddNewMenuOpen] = useState(false);
@@ -1467,7 +1471,9 @@ function CalendarScreen({
           <h1>Marketing Plan</h1>
           <div className="static-header-actions">
             <span>Give Feedback</span>
-            <span className="create-new"><Plus size={18} /> Create New</span>
+            {!hideHeaderCreateNew && (
+              <span className="create-new"><Plus size={18} /> Create New</span>
+            )}
           </div>
         </div>
         <div className="marketing-quick-links">
@@ -1488,7 +1494,10 @@ function CalendarScreen({
             <ChevronRight size={24} />
             <strong>{v4Prompt === undefined ? "November" : "Nov"}</strong>
             <span>2026</span>
-            {v4Prompt !== undefined && onV4PromptChange && onV4PromptSubmit && (
+            {!hideCalendarPrompt
+              && v4Prompt !== undefined
+              && onV4PromptChange
+              && onV4PromptSubmit && (
               <form
                 className={`v4-calendar-prompt${v4Generating ? " generating" : ""}`}
                 aria-busy={v4Generating}
@@ -1522,7 +1531,7 @@ function CalendarScreen({
                   </button>
                 )}
               </form>
-            )}
+              )}
             <small><CalendarDays size={14} /> Today</small>
           </div>
           <div className="calendar-view-control">
@@ -1723,7 +1732,6 @@ function V4StartIdeaPromptModal({
     "facebook",
     "instagram",
     "email",
-    "website",
   ];
   const submit = () => {
     if (!trimmedPrompt) return;
@@ -8027,15 +8035,7 @@ export default function App() {
       setContextualToast((current) => current?.id === id ? null : current);
     }, 4000);
   };
-  const openV4TopicCompletionIfNeeded = ({
-    source,
-    channel,
-    action,
-    previousDeliveries,
-    nextDeliveries,
-    previousGoogleState,
-    nextGoogleState,
-  }: {
+  const openV4TopicCompletionIfNeeded = (_context: {
     source: V4CampaignSource;
     channel: ContextualChannel;
     action: V4TopicCompletionAction;
@@ -8043,51 +8043,7 @@ export default function App() {
     nextDeliveries: V4ChannelDeliveries;
     previousGoogleState: GoogleContextDemoState;
     nextGoogleState: GoogleContextDemoState;
-  }) => {
-    if (version !== "v4") return false;
-    if (source === "generated" && !hasPersistedGeneratedV4Campaign) return false;
-    const channels = source === "generated"
-      ? generatedV4CompletionChannels
-      : originalV4CompletionChannels;
-    const wasComplete = isV4CampaignComplete(
-      channels,
-      previousDeliveries,
-      previousGoogleState,
-    );
-    const isComplete = isV4CampaignComplete(
-      channels,
-      nextDeliveries,
-      nextGoogleState,
-    );
-    if (wasComplete || !isComplete) return false;
-
-    setContextualToast(null);
-    setScheduleToastVisible(false);
-    setReviewDeleteChannel(null);
-    setV4CardSummaryOpen(false);
-    setV4SuggestedSummaryOpen(false);
-    setSuggestedDialogOpen(false);
-    setSuggestedReviewChannel(null);
-    setSuggestedEditor(null);
-    setCombinedWorkflow(null);
-    setV4ReviewOrigin(null);
-    setActiveV4ContextChannel(null);
-    setV4ReviewScopedChannels(null);
-    setScreen("calendar");
-    setV4EntrySurface("calendar");
-    if (source === "generated") {
-      setGeneratedV4Phase("idle");
-      setGeneratedV4ExitTarget(null);
-      setGeneratedV4ExitVersionTarget(null);
-      generatedV4ExitPendingRef.current = false;
-      generatedV4ExitActionRef.current = false;
-    }
-    setV4TopicCompletion({
-      source,
-      confirmation: v4CompletionConfirmation(channel, action, nextDeliveries[channel]),
-    });
-    return true;
-  };
+  }) => false;
   const deleteV4Campaign = (target: V4CampaignDeleteTarget) => {
     if (target.kind === "calendar" && target.source === "original") {
       const deletedDeliveries = markV4CampaignDeleted(v4ChannelDeliveries);
@@ -8346,21 +8302,7 @@ export default function App() {
       return;
     }
 
-    const previousDeliveries = v4ChannelDeliveries;
-    const previousGoogleState = googleContextDemoState;
     const nextDeliveries = performV4LifecycleAction(channel, action);
-    const nextGoogleState = channel === "google"
-      ? action === "schedule" ? "scheduled" : "sent"
-      : previousGoogleState;
-    if (!isV4CampaignComplete(
-      originalV4CompletionChannels,
-      previousDeliveries,
-      previousGoogleState,
-    ) && isV4CampaignComplete(
-      originalV4CompletionChannels,
-      nextDeliveries,
-      nextGoogleState,
-    )) return;
     advanceV4Review(channel, nextDeliveries, true);
   };
   const deleteV4Channel = (channel: ContextualChannel, returnToContext = true) => {
@@ -8403,19 +8345,7 @@ export default function App() {
     return nextDeliveries;
   };
   const deleteV4ReviewChannel = (channel: ContextualChannel) => {
-    const previousDeliveries = v4ChannelDeliveries;
-    const previousGoogleState = googleContextDemoState;
     const nextDeliveries = deleteV4Channel(channel, false);
-    const nextGoogleState = channel === "google" ? "suggested" : previousGoogleState;
-    if (!isV4CampaignComplete(
-      originalV4CompletionChannels,
-      previousDeliveries,
-      previousGoogleState,
-    ) && isV4CampaignComplete(
-      originalV4CompletionChannels,
-      nextDeliveries,
-      nextGoogleState,
-    )) return;
     advanceV4Review(channel, nextDeliveries, true);
   };
   const acceptGeneratedV4Campaign = (
@@ -8862,39 +8792,13 @@ export default function App() {
     channel: ContextualChannel,
     action: Extract<V4LifecycleAction, "schedule" | "send">,
   ) => {
-    const previousDeliveries = generatedV4State.channelDeliveries;
-    const previousGoogleState = generatedV4State.googleDemoState;
     const nextDeliveries = performGeneratedV4LifecycleAction(channel, action);
     if (nextDeliveries === false) return;
-    const nextGoogleState = channel === "google"
-      ? action === "schedule" ? "scheduled" : "sent"
-      : previousGoogleState;
-    if (!isV4CampaignComplete(
-      generatedV4CompletionChannels,
-      previousDeliveries,
-      previousGoogleState,
-    ) && isV4CampaignComplete(
-      generatedV4CompletionChannels,
-      nextDeliveries,
-      nextGoogleState,
-    )) return;
     advanceGeneratedV4Review(channel, nextDeliveries, true);
   };
   const deleteGeneratedV4ReviewChannel = (channel: ContextualChannel) => {
-    const previousDeliveries = generatedV4State.channelDeliveries;
-    const previousGoogleState = generatedV4State.googleDemoState;
     const nextDeliveries = deleteGeneratedV4Channel(channel);
     if (GENERATED_V4_CHANNELS.every((candidate) => nextDeliveries[candidate].deleted)) return;
-    const nextGoogleState = channel === "google" ? "suggested" : previousGoogleState;
-    if (!isV4CampaignComplete(
-      generatedV4CompletionChannels,
-      previousDeliveries,
-      previousGoogleState,
-    ) && isV4CampaignComplete(
-      generatedV4CompletionChannels,
-      nextDeliveries,
-      nextGoogleState,
-    )) return;
     advanceGeneratedV4Review(channel, nextDeliveries, true);
   };
   const saveScheduleEdits = (
@@ -10038,6 +9942,8 @@ export default function App() {
                 inertPostTitleOne={version === "v4"}
                 v4CampaignDesign={version === "v4"}
                 v4AddNewMenu={version === "v4"}
+                hideHeaderCreateNew={version === "v4"}
+                hideCalendarPrompt={version === "v4"}
                 onCreateMultipleChannels={version === "v4"
                   ? (prompt) => beginV4SuggestionGeneration(prompt, "calendar", true)
                   : undefined}
@@ -10674,22 +10580,6 @@ export default function App() {
               onSave={(date, time) => {
                 saveScheduleEdits(scheduleEditorChannel, date, time);
               }}
-            />
-          )}
-          {version === "v4" && v4TopicCompletion && (
-            <V4TopicCompletionModal
-              confirmation={v4TopicCompletion.confirmation}
-              delivered={v4CompletionProgress.delivered}
-              total={v4CompletionProgress.total}
-              nextTopic={nextV4IncompleteTopic && nextV4IncompleteChannel
-                ? {
-                    channelLabel:
-                      CONTEXTUAL_TO_CALENDAR_CHANNEL[nextV4IncompleteChannel],
-                    title: nextV4IncompleteTopic.title,
-                  }
-                : null}
-              onBackToCalendar={closeV4TopicCompletion}
-              onReviewNext={reviewNextV4Topic}
             />
           )}
           {version === "v4"

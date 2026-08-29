@@ -16,7 +16,7 @@ const multipleChannels = () => page.getByRole("menuitem", {
   name: "Create for Multiple Channels",
   exact: true,
 });
-const modal = () => page.getByRole("dialog", { name: "Start with your own idea" });
+const modal = () => page.locator(".v4-start-idea-modal");
 const prompt = () => modal().getByLabel("Describe your marketing idea");
 const generate = () => modal().getByRole("button", { name: "Generate Content", exact: true });
 
@@ -31,8 +31,6 @@ try {
   await page.getByRole("button", { name: "Version 4", exact: true }).click();
   await page.getByRole("button", { name: "Icon button", exact: true }).click();
 
-  const directPrompt = page.getByLabel("Add to your marketing calendar");
-  await directPrompt.fill("Preserve this direct Calendar prompt");
   await openModal();
 
   assert.equal(await modal().getAttribute("aria-modal"), "true");
@@ -44,7 +42,7 @@ try {
   assert.equal(await generate().isDisabled(), true);
   assert.deepEqual(
     await modal().getByRole("group", { name: "Channels" }).locator(":scope > span").allTextContents(),
-    ["Google", "Facebook", "Instagram", "Email", "Website"],
+    ["Google", "Facebook", "Instagram", "Email"],
   );
   assert.deepEqual(
     await modal().locator(".v4-start-idea-suggestions button").allTextContents(),
@@ -125,7 +123,6 @@ try {
       [16, 16],
       [16, 16],
       [16, 16],
-      [16, 16],
     ],
     suggestionIconSize: [20, 20],
   });
@@ -144,7 +141,6 @@ try {
     document.activeElement === document.querySelector(".calendar-toolbar button.add-new")
   ));
   assert.equal(await addNew().evaluate((button) => document.activeElement === button), true);
-  assert.equal(await directPrompt.inputValue(), "Preserve this direct Calendar prompt");
 
   await openModal();
   await modal().getByRole("button", { name: "15% promotion", exact: true }).click();
@@ -175,7 +171,6 @@ try {
   );
   const generatedSummary = generatedFlow.locator(".v4-summary-modal--generated");
   await generatedSummary.waitFor({ timeout: 8_000 });
-  assert.equal(await directPrompt.inputValue(), "Preserve this direct Calendar prompt");
   assert.equal(await generatedSummary.getByText("Website", { exact: true }).count(), 0);
 
   console.log(
