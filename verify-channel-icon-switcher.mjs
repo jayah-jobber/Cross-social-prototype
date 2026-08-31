@@ -127,7 +127,7 @@ try {
   let switcher = await assertSwitcher(context(), ".channel-icon-switcher--modal-v4");
   assert.equal(
     (await context().locator(".v4-delivery-progress").textContent()).trim(),
-    "0/5 scheduled",
+    "0/5 complete",
   );
   await assertLeftAligned(context(), {
     switcherSelector: ".channel-icon-switcher--modal-v4",
@@ -176,7 +176,7 @@ try {
   assert.equal(await facebook.getAttribute("aria-checked"), "true");
   assert.equal(
     (await context().locator(".v4-delivery-progress").textContent()).trim(),
-    "1/5 scheduled",
+    "1/5 complete",
   );
 
   await context().locator(".v4-context-footer")
@@ -185,7 +185,7 @@ try {
   await review().waitFor();
   const reviewSwitcher = await assertSwitcher(review(), ".channel-icon-switcher--review");
   const reviewProgress = review().locator(".v4-delivery-progress");
-  assert.equal((await reviewProgress.textContent()).trim(), "1/5 scheduled");
+  assert.equal((await reviewProgress.textContent()).trim(), "1/5 complete");
   assert.equal(await reviewProgress.getAttribute("data-delivered"), "1");
   assert.equal(await reviewProgress.getAttribute("data-active"), "5");
   await assertLeftAligned(review(), {

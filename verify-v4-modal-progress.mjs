@@ -222,7 +222,7 @@ try {
   await page.waitForTimeout(470);
   await markStart(page);
   await activeText(page).getByRole("button", { name: "Schedule Google post", exact: true }).click();
-  assert.equal((await progress(page).textContent()).trim(), "1/5 scheduled");
+  assert.equal((await progress(page).textContent()).trim(), "1/5 complete");
   const toast = page.locator(".v4-delivery-toast");
   await toast.waitFor();
   assert.equal(

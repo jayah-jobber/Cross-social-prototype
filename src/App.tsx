@@ -2809,7 +2809,7 @@ function V4DeliveryProgress({
       ? isV4DeliveredChannel(channel, deliveries[channel], googleState)
       : false;
   }).length;
-  const progressText = `${delivered}/${activeChannels.length} scheduled`;
+  const progressText = `${delivered}/${activeChannels.length} complete`;
 
   return (
     <div
